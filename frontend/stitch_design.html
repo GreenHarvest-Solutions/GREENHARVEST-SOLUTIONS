@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+
+<html lang="en" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SkillAlley Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Poppins', 'sans-serif'],
+          },
+          colors: {
+            primary: {
+              DEFAULT: '#7C3AED', // Violet 600
+              light: '#8B5CF6',   // Violet 500
+              dark: '#6D28D9',    // Violet 700
+            },
+            background: {
+              light: '#FDFCFE',
+              gradient: 'linear-gradient(135deg, #FDFCFE 0%, #F5F0FF 100%)'
+            }
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-utilities">
+    body {
+      background: linear-gradient(135deg, #F8F4FF 0%, #EFE7FF 100%);
+      min-height: 100vh;
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+  </style>
+</head>
+<body class="font-sans text-gray-800 flex h-screen overflow-hidden p-4">
+<!-- BEGIN: Main Dashboard Container -->
+<div class="flex w-full h-full rounded-[2.5rem] bg-white overflow-hidden shadow-2xl shadow-purple-200/50 relative">
+<!-- BEGIN: Sidebar -->
+<aside class="w-64 bg-white/80 flex flex-col h-full border-r border-gray-100 z-10 relative">
+<!-- Background Graphic -->
+<div class="absolute inset-0 bg-gradient-to-b from-transparent to-purple-50/50 pointer-events-none"></div>
+<!-- Logo -->
+<div class="px-8 py-10 flex items-center gap-3 relative z-10">
+<div class="grid grid-cols-2 gap-1 w-6 h-6">
+<div class="w-2.5 h-2.5 rounded-full bg-gray-800"></div>
+<div class="w-2.5 h-2.5 rounded-full border-2 border-gray-800"></div>
+<div class="w-2.5 h-2.5 rounded-full border-2 border-gray-800"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-gray-800"></div>
+</div>
+<span class="text-xl font-bold tracking-tight">Green <span class="text-primary">Solution</span></span>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 px-4 py-4 overflow-y-auto hide-scrollbar relative z-10">
+<ul class="space-y-2"><li class=""><a class="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#"><i class="fa-solid fa-border-all w-6 text-center text-gray-400"></i><span>Dashboard</span></a></li><li class=""><a class="flex items-center justify-between px-4 py-3 bg-primary text-white rounded-xl shadow-lg shadow-primary/30 transition-all font-medium" href="#"><div class="flex items-center"><i class="fa-solid fa-briefcase w-6 text-center text-white/90"></i><span>Marketplace</span></div><i class="fa-solid fa-arrow-right text-sm"></i></a></li><li class=""><a class="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#"><i class="fa-solid fa-book w-6 text-center text-gray-400"></i><span>Orders</span></a></li><li class=""><a class="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#"><i class="fa-solid fa-chart-pie w-6 text-center text-gray-400"></i><span>Inventory</span></a></li><li class=""><a class="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#"><i class="fa-solid fa-file-invoice w-6 text-center text-gray-400"></i><span>Analytics</span></a></li></ul>
+<div class="mt-8">
+<span class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">SUPPLY CHAIN</span>
+<ul class="mt-3 space-y-2">
+<li class="">
+<a class="flex items-center justify-between px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#">
+<div class="flex items-center">
+<i class="fa-solid fa-envelope-open-text w-6 text-center text-gray-400"></i>
+<span class="">MESSAGES</span>
+</div>
+<span class="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-bold">6</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#">
+<i class="fa-solid fa-bolt w-6 text-center text-gray-400"></i>
+<span class="">Activities</span>
+</a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- Go Pro Widget -->
+<div class="p-6 relative z-10">
+<div class="bg-white rounded-2xl p-5 shadow-xl shadow-purple-100/50 flex flex-col items-center text-center relative overflow-hidden"><div class="absolute inset-0 bg-gradient-to-br from-purple-50/50 to-transparent"></div><div class="w-24 h-24 mb-4 relative z-10 flex items-center justify-center"><img alt="Harvest Pro" class="w-full h-full object-contain relative z-10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8dCe7k9900mpnu9UqbMUNrK7T3vqCiFaf76KbNqG6mBP0IrRM706gTQTqq4-i1z18wPYlrYbg-kvusTuROcExF9PAw8VGuFkQI9CdQaYbxWTsdFsAB5ugbBYKmkvHFkr33mukBT0CGuk5lhl6eeQA6cBovB21A6TTdKoeczyLq9X84B_DdZiAso7ExBG25f810tuK5x4qTkw2I09F1WcVfGrc1C_KuPOi2oHSYvYIXwZIzzpncj3fcQ"/></div><a class="text-sm font-semibold text-primary hover:text-primary-dark transition-colors relative z-10 flex items-center gap-1" href="#">Get Harvest Pro <i class="fa-solid fa-arrow-right text-xs"></i></a></div>
+</div>
+</aside>
+<!-- END: Sidebar -->
+<!-- BEGIN: Main Content Area -->
+<main class="flex-1 flex flex-col bg-[#FDFCFE] rounded-l-3xl shadow-[-10px_0_30px_rgba(0,0,0,0.02)] z-20">
+<div class="flex-1 overflow-y-auto hide-scrollbar p-10 flex gap-10">
+<!-- Left Column (Hero & Schedule) -->
+<div class="flex-1 flex flex-col min-w-[500px]">
+<!-- Hero Section -->
+<section class="bg-[#F8F9FF] rounded-[2rem] p-10 flex items-center justify-between relative overflow-hidden mb-8">
+<div class="absolute top-0 right-0 w-64 h-64 bg-purple-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70 translate-x-1/3 -translate-y-1/3 pointer-events-none"></div>
+<div class="absolute bottom-0 right-32 w-48 h-48 bg-pink-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70 translate-y-1/3 pointer-events-none"></div>
+<div class="max-w-sm relative z-10"><h1 class="text-4xl font-bold leading-tight mb-4 text-gray-900">Get Fresh Harvest Delivered.</h1><p class="text-gray-500 mb-8 text-sm">Order organic produce directly from local farms. Sustainable, fresh, and fair. 🔥</p><button class="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-xl font-medium shadow-lg shadow-primary/30 transition-all flex items-center gap-2">Upgrade Now <i class="fa-solid fa-arrow-right text-sm"></i></button></div>
+<!-- 3D Graphic Area Placeholder -->
+<div class="relative w-72 h-64 z-10 flex items-center justify-center"><img alt="Premium Courses" class="w-full h-full object-contain relative z-10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMT5CqXpNvnra8iF3gUsqhbNFv5MfFxfhCi4Xs47y5IYoposx8oYzJMs7cyEJ5FswJuqEVNcrVyqpui0YZaoZTjHpodcA5wjIEmE-j9oAaTTz2_o-FqS0cNpQuHBk1qpABOvotheyrWBqrODZrca1Pzk9MXjO7cLnHTX7yyFGiy6KvsYvSXeza4x59jq5lPxvvN2zCKY14HJXWGdyvKUGB5wQbYHj1sEB2Lr5ydbpX-pJbpLbiKVFtjA"/></div>
+</section>
+<!-- Schedule Section -->
+<section class="flex-1 flex flex-col">
+<div class="flex items-center justify-between mb-6">
+<h2 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                Monday <span class="font-normal text-gray-600">31 Aug</span>
+<i class="fa-solid fa-chevron-down text-sm text-gray-400 ml-1"></i>
+</h2>
+</div>
+<div class="flex-1 relative flex">
+<!-- Timeline Axis -->
+<div class="w-16 flex flex-col justify-between text-xs text-gray-400 font-medium py-4 relative z-0">
+<div class="h-8 flex items-center justify-end pr-4 text-gray-800 relative">
+                   08:00
+                   <div class="absolute right-0 top-1/2 w-8 h-[1px] bg-purple-300 transform -translate-y-1/2"></div>
+<div class="absolute right-8 top-1/2 w-2 h-2 rounded-full bg-primary transform -translate-y-1/2 translate-x-1/2"></div>
+</div>
+<div class="h-8 flex items-center justify-end pr-4 relative">
+                    09:00
+                    <div class="absolute right-0 top-1/2 w-4 h-[1px] bg-gray-200 transform -translate-y-1/2"></div>
+</div>
+<div class="h-8 flex items-center justify-end pr-4 relative">
+                    10:00
+                    <div class="absolute right-0 top-1/2 w-4 h-[1px] bg-gray-200 transform -translate-y-1/2"></div>
+</div>
+<div class="h-8 flex items-center justify-end pr-4 relative">
+                    11:00
+                    <div class="absolute right-0 top-1/2 w-4 h-[1px] bg-gray-200 transform -translate-y-1/2"></div>
+</div>
+<div class="h-8 flex items-center justify-end pr-4 relative">
+                    12:00
+                    <div class="absolute right-0 top-1/2 w-4 h-[1px] bg-gray-200 transform -translate-y-1/2"></div>
+</div>
+</div>
+<!-- Schedule Cards -->
+<div class="flex-1 flex flex-col gap-4 relative z-10 pl-4 py-2 border-l border-gray-100">
+<!-- Card 1 -->
+<div class="bg-purple-50 rounded-2xl p-5 flex items-stretch relative overflow-hidden h-40"><div class="absolute left-0 top-6 bottom-6 w-1.5 bg-primary rounded-r-lg"></div><div class="w-32 flex items-end justify-center pb-2 relative"><img alt="Fresh Produce" class="w-24 h-24 object-contain relative z-10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCx9LiVI9DdyUvqVPnCDnqwn9YfwQzkksdDRfA_3eVCu4Gaydf_OnoEnLchmMi2HWC9dAC3Nzija4HfLXRPZQ9msOxQSBnkjau82ID5VyPAuBSgUDnL-ZatrU54nBBrOd68Cpc1b0v1veWrOy9eH0r-dWF5uweP3pqIwvL90DHDwcXyLnrsNQtShp4M05AGOEmjhvBT9SXpQ16SbsqPFB0hjPiKfyS8-7xBuGuvf127CzxElgFTy3W3Xg"/></div><div class="flex-1 flex flex-col justify-center py-2 pr-12 relative"><div class="text-xs text-primary font-semibold mb-1 flex items-center gap-1"><i class="fa-regular fa-clock"></i> 08:00 - 09:30</div><h3 class="text-lg font-bold text-primary-dark leading-tight mb-2">Fresh Produce Batch #201</h3><p class="text-xs text-gray-500 leading-relaxed max-w-[200px]">Review quality control for the morning vegetable harvest.</p><button class="absolute bottom-4 right-0 w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"><i class="fa-solid fa-arrow-right text-xs"></i></button><div class="absolute top-0 right-0 w-10 h-10 rounded-full border-[3px] border-orange-400 border-l-gray-200 flex items-center justify-center bg-white"><span class="text-[10px] font-bold text-gray-700">75</span></div></div></div>
+<!-- Card 2 (Small) -->
+<div class="bg-gray-50 rounded-xl p-4 flex items-center justify-between border border-gray-100">
+<div class="text-xs text-primary font-semibold flex items-center gap-1">
+<i class="fa-regular fa-clock"></i> 09:30 - 10:30
+                    </div>
+<h3 class="text-sm font-semibold text-gray-700">Logistics Sync</h3>
+<div class="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center">
+<span class="text-sm">😎</span>
+</div>
+</div>
+<!-- Card 3 (Active/Dark) -->
+<div class="bg-[#7B2CBF] rounded-2xl p-5 flex items-stretch relative overflow-hidden h-40 shadow-xl shadow-purple-500/20"><div class="absolute left-0 top-6 bottom-6 w-1.5 bg-white/40 rounded-r-lg"></div><div class="w-32 flex items-end justify-center pb-2 relative z-10"><img alt="Soil Health" class="w-24 h-24 object-contain relative z-10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwkKwi0pBt7CvKw7r7rv-vj7Pp3wu5sunVmiGb4ezoh6F99ypO5zQI2sPhjbuF_2_T7GXpg518XtRy2ZWioMoOo6trqPhVsmd46vxd0qqlUuNq9opCXbJfqFKl4Wpf7DKGbQcoS-emWNGWL7hHW1TbhlAGI92wDE5eCdOHxzY6KFehG8E2K9HUBHH_M3Jzd6j3Y2IU7z00rsc9cGyrEqpuL80nuq5HnfG2kOXhPWfDglEWCNjvd8CBYA"/></div><div class="flex-1 flex flex-col justify-center py-2 pr-12 relative z-10"><div class="text-xs text-purple-200 font-medium mb-1 flex items-center gap-1"><i class="fa-regular fa-clock"></i> 11:00 - 12:30</div><h3 class="text-lg font-bold text-white leading-tight mb-2">Soil Health Analysis</h3><p class="text-xs text-purple-200/80 leading-relaxed max-w-[200px]">Detailed report on nutrient levels for upcoming planting season.</p><button class="absolute bottom-4 right-0 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"><i class="fa-solid fa-arrow-right text-xs"></i></button><div class="absolute top-0 right-0 w-10 h-10 rounded-full border-[3px] border-white border-b-white/20 flex items-center justify-center bg-white/10 backdrop-blur-sm text-white"><span class="text-[10px] font-bold">85</span></div></div></div>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column (Details Panel) -->
+<div class="w-80 flex flex-col">
+<!-- Top Bar (Search & Profile) -->
+<div class="flex items-center justify-between mb-10">
+<div class="relative flex-1 mr-6">
+<i class="fa-solid fa-search absolute left-0 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm"></i>
+<input class="w-full bg-transparent border-none focus:ring-0 pl-7 text-sm font-medium text-gray-600 placeholder-gray-400 p-0" placeholder="Search" type="text"/>
+</div>
+<button class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30 shrink-0 relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-tr from-purple-700 to-purple-400"></div>
+<i class="fa-solid fa-shield-halved text-white relative z-10 text-sm"></i>
+</button>
+</div>
+<!-- Class Details -->
+<div class="flex-1 flex flex-col">
+<div class="flex items-center justify-between mb-3">
+<span class="text-xs font-semibold text-primary uppercase tracking-wider">TOP HARVEST</span>
+<button class="text-gray-400 hover:text-gray-600">
+<i class="fa-solid fa-ellipsis"></i>
+</button>
+</div>
+<h2 class="text-3xl font-bold text-gray-900 leading-tight mb-2">Organic Kale &amp;<br/>Spinach</h2>
+<div class="flex items-center justify-between text-sm text-gray-500 border-b border-gray-100 pb-6 mb-6">
+<span class="">Organic Kale &amp; Spinach</span>
+<i class="fa-solid fa-chevron-down text-xs"></i>
+</div>
+<!-- Participants -->
+<div class="mb-8">
+<h4 class="text-xs font-semibold text-gray-400 mb-3">Recent Buyers</h4>
+<div class="flex items-center">
+<img alt="Participant" class="w-8 h-8 rounded-full border-2 border-white -ml-0 relative z-10 shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7wsN6OrE2AGSlhkBCklnAmMT5ePXMDApYu55RwPyBablcEJZZT-hhmMTlgamWV6X5VqrlSKJdAK7WwYBO796ylVyZ7sjJq-BDVZsyzC6Q3eK5ugycHGlFGRYS1AFmliOaJK25_fvh7PntFNIs1qCOMoBjUbpXTTcLtjppqD626gWfQHHrKfwrd7dxvLmlqGoSqu3hspr1qCm-pDMQqjvGbSFnPM7s55UHjZxiHRqUdvSVigZEPnLJlw"/>
+<img alt="Participant" class="w-8 h-8 rounded-full border-2 border-white -ml-2 relative z-20 shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwDk74UlHRh-Ej9GrvhDv5k6v5F-mtc8YoALXkOP7ixeiK2WeUySyAcbbWBCHJ8KptU7-49pi_XTYf5-b-ojmXP3iAaZxrlCoPtqqryDCXoA3gTQjGoAtMKPIvo_vppbfhd0eVGC1M-b_to6IbNExgliDGoQ7O5Dy0NbqBD3UW-bWTuGSt7JmoLfHd06knYOE6mspwrixkzWOuJl_fFCPAwx23SdKtEYF2WNKeRZRSi_hE4CMhOY66xw"/>
+<img alt="Participant" class="w-8 h-8 rounded-full border-2 border-white -ml-2 relative z-30 shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjoqH1al-w-B8fqCwEC9DrgDYMAfXXWeLHwueHnzXEU4qdp9EUbgpUe2oYCENagAHPlwfrmr0c_UQliaOR9PN7RbgWqjkSB5CTv3NQ1LVHRH14f0cw6jcsRGIAiGfnAUlb3JSYNgScBvsCLjgATjrUuVDktVMhq-bC8K9PC-cXAvzAWAzbzC2y1WTHD4pc5F2Nefd7Kw1lzjNxK5vRkNAZFPKJVROowXN9bXiLskqW1p9jOFqKzXGDxQ"/>
+<img alt="Participant" class="w-8 h-8 rounded-full border-2 border-white -ml-2 relative z-40 shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZmq83wKVbSgSt9lbGr4wAeQ00kGhLuSHa6Vgkgm0YnW1xxEe06qiqQMZ7kAMZHJF732ZagagTgE7x6izGfDR3RSXLwaMy7XFlafeBDwcGaRniBXvTt8Q0bpLOvCQd7lhgIxSxYxakXiGUHWx-wy5X7XrRW2UWSlqmObJdw5i24QxhPkSj0UX1VsnlPS4mK4USNpFSjmNIh_2NDI7QBI0QwOm5sLRnexA5H8mDQHStbBDWxRsnd-c4HQ"/>
+<div class="w-8 h-8 rounded-full border-2 border-white bg-gray-900 text-white text-[10px] font-bold flex items-center justify-center -ml-2 relative z-50 shadow-sm">
+                            3+
+                        </div>
+</div>
+</div>
+<!-- Info List -->
+<div class="space-y-6 flex-1">
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-2xl bg-purple-100 text-primary flex items-center justify-center shrink-0">
+<i class="fa-solid fa-calendar-day"></i>
+</div>
+<div>
+<p class="text-xs text-gray-400 font-medium mb-1">Monday, August 2020</p>
+<p class="text-sm font-bold text-gray-900">08:00 - 10:00 AM</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-2xl bg-pink-50 text-pink-500 flex items-center justify-center shrink-0">
+<i class="fa-solid fa-clock-rotate-left"></i>
+</div>
+<div>
+<p class="text-xs text-gray-400 font-medium mb-1">Duration</p>
+<p class="text-sm font-bold text-gray-900">2 hours</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center shrink-0">
+<i class="fa-solid fa-layer-group"></i>
+</div>
+<div>
+<p class="text-xs text-gray-400 font-medium mb-1">Level</p>
+<p class="text-sm font-bold text-gray-900">Grade A Premium</p>
+</div>
+</div>
+</div>
+<!-- Action Button -->
+<div class="pt-6">
+<button class="w-full bg-[#7B2CBF] hover:bg-[#6D28D9] text-white py-4 rounded-xl font-medium shadow-lg shadow-purple-500/30 transition-all flex items-center justify-center gap-2">
+                        Join Now <i class="fa-solid fa-arrow-right text-sm"></i>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- END: Main Content Area -->
+</div>
+<!-- END: Main Dashboard Container -->
+</body></html>

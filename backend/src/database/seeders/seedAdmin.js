@@ -21,7 +21,7 @@ const seedAdmin = async () => {
     const adminRole = roleResult.rows[0];
 
     const existingResult = await pool.query(
-      `SELECT user_id FROM users WHERE email = $1`,
+      `SELECT id FROM users WHERE email = $1`,
       [adminEmail.toLowerCase()]
     );
 
@@ -35,8 +35,8 @@ const seedAdmin = async () => {
 
     await pool.query(
       `
-        INSERT INTO users (name, email, password_hash, role_id)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO users (name, email, password, role, role_id)
+        VALUES ($1, $2, $3, 'admin', $4)
       `,
       [adminName, adminEmail.toLowerCase(), hashedPassword, adminRole.role_id]
     );
