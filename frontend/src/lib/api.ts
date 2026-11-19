@@ -227,8 +227,8 @@ class APIClient {
     });
   }
 
-  async createOrder(orderData: any) {
-    return this.request({
+  async createOrder(orderData: any): Promise<any> {
+    return this.request<any>({
       method: 'POST',
       url: '/orders',
       data: orderData,

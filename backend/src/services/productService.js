@@ -131,19 +131,6 @@ const createProduct = async ({ user, payload }) => {
 		throw createServiceError("price must be a valid number greater than 0", 400);
 	}
 
-	if (
-		productValues.discount_price !== null &&
-		(!isNonNegativeNumber(productValues.discount_price) ||
-			Number(productValues.discount_price) <= 0 ||
-			Number(productValues.discount_price) >= Number(productValues.price))
-	) {
-		throw createServiceError("discount_price must be greater than 0 and less than price", 400);
-	}
-
-	if (!Number.isInteger(productValues.stock) || productValues.stock <= 0) {
-		throw createServiceError("stock must be a positive integer", 400);
-	}
-
 	if (productValues.discount_price !== null && productValues.discount_price !== undefined) {
 		if (!isNonNegativeNumber(productValues.discount_price) || Number(productValues.discount_price) <= 0) {
 			throw createServiceError("discount_price must be greater than 0", 400);
@@ -151,6 +138,10 @@ const createProduct = async ({ user, payload }) => {
 		if (Number(productValues.discount_price) >= Number(productValues.price)) {
 			throw createServiceError("discount_price must be less than price", 400);
 		}
+	}
+
+	if (!Number.isInteger(productValues.stock) || productValues.stock < 0) {
+		throw createServiceError("stock must be an integer greater than or equal to 0", 400);
 	}
 
 	const category_id = await validateCategoryId(payload.category_id);
@@ -239,9 +230,9 @@ const updateProduct = async ({ user, productId, payload }) => {
 
 	if (
 		productValues.stock !== undefined &&
-		(!Number.isInteger(productValues.stock) || productValues.stock <= 0)
+		(!Number.isInteger(productValues.stock) || productValues.stock < 0)
 	) {
-		throw createServiceError("stock must be a positive integer", 400);
+		throw createServiceError("stock must be an integer greater than or equal to 0", 400);
 	}
 
 	if (productValues.discount_price !== null && productValues.discount_price !== undefined) {
@@ -335,8 +326,8 @@ const updateProductStock = async ({ user, productId, stock }) => {
 
 	const parsedStock = Number(stock);
 
-	if (!Number.isInteger(parsedStock) || parsedStock <= 0) {
-		throw createServiceError("stock must be a positive integer", 400);
+	if (!Number.isInteger(parsedStock) || parsedStock < 0) {
+		throw createServiceError("stock must be an integer greater than or equal to 0", 400);
 	}
 
 	const ownedProduct = await getProductOwnership(Number(productId));
@@ -350,6 +341,10 @@ const updateProductStock = async ({ user, productId, stock }) => {
 	if (!isAllowed) {
 		throw createServiceError("You can only update stock for your own products", 403);
 	}
+
+	await productModel.updateProductById(Number(productId), {
+		stock: parsedStock,
+	});
 
 	await inventoryModel.upsertInventory({
 		product_id: Number(productId),

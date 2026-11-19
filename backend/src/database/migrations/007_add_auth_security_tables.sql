@@ -17,7 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_users_password_reset_token_hash
 
 CREATE TABLE IF NOT EXISTS refresh_tokens (
   id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
   family_id VARCHAR(128) NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at
 
 CREATE TABLE IF NOT EXISTS otp_codes (
   id BIGSERIAL PRIMARY KEY,
-  user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   purpose VARCHAR(50) NOT NULL,
   challenge_hash TEXT NOT NULL UNIQUE,
   otp_hash TEXT NOT NULL,
