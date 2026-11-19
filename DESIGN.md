@@ -156,3 +156,4 @@ Craft values:
 - **DON'T** introduce artificial `animate-pulse` or `animate-ping` on static status dots.
 - **DON'T** let functional UI text drop below `11px`.
 - **DON'T** use purple or violet accent colors—GreenHarvest's canonical palette is `#286c00`.
+

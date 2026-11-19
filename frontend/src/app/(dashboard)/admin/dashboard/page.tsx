@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
 interface TopProduct {
@@ -50,7 +51,8 @@ interface DisputeItem {
   status: 'open' | 'resolved' | 'refunded';
 }
 
-export default function AdminDashboardPage() {
+function AdminDashboardContent() {
+  const searchParams = useSearchParams();
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     total_users: 0,
     total_farmers: 0,
@@ -62,6 +64,13 @@ export default function AdminDashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'verifications' | 'moderation' | 'disputes' | 'fleet'>('verifications');
+
+  useEffect(() => {
+    const tabQuery = searchParams.get('tab');
+    if (tabQuery && ['verifications', 'moderation', 'disputes', 'fleet'].includes(tabQuery)) {
+      setActiveTab(tabQuery as any);
+    }
+  }, [searchParams]);
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
@@ -809,5 +818,20 @@ export default function AdminDashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminDashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center p-8 text-xs font-semibold text-gray-500">
+          <i className="fa-solid fa-spinner animate-spin mr-2" />
+          Loading Command Center...
+        </div>
+      }
+    >
+      <AdminDashboardContent />
+    </Suspense>
   );
 }
