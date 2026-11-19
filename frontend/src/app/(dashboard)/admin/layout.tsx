@@ -1,5 +1,5 @@
 import React from 'react';
-import Script from 'next/script';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 export const metadata = {
   title: 'Admin Dashboard | GreenHarvest',
@@ -22,14 +22,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
       <div
-        className="h-screen overflow-hidden text-gray-800 p-4"
+        className="flex h-screen w-screen overflow-hidden text-gray-800 bg-[#FDFCFE]"
         style={{
           fontFamily: "'Poppins', sans-serif",
-          background: 'linear-gradient(135deg, #F8F4FF 0%, #EFE7FF 100%)',
-          zoom: '0.85',
         }}
       >
-        {children}
+        {/* Full-height Admin Sidebar */}
+        <AdminSidebar />
+
+        {/* Full-height Main View Container */}
+        <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-[#FDFCFE]">
+          {children}
+        </main>
       </div>
     </>
   );

@@ -37,7 +37,7 @@ class APIClient {
         if (error.response?.status === 401) {
           // Token expired or invalid
           this.clearToken();
-          if (typeof window !== 'undefined') {
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/admin')) {
             window.location.href = '/login';
           }
         }
@@ -517,6 +517,43 @@ class APIClient {
       method: 'GET',
       url: '/market-insights',
       params: { months },
+    });
+  }
+
+  // Admin endpoints
+  async getAdminDashboard() {
+    return this.request<{
+      metrics: {
+        total_users: number;
+        total_farmers: number;
+        total_orders: number;
+        total_revenue: number | string;
+        top_selling_products: Array<{
+          id: number;
+          name: string;
+          units_sold: number;
+          revenue_generated: number | string;
+        }>;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/dashboard',
+    });
+  }
+
+  async listUsers(params?: any) {
+    return this.request<{ users: any[] }>({
+      method: 'GET',
+      url: '/users',
+      params,
+    });
+  }
+
+  async assignDelivery(orderId: number | string, deliveryPartnerId: number | string) {
+    return this.request<{ message: string }>({
+      method: 'POST',
+      url: '/delivery/assign',
+      data: { order_id: orderId, delivery_partner_id: deliveryPartnerId },
     });
   }
 
