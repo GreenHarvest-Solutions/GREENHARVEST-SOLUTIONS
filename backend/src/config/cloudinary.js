@@ -12,10 +12,13 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: 'greenharvest/products',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 1200, height: 1200, crop: 'limit', quality: 'auto' }],
+  params: async (req, file) => {
+    const farmerId = req.user?.id ? String(req.user.id) : 'general';
+    return {
+      folder: `greenharvest/products/${farmerId}`,
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+      transformation: [{ width: 1200, height: 1200, crop: 'limit', quality: 'auto' }],
+    };
   },
 });
 

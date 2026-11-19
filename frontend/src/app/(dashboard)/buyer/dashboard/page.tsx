@@ -17,9 +17,8 @@ export default function BuyerDashboard() {
   const router = useRouter();
   const { cart, toggleCart, addToCart } = useCart();
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await api.logout();
     window.location.href = '/login';
   };
 
