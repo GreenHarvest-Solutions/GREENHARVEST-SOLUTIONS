@@ -55,11 +55,38 @@ export default function FarmerDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  const handleMarkNotifRead = async (id: string | number) => {
+    try {
+      await api.markNotificationAsRead(id.toString());
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch {
+      // Non-blocking
+    }
+  };
+
+  const handleMarkAllNotifsRead = async () => {
+    try {
+      const unread = notifications.filter(n => !n.is_read);
+      await Promise.all(unread.map(n => api.markNotificationAsRead(n.id.toString()).catch(() => {})));
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch {
+      // Non-blocking
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Fallback
+    } finally {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      router.push('/login');
+    }
   };
 
   if (loading) {
@@ -106,28 +133,95 @@ export default function FarmerDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-5 ml-6">
-            {/* MESSAGES */}
-            <button className="relative w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
-              <span className="material-symbols-outlined text-[24px]">chat_bubble_outline</span>
-              {unreadMessages > 0 && (
-                <span className="absolute top-2 right-2 bg-[#f27421] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
-                  {unreadMessages}
-                </span>
-              )}
-            </button>
+          <div className="flex items-center space-x-4 ml-6">
+            {/* VIEW LIVE STORE */}
+            {user?.id && (
+              <Link
+                href={`/buyer/farmer/${user.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#16a34a] border border-emerald-200 rounded-xl text-xs font-bold transition-colors shadow-2xs"
+                title="View your public storefront as seen by buyers"
+              >
+                <span className="material-symbols-outlined text-sm">open_in_new</span>
+                <span>Live Store</span>
+              </Link>
+            )}
 
             {/* NOTIFICATIONS */}
-            <button className="relative w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
-              <span className="material-symbols-outlined text-[24px]">notifications_none</span>
-              {notifications.length > 0 && (
-                <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
-                  {notifications.length}
-                </span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsNotifOpen(!isNotifOpen)}
+                className="relative w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
+                title="Notifications"
+              >
+                <span className="material-symbols-outlined text-[24px]">notifications_none</span>
+                {unreadMessages > 0 && (
+                  <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
+                    {unreadMessages}
+                  </span>
+                )}
+              </button>
+
+              {isNotifOpen && (
+                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-gray-100 py-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-4 pb-3 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900">Notifications</h4>
+                      <p className="text-[11px] text-gray-400">{unreadMessages} unread alerts</p>
+                    </div>
+                    {unreadMessages > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllNotifsRead}
+                        className="text-[11px] text-[#16a34a] font-bold hover:underline"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+                    {notifications.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-gray-400">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      notifications.slice(0, 8).map((notif: any) => (
+                        <div
+                          key={notif.id}
+                          onClick={() => handleMarkNotifRead(notif.id)}
+                          className={`p-3.5 hover:bg-gray-50 cursor-pointer transition-colors flex items-start gap-3 ${
+                            !notif.is_read ? 'bg-green-50/40' : ''
+                          }`}
+                        >
+                          <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${!notif.is_read ? 'bg-[#16a34a]' : 'bg-transparent'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-800 line-clamp-2">{notif.message || notif.title || 'New harvest notification'}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {notif.created_at ? new Date(notif.created_at).toLocaleDateString() : 'Just now'}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="pt-2 px-4 border-t border-gray-100 text-center">
+                    <Link
+                      href="/farmer/orders"
+                      onClick={() => setIsNotifOpen(false)}
+                      className="text-xs text-gray-600 hover:text-[#16a34a] font-bold inline-block"
+                    >
+                      View all activities →
+                    </Link>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
             
-            <div className="h-8 w-px bg-gray-200 mx-2"></div>
+            <div className="h-8 w-px bg-gray-200 mx-1"></div>
 
             {/* USER PROFILE */}
             <div className="flex items-center cursor-pointer group relative pl-2">
