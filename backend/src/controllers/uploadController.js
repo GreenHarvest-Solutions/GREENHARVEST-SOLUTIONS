@@ -29,6 +29,35 @@ const uploadProductImage = [
 ];
 
 /**
+ * POST /api/upload/product-images
+ * Multer middleware handles multi-image upload to Cloudinary (up to 5 images).
+ * Returns { images: [{ url, public_id }], urls: string[] } on success.
+ */
+const uploadProductImages = [
+  upload.array('images', 5),
+  async (req, res) => {
+    try {
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ message: 'No image files provided' });
+      }
+
+      const uploaded = req.files.map((file) => ({
+        url: file.path,
+        public_id: file.filename,
+      }));
+
+      return res.status(200).json({
+        images: uploaded,
+        urls: uploaded.map((u) => u.url),
+      });
+    } catch (error) {
+      logger.error('Multi-image upload failed', { message: error.message });
+      return res.status(500).json({ message: 'Image upload failed' });
+    }
+  },
+];
+
+/**
  * DELETE /api/upload/product-image
  * Deletes an image from Cloudinary by public_id.
  */
@@ -81,4 +110,4 @@ const deleteProductImage = async (req, res) => {
   }
 };
 
-module.exports = { uploadProductImage, deleteProductImage };
+module.exports = { uploadProductImage, uploadProductImages, deleteProductImage };

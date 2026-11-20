@@ -135,6 +135,43 @@ class APIClient {
     });
   }
 
+  // Upload endpoints
+  async uploadProductImage(file: File) {
+    const formData = new FormData();
+    formData.append('image', file);
+    return this.request<{ url: string; public_id: string }>({
+      method: 'POST',
+      url: '/upload/product-image',
+      data: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
+
+  async uploadProductImages(files: File[]) {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('images', file);
+    });
+    return this.request<{ images: { url: string; public_id: string }[]; urls: string[] }>({
+      method: 'POST',
+      url: '/upload/product-images',
+      data: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
+
+  async deleteProductImage(public_id: string) {
+    return this.request<{ message: string }>({
+      method: 'DELETE',
+      url: '/upload/product-image',
+      data: { public_id },
+    });
+  }
+
   // Product endpoints
   async getProducts(filters?: any) {
     return this.request<{ products: any[] }>({
