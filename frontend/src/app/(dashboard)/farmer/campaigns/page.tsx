@@ -276,7 +276,7 @@ export default function CampaignManagementPage() {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Promo Revenue</p>
-                  <p className="text-3xl font-black text-gray-900" style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}>${displayStats.promo_revenue.toLocaleString('en-US', {minimumFractionDigits: 2})}</p>
+                  <p className="text-3xl font-black text-gray-900" style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}>ETB {displayStats.promo_revenue.toLocaleString('en-US', {minimumFractionDigits: 2})}</p>
                 </div>
               </div>
 
@@ -444,7 +444,7 @@ export default function CampaignManagementPage() {
                       } else if (campaign.discount_type === 'percentage') {
                         discountDesc = `${campaign.discount_value}% OFF`;
                       } else {
-                        discountDesc = `Save $${campaign.discount_value}`;
+                        discountDesc = `Save ETB ${campaign.discount_value}`;
                       }
 
                       return (
