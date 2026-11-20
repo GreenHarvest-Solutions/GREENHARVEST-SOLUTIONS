@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
 const deliveryModel = require("../models/deliveryModel");
+const orderModel = require("../models/orderModel");
 const { normalizeRole } = require("../utils/roles");
 const { isPositiveInteger } = require("../utils/validators");
 
@@ -8,6 +9,7 @@ const allowedDeliveryStatuses = [
 	"assigned",
 	"processing",
 	"shipped",
+	"in_transit",
 	"out for delivery",
 	"delivered",
 	"cancelled",
@@ -20,11 +22,10 @@ const createServiceError = (message, statusCode, extra = {}) => {
 	return error;
 };
 
-const orderModel = require("../models/orderModel");
-
 const assignDeliveryPartnerToOrder = async ({ actor, order_id, delivery_partner_id }) => {
-	if (!actor || normalizeRole(actor.role) !== "admin") {
-		throw createServiceError("Only admins can assign delivery partners", 403);
+	const actorRole = normalizeRole(actor.role);
+	if (!actor || (actorRole !== "admin" && actorRole !== "field_agent")) {
+		throw createServiceError("Only admins or field agents can assign delivery partners", 403);
 	}
 
 	if (!isPositiveInteger(order_id) || !isPositiveInteger(delivery_partner_id)) {
@@ -50,7 +51,7 @@ const assignDeliveryPartnerToOrder = async ({ actor, order_id, delivery_partner_
 
 		const updatedOrder = await orderModel.assignDeliveryPartnerById(
 			Number(order_id),
-			Number(delivery_partner_id),
+			Number(partner.id),
 			client
 		);
 
@@ -65,8 +66,9 @@ const assignDeliveryPartnerToOrder = async ({ actor, order_id, delivery_partner_
 };
 
 const assignDelivery = async ({ actor, payload }) => {
-	if (normalizeRole(actor.role) !== "admin") {
-		throw createServiceError("Only admins can assign delivery partners", 403);
+	const actorRole = normalizeRole(actor.role);
+	if (actorRole !== "admin" && actorRole !== "field_agent") {
+		throw createServiceError("Only admins or field agents can assign delivery partners", 403);
 	}
 
 	const order_id = Number(payload.order_id);
@@ -151,11 +153,11 @@ const updateDeliveryStatus = async ({ actor, payload }) => {
 		throw createServiceError("order_id or delivery_id is required", 400);
 	}
 
-	if (!allowedDeliveryStatuses.includes(String(status).trim().toLowerCase())) {
+	const normalizedStatus = String(status).trim().toLowerCase();
+	if (!allowedDeliveryStatuses.includes(normalizedStatus)) {
 		throw createServiceError("Invalid delivery status value", 400);
 	}
 
-	const normalizedStatus = String(status).trim().toLowerCase();
 	const client = await pool.connect();
 
 	try {
@@ -184,11 +186,15 @@ const updateDeliveryStatus = async ({ actor, payload }) => {
 
 		const actorRole = normalizeRole(actor.role);
 
-		if (actorRole !== "delivery_partner") {
-			throw createServiceError("Only delivery partners can update delivery status", 403);
+		if (actorRole !== "delivery_partner" && actorRole !== "admin") {
+			throw createServiceError("Only delivery partners or admins can update delivery status", 403);
 		}
 
-		if (Number(actor.id) !== Number(existingDelivery.delivery_partner_id)) {
+		if (
+			actorRole !== "admin" &&
+			Number(actor.id) !== Number(existingDelivery.delivery_partner_id) &&
+			Number(actor.id) !== Number(existingDelivery.delivery_person_id)
+		) {
 			throw createServiceError("You are not allowed to update this delivery", 403);
 		}
 
@@ -230,10 +236,21 @@ const trackDelivery = async ({ actor, order_id }) => {
 
 	const actorRole = normalizeRole(actor.role);
 
+	let isFarmerForOrder = false;
+	if (actorRole === "farmer") {
+		const orderItems = await pool.query(
+			`SELECT 1 FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = $1 AND p.farmer_id = $2 LIMIT 1`,
+			[Number(order_id), Number(actor.id)]
+		);
+		isFarmerForOrder = orderItems.rows.length > 0;
+	}
+
 	if (
 		actorRole !== "admin" &&
+		actorRole !== "field_agent" &&
 		Number(actor.id) !== Number(delivery.buyer_id) &&
-		Number(actor.id) !== Number(delivery.delivery_partner_id)
+		Number(actor.id) !== Number(delivery.delivery_partner_id) &&
+		!isFarmerForOrder
 	) {
 		throw createServiceError("You are not allowed to view this delivery", 403);
 	}
@@ -241,10 +258,19 @@ const trackDelivery = async ({ actor, order_id }) => {
 	return delivery;
 };
 
+const getAssignedDeliveries = async ({ actor }) => {
+	const actorRole = normalizeRole(actor.role);
+	if (actorRole !== "delivery_partner" && actorRole !== "admin") {
+		throw createServiceError("Only delivery partners or admins can view assigned deliveries", 403);
+	}
+	return await deliveryModel.findDeliveriesByPartnerId(Number(actor.id));
+};
+
 module.exports = {
 	allowedDeliveryStatuses,
 	assignDelivery,
 	assignDeliveryPartnerToOrder,
+	getAssignedDeliveries,
 	trackDelivery,
 	updateDeliveryStatus,
 };

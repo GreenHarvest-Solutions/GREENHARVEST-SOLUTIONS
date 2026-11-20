@@ -153,17 +153,26 @@ const findOrderById = async (order_id, client = pool) => {
 	const result = await client.query(
 		`
 			SELECT
-				id,
-				buyer_id,
-				address_id,
-				total_price,
-				total_amount,
-				order_status,
-				payment_status,
-				delivery_status,
-				created_at
-			FROM orders
-			WHERE id = $1
+				o.id,
+				o.buyer_id,
+				o.address_id,
+				o.total_price,
+				o.total_amount,
+				o.order_status,
+				o.payment_status,
+				o.delivery_status,
+				o.created_at,
+				d.delivery_partner_id,
+				COALESCE(
+					(SELECT p.farmer_id FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = o.id LIMIT 1),
+					NULL
+				) AS farmer_id,
+				ARRAY(
+					SELECT DISTINCT p.farmer_id FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = o.id
+				) AS farmer_ids
+			FROM orders o
+			LEFT JOIN deliveries d ON d.order_id = o.id
+			WHERE o.id = $1
 		`,
 		[order_id]
 	);
@@ -172,11 +181,10 @@ const findOrderById = async (order_id, client = pool) => {
 };
 
 const assignDeliveryPartnerById = async (order_id, delivery_partner_id, client = pool) => {
-	const result = await client.query(
+	const orderResult = await client.query(
 		`
 			UPDATE orders
-			SET delivery_partner_id = $2,
-					delivery_status = 'assigned'
+			SET delivery_status = 'assigned'
 			WHERE id = $1
 			RETURNING
 				id,
@@ -186,14 +194,41 @@ const assignDeliveryPartnerById = async (order_id, delivery_partner_id, client =
 				total_amount,
 				order_status,
 				payment_status,
-				delivery_partner_id,
 				delivery_status,
 				created_at
+		`,
+		[order_id]
+	);
+
+	if (orderResult.rows.length === 0) {
+		return null;
+	}
+
+	await client.query(
+		`
+			INSERT INTO deliveries (
+				order_id,
+				delivery_person_id,
+				delivery_partner_id,
+				delivery_address,
+				delivery_location,
+				delivery_status,
+				status
+			)
+			VALUES ($1, $2, $2, 'Standard Delivery Address', 'Standard Delivery Location', 'assigned', 'assigned')
+			ON CONFLICT (order_id) DO UPDATE SET
+				delivery_person_id = EXCLUDED.delivery_person_id,
+				delivery_partner_id = EXCLUDED.delivery_partner_id,
+				delivery_status = 'assigned',
+				status = 'assigned'
 		`,
 		[order_id, delivery_partner_id]
 	);
 
-	return result.rows[0] || null;
+	return {
+		...orderResult.rows[0],
+		delivery_partner_id,
+	};
 };
 
 const updateOrderStatusById = async (order_id, order_status, client = pool) => {

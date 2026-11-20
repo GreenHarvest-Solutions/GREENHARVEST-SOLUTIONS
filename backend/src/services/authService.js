@@ -6,7 +6,7 @@ const userModel = require("../models/userModel");
 const emailService = require("./emailService");
 const logger = require("../utils/logger");
 const { getAccessTokenTtlMinutes, signAccessToken } = require("../utils/jwt");
-const { ALLOWED_ROLES, normalizeRole } = require("../utils/roles");
+const { ALLOWED_ROLES, PUBLIC_REGISTRATION_ROLES, isPublicRegistrationRole, normalizeRole } = require("../utils/roles");
 const {
   addDays,
   addMinutes,
@@ -209,8 +209,11 @@ const registerUser = async ({
     await validateEmailDomainIfEnabled(backup_email);
   }
 
-  if (!allowedRoles.includes(normalizedRole)) {
-    throw createServiceError("Invalid role provided", 400);
+  if (!isPublicRegistrationRole(normalizedRole)) {
+    throw createServiceError(
+      `Self-registration is only allowed for roles: ${PUBLIC_REGISTRATION_ROLES.join(", ")}`,
+      403
+    );
   }
 
   if (!isStrongPassword(password)) {

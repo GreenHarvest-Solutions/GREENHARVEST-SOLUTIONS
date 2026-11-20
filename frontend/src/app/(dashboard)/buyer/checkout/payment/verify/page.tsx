@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
-export default function VerifyPaymentPage() {
+function VerifyPaymentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     
@@ -90,5 +90,17 @@ export default function VerifyPaymentPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function VerifyPaymentPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center p-4">
+                <div className="w-16 h-16 border-4 border-gray-100 border-t-[#00a859] rounded-full animate-spin"></div>
+            </div>
+        }>
+            <VerifyPaymentContent />
+        </Suspense>
     );
 }

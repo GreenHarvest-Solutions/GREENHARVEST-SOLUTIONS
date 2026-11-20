@@ -8,12 +8,38 @@ const {
   shouldExposeRefreshToken,
 } = require("../utils/cookies");
 
+const SENSITIVE_KEYS = new Set([
+  "password",
+  "confirm_password",
+  "token",
+  "refresh_token",
+  "otp",
+  "secret",
+  "authorization",
+]);
+
+const sanitizeLogData = (data) => {
+  if (!data || typeof data !== "object") return data;
+  if (Array.isArray(data)) return data.map(sanitizeLogData);
+  const sanitized = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+      sanitized[key] = "[REDACTED]";
+    } else if (typeof value === "object" && value !== null) {
+      sanitized[key] = sanitizeLogData(value);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+};
+
 const handleControllerError = (res, context, error, meta = {}) => {
   logger.error(context, {
     message: error.message,
     code: error.code,
     stack: error.stack,
-    ...meta,
+    ...sanitizeLogData(meta),
   });
 
   return res.status(error.statusCode || 500).json({
@@ -47,8 +73,12 @@ const registerUser = async (req, res) => {
       ...result,
     });
   } catch (error) {
+    const safeBody = { ...(req.body || {}) };
+    delete safeBody.password;
+    delete safeBody.confirm_password;
+
     return handleControllerError(res, "User registration failed", error, {
-      body: req.body,
+      body: safeBody,
     });
   }
 };

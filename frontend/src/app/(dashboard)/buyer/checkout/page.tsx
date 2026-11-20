@@ -193,7 +193,7 @@ export default function CheckoutPage() {
 
                         {/* Order Items (Grouped by Store) */}
                         <div className="space-y-4">
-                            {Object.entries(storeGroups).map(([storeId, storeGroup]) => (
+                            {(Object.entries(storeGroups) as [string, { storeName: string; items: any[] }][]).map(([storeId, storeGroup]) => (
                                 <div key={storeId} className="bg-white rounded-xl shadow-sm overflow-hidden">
                                     <div className="bg-gray-50 px-5 py-3 border-b border-gray-100 flex items-center gap-2">
                                         <span className="material-symbols-outlined text-gray-500 text-sm">storefront</span>
@@ -202,7 +202,7 @@ export default function CheckoutPage() {
                                     </div>
                                     
                                     <div className="p-5 space-y-5">
-                                        {storeGroup.items.map((item, index) => (
+                                        {storeGroup.items.map((item: any, index: number) => (
                                             <div key={item.id || index} className="flex gap-4">
                                                 <div className="w-24 h-24 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center shrink-0 overflow-hidden">
                                                     {item.image_url || item.product?.image_url ? (

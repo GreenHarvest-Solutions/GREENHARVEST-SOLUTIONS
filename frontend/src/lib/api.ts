@@ -103,7 +103,20 @@ class APIClient {
   }
 
   async logout() {
-    this.clearToken();
+    try {
+      await this.request({
+        method: 'POST',
+        url: '/auth/logout',
+      });
+    } catch {
+      // Ignore network / auth errors during logout
+    } finally {
+      this.clearToken();
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    }
   }
 
   async forgotPassword(email: string) {
@@ -214,8 +227,8 @@ class APIClient {
     });
   }
 
-  async createOrder(orderData: any) {
-    return this.request({
+  async createOrder(orderData: any): Promise<any> {
+    return this.request<any>({
       method: 'POST',
       url: '/orders',
       data: orderData,

@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
 interface TopProduct {
-  id: number;
+  id: number | string;
   name: string;
   units_sold: number;
   revenue_generated: number | string;

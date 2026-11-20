@@ -66,6 +66,18 @@ const createProduct = async ({
 		}
 	}
 
+	const hasInventoryTable = await tableExists('inventory');
+	if (hasInventoryTable) {
+		await pool.query(
+			`
+				INSERT INTO inventory (product_id, farmer_id, quantity, last_updated)
+				VALUES ($1, $2, $3, NOW())
+				ON CONFLICT (product_id) DO UPDATE SET quantity = EXCLUDED.quantity, last_updated = NOW()
+			`,
+			[result.rows[0].id, farmer_id, stock ?? 0]
+		);
+	}
+
 	return result.rows[0];
 };
 
@@ -169,7 +181,7 @@ const findFarmerById = async (farmerId) => {
 };
 
 const findProductOwnershipById = async (productId) => {
-	const result = await pool.query("SELECT id, farmer_id FROM products WHERE id = $1", [productId]);
+	const result = await pool.query("SELECT id, farmer_id, price FROM products WHERE id = $1", [productId]);
 	return result.rows[0] || null;
 };
 
@@ -304,6 +316,20 @@ const updateProductById = async (
 		`,
 		[name, description, price, discount_price, stock, category_id, farm_location, image_url, productId]
 	);
+
+	if (result.rows.length > 0 && stock !== null && stock !== undefined) {
+		const hasInventoryTable = await tableExists('inventory');
+		if (hasInventoryTable) {
+			await pool.query(
+				`
+					INSERT INTO inventory (product_id, farmer_id, quantity, last_updated)
+					VALUES ($1, $2, $3, NOW())
+					ON CONFLICT (product_id) DO UPDATE SET quantity = EXCLUDED.quantity, last_updated = NOW()
+				`,
+				[productId, result.rows[0].farmer_id, stock]
+			);
+		}
+	}
 
 	return result.rows[0] || null;
 };

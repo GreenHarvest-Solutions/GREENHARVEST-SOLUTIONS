@@ -6,6 +6,7 @@ const authMiddleware = require("../middleware/authMiddleware");
 const { requireRole } = require("../middleware/roleMiddleware");
 const {
   assignDeliveryPartner,
+  getAssignedDeliveries,
   updateDeliveryStatus,
   trackDelivery,
 } = require("../controllers/deliveryController");
@@ -14,11 +15,11 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
-router.post("/assign", requireRole("admin"), assignDeliveryPartner);
-router.put("/update-status", requireRole("delivery_partner"), updateDeliveryStatus);
+router.post("/assign", requireRole("admin", "field_agent"), assignDeliveryPartner);
+router.get("/assigned", requireRole("delivery_partner", "admin"), getAssignedDeliveries);
+router.put("/update-status", requireRole("delivery_partner", "admin"), updateDeliveryStatus);
+router.patch("/:id/status", requireRole("delivery_partner", "admin"), updateDeliveryStatus);
 router.get("/track/:orderId", trackDelivery);
-
-router.patch("/:id/status", requireRole("delivery_partner"), updateDeliveryStatus);
 router.get("/:order_id", trackDelivery);
 
 module.exports = router;
