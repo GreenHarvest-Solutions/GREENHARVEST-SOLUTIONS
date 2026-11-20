@@ -463,7 +463,7 @@ class APIClient {
   }
 
   // Task 5.1 — Returns endpoints
-  async getReturns(params?: { page?: number; limit?: number }) {
+  async getReturns(params?: { page?: number; limit?: number; status?: string; search?: string }) {
     return this.request<{ returns: any[]; pagination: any }>({
       method: 'GET',
       url: '/returns',
@@ -481,11 +481,15 @@ class APIClient {
   }
 
   // Task 5.3 — Update return (accept/reject)
-  async updateReturn(id: string | number, action: 'accept' | 'reject') {
+  async updateReturn(
+    id: string | number,
+    action: 'accept' | 'reject',
+    data?: { resolution_note?: string; restock?: boolean }
+  ) {
     return this.request<{ return: any }>({
       method: 'PATCH',
       url: `/returns/${id}`,
-      data: { action },
+      data: { action, ...data },
     });
   }
 
