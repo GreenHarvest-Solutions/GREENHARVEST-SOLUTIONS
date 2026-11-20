@@ -35,33 +35,29 @@ const resolveActorId = async (user_id, role) => {
   }
 
   if (role === "delivery_partner") {
-    const result = await pool.query(
+    await pool.query(
       `
         INSERT INTO delivery_profiles (user_id)
         VALUES ($1)
-        ON CONFLICT (user_id)
-        DO UPDATE SET user_id = EXCLUDED.user_id
-        RETURNING delivery_id
+        ON CONFLICT (user_id) DO NOTHING
       `,
       [user_id]
     );
 
-    return result.rows[0].delivery_id;
+    return user_id;
   }
 
   if (role === "field_agent") {
-    const result = await pool.query(
+    await pool.query(
       `
         INSERT INTO field_agent_profiles (user_id)
         VALUES ($1)
-        ON CONFLICT (user_id)
-        DO UPDATE SET user_id = EXCLUDED.user_id
-        RETURNING agent_id
+        ON CONFLICT (user_id) DO NOTHING
       `,
       [user_id]
     );
 
-    return result.rows[0].agent_id;
+    return user_id;
   }
 
   return user_id;
