@@ -1,396 +1,829 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 
-export default function ShippingManagementPage() {
-  const router = useRouter();
-  const { showError } = useToast();
-  const [orders, setOrders] = useState<any[]>([]);
+interface OrderItem {
+  product_id?: number;
+  product_name: string;
+  quantity: number;
+  price: number;
+  unit?: string;
+  category_name?: string;
+  image_url?: string;
+}
+
+interface FarmerOrder {
+  id?: number;
+  order_id: number;
+  order_status: 'pending' | 'confirmed' | 'in_transit' | 'delivered' | 'cancelled';
+  total_amount: number | string;
+  farmer_total?: number | string;
+  payment_status?: string;
+  delivery_address?: string;
+  delivery_status?: string;
+  created_at: string;
+  buyer_name: string;
+  buyer_phone?: string;
+  buyer_email?: string;
+  items: OrderItem[];
+}
+
+function ShippingManagementContent() {
+  const searchParams = useSearchParams();
+  const queryOrderId = searchParams.get('orderId');
+
+  const { showSuccess, showError } = useToast();
+  const [orders, setOrders] = useState<FarmerOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Pagination & Filtering state
+  const [activeTab, setActiveTab] = useState<'all' | 'to_ship' | 'in_transit' | 'delivered'>('to_ship');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [carrierFilter, setCarrierFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
-  const [activeTab, setActiveTab] = useState('to ship'); // default to 'to ship'
-  
-  // Search inputs
-  const [orderIdSearch, setOrderIdSearch] = useState('');
-  const [productSearch, setProductSearch] = useState('');
-  const [buyerSearch, setBuyerSearch] = useState('');
-  const [dateRange, setDateRange] = useState('');
-  
-  // Dashboard info for the sidebar
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [user, setUser] = useState<any>(null);
-  const [notifications, setNotifications] = useState<any[]>([]);
+
+  // Farmer / Farm Info for packing slip
+  const [farmerProfile, setFarmerProfile] = useState<any>(null);
+
+  // Packing slip modal
+  const [selectedOrderForSlip, setSelectedOrderForSlip] = useState<FarmerOrder | null>(null);
+
+  // Dispatch confirmation modal
+  const [dispatchingOrder, setDispatchingOrder] = useState<FarmerOrder | null>(null);
+  const [selectedCarrier, setSelectedCarrier] = useState('Farm Direct Delivery');
+  const [trackingNotes, setTrackingNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Selected orders for batch operations
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   useEffect(() => {
-    loadSidebarData();
+    loadFarmerProfile();
   }, []);
 
-  useEffect(() => {
-    loadOrders();
-  }, [page, activeTab]);
-
-  const loadSidebarData = async () => {
+  const loadFarmerProfile = async () => {
     try {
-      const [dashRes, userRes, notifRes] = await Promise.all([
-        api.getFarmerDashboard().catch(() => ({})),
-        api.getUserProfile().catch(() => ({ user: null })),
-        api.getNotifications().catch(() => ({ notifications: [] }))
-      ]);
-      setDashboardData(dashRes || null);
-      setUser(userRes.user || null);
-      setNotifications(notifRes.notifications || []);
-    } catch (error) {
-      console.error("Failed to load sidebar data", error);
+      const res = await api.getUserProfile();
+      setFarmerProfile(res.user || null);
+    } catch {
+      // Non-blocking fallback
     }
   };
 
-  const loadOrders = async (searchOverride?: string) => {
+  const loadOrders = async () => {
     try {
       setLoading(true);
-      
-      const searchTerm = searchOverride !== undefined 
-        ? searchOverride 
-        : (orderIdSearch || buyerSearch) ? `${orderIdSearch} ${buyerSearch}`.trim() : undefined;
-
-      let mappedStatus = activeTab;
-      if (mappedStatus === 'to ship') mappedStatus = 'confirmed';
-      if (mappedStatus === 'in transit') mappedStatus = 'in_transit';
-      if (mappedStatus === 'delivered') mappedStatus = 'delivered';
-      if (mappedStatus === 'all') mappedStatus = '';
+      let mappedStatus: string | undefined = undefined;
+      if (activeTab === 'to_ship') mappedStatus = 'confirmed';
+      else if (activeTab === 'in_transit') mappedStatus = 'in_transit';
+      else if (activeTab === 'delivered') mappedStatus = 'delivered';
 
       const res = await api.getFarmerOrders({
         page,
-        limit: 10,
-        status: mappedStatus === 'all' ? undefined : mappedStatus,
-        search: searchTerm || undefined
+        limit: 15,
+        status: mappedStatus,
+        search: searchQuery.trim() || undefined,
       });
 
-      setOrders(res.orders || []);
+      const fetched: FarmerOrder[] = res.orders || [];
+      setOrders(fetched);
       setTotalPages(res.pagination?.total_pages || 1);
       setTotalOrders(res.pagination?.total || 0);
-    } catch (error) {
-      console.error("Failed to load shipping data", error);
+
+      // If queryOrderId is present, auto-open packing slip for that order
+      if (queryOrderId) {
+        const found = fetched.find((o) => (o.id || o.order_id).toString() === queryOrderId);
+        if (found) {
+          setSelectedOrderForSlip(found);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load shipments:', err);
+      showError('Failed to load shipments.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = () => {
+  useEffect(() => {
+    loadOrders();
+  }, [page, activeTab]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
     setPage(1);
     loadOrders();
   };
 
-  const handleReset = () => {
-    setOrderIdSearch('');
-    setProductSearch('');
-    setBuyerSearch('');
-    setDateRange('');
-    setPage(1);
-    loadOrders('');
-  };
-
-  const handleUpdateStatus = async (orderId: string, nextStatus: string) => {
+  const handleStatusUpdate = async (orderId: number, nextStatus: string) => {
     try {
-      await api.updateOrderStatus(orderId, nextStatus);
+      setIsSubmitting(true);
+      await api.updateOrderStatus(orderId.toString(), nextStatus);
+      showSuccess(`Shipment status updated to "${nextStatus.replace('_', ' ')}".`);
+      setDispatchingOrder(null);
       loadOrders();
-      loadSidebarData(); // refresh sidebar counts
-    } catch (error) {
-      console.error("Failed to update status", error);
-      showError('Failed to update status. Please try again.');
+    } catch (err: any) {
+      console.error('Failed to update shipment status:', err);
+      showError(err.message || 'Failed to update shipment status.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const pendingShipments = dashboardData?.summary?.pending_orders || 0;
-  const inTransitCount = dashboardData?.summary?.in_transit_orders || 0;
-  const unreadMessages = notifications.filter(n => !n.is_read).length;
+  const toggleSelectOrder = (id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
 
-  const tabs = [
-    { id: 'to ship', label: 'To Ship', count: pendingShipments },
-    { id: 'in transit', label: 'In Transit', count: inTransitCount },
-    { id: 'delivered', label: 'Delivered', count: dashboardData?.summary?.delivered_orders || 0 },
-  ];
+  const toggleSelectAll = () => {
+    if (selectedIds.length === orders.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(orders.map((o) => o.id || o.order_id));
+    }
+  };
+
+  const handlePrintSlip = () => {
+    window.print();
+  };
 
   return (
-    <>
-      
-      
+    <div className="space-y-6">
+      {/* Print CSS Rules */}
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #printable-packing-slip,
+          #printable-packing-slip * {
+            visibility: visible;
+          }
+          #printable-packing-slip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 24px;
+            background: white !important;
+            z-index: 999999;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
 
-      {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa]">
-        
-        {/* TOP HEADER */}
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 flex-shrink-0 z-10 sticky top-0">
-          <div className="flex items-center">
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight" style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}>Shipping Management</h1>
-            <p className="ml-4 text-sm text-gray-500 font-medium hidden md:block">Track and dispatch your outgoing deliveries.</p>
+      {/* Top Banner / Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#16a34a] text-2xl">local_shipping</span>
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Shipping & Logistics</h1>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">
+            Dispatch fresh farm harvests, generate official packing slips, and monitor customer deliveries.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/farmer/orders"
+            className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold transition-colors flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-base">receipt_long</span>
+            Manage Orders
+          </Link>
+          {orders.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const target = orders[0];
+                if (target) setSelectedOrderForSlip(target);
+              }}
+              className="px-4 py-2.5 rounded-xl bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-base">print</span>
+              Print Waybill / Slip
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Status Filter Tabs */}
+      <div className="flex gap-2 border-b border-gray-200 overflow-x-auto pb-1">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('to_ship');
+            setPage(1);
+          }}
+          className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'to_ship'
+              ? 'bg-[#16a34a] text-white shadow-xs'
+              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">inventory_2</span>
+          Ready to Ship / Pack
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('in_transit');
+            setPage(1);
+          }}
+          className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'in_transit'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">local_shipping</span>
+          In Transit
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('delivered');
+            setPage(1);
+          }}
+          className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'delivered'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">verified</span>
+          Delivered
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('all');
+            setPage(1);
+          }}
+          className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'all'
+              ? 'bg-gray-800 text-white shadow-xs'
+              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">dataset</span>
+          All Shipments
+        </button>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <form onSubmit={handleSearch} className="bg-white p-4 rounded-2xl border border-gray-100 flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[240px]">
+          <span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400 text-lg">search</span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by Order ID, Buyer Name, or Destination..."
+            className="w-full pl-9 pr-4 py-2 bg-gray-50/80 border border-gray-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] transition-all"
+          />
+        </div>
+
+        <select
+          value={carrierFilter}
+          onChange={(e) => setCarrierFilter(e.target.value)}
+          className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30"
+        >
+          <option value="all">All Delivery Modes</option>
+          <option value="direct">Farm Direct Delivery</option>
+          <option value="greenharvest">GreenHarvest Logistics</option>
+          <option value="carrier">Local Transporter / Ethio-Post</option>
+        </select>
+
+        <button
+          type="submit"
+          className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-colors"
+        >
+          Filter
+        </button>
+
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery('');
+              setPage(1);
+              loadOrders();
+            }}
+            className="px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-700"
+          >
+            Clear
+          </button>
+        )}
+      </form>
+
+      {/* Shipments Table */}
+      {loading ? (
+        <div className="py-20 flex flex-col items-center justify-center bg-white rounded-2xl border border-gray-100">
+          <div className="w-10 h-10 border-4 border-[#16a34a] border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Loading Logistics Dispatches...</p>
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="py-20 text-center bg-white rounded-2xl border border-dashed border-gray-200 p-8">
+          <div className="w-14 h-14 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-3">
+            <span className="material-symbols-outlined text-3xl">local_shipping</span>
+          </div>
+          <h3 className="text-base font-bold text-gray-800">No Shipments Found</h3>
+          <p className="text-xs text-gray-500 max-w-sm mx-auto mt-1 mb-4">
+            {activeTab === 'to_ship'
+              ? 'No orders are waiting to be packed and dispatched right now.'
+              : 'No shipments match the selected filter criteria.'}
+          </p>
+          <Link
+            href="/farmer/orders"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#16a34a] text-white text-xs font-bold rounded-xl hover:bg-[#15803d] transition-colors"
+          >
+            Check Pending Orders
+          </Link>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-gray-50/80 border-b border-gray-100 text-gray-500 font-bold uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th className="p-4 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.length === orders.length && orders.length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded border-gray-300 text-[#16a34a] focus:ring-[#16a34a] cursor-pointer"
+                    />
+                  </th>
+                  <th className="p-4">Shipment / Order</th>
+                  <th className="p-4">Harvest Produce</th>
+                  <th className="p-4">Destination & Contact</th>
+                  <th className="p-4">Status & Payment</th>
+                  <th className="p-4">Farmer Share</th>
+                  <th className="p-4 text-right">Logistics Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {orders.map((order) => {
+                  const currentOrderId = order.id || order.order_id;
+                  const item = order.items && order.items[0] ? order.items[0] : null;
+                  const totalItems = order.items ? order.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0) : 0;
+                  const isSelected = selectedIds.includes(currentOrderId);
+
+                  return (
+                    <tr key={currentOrderId} className={`hover:bg-gray-50/60 transition-colors ${isSelected ? 'bg-green-50/30' : ''}`}>
+                      <td className="p-4">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectOrder(currentOrderId)}
+                          className="rounded border-gray-300 text-[#16a34a] focus:ring-[#16a34a] cursor-pointer"
+                        />
+                      </td>
+
+                      <td className="p-4">
+                        <span className="font-mono font-bold text-gray-900">#GH-{currentOrderId}</span>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {new Date(order.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </p>
+                      </td>
+
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          {item?.image_url ? (
+                            <img
+                              src={item.image_url}
+                              alt={item.product_name}
+                              className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-green-50 text-[#16a34a] flex items-center justify-center shrink-0">
+                              <span className="material-symbols-outlined text-lg">spa</span>
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-bold text-gray-800 line-clamp-1">{item?.product_name || 'Farm Produce'}</p>
+                            <p className="text-[11px] text-gray-500">
+                              {order.items?.length > 1
+                                ? `${item?.quantity} ${item?.unit || 'kg'} + ${order.items.length - 1} other item(s)`
+                                : `${item?.quantity} ${item?.unit || 'kg'} total`}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-4 max-w-[200px]">
+                        <p className="font-semibold text-gray-800">{order.buyer_name}</p>
+                        {order.buyer_phone && (
+                          <p className="text-[11px] text-gray-500 font-mono mt-0.5">{order.buyer_phone}</p>
+                        )}
+                        <p className="text-[11px] text-gray-400 truncate mt-0.5" title={order.delivery_address}>
+                          {order.delivery_address || 'Addis Ababa / Regional'}
+                        </p>
+                      </td>
+
+                      <td className="p-4">
+                        <div className="space-y-1">
+                          {order.order_status === 'pending' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                              Order Pending
+                            </span>
+                          )}
+                          {order.order_status === 'confirmed' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                              Ready for Dispatch
+                            </span>
+                          )}
+                          {order.order_status === 'in_transit' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                              In Transit
+                            </span>
+                          )}
+                          {order.order_status === 'delivered' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              Delivered
+                            </span>
+                          )}
+                          {order.order_status === 'cancelled' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">
+                              Cancelled
+                            </span>
+                          )}
+
+                          <div>
+                            <span
+                              className={`text-[10px] font-semibold uppercase tracking-wider ${
+                                order.payment_status === 'paid' ? 'text-[#16a34a]' : 'text-gray-400'
+                              }`}
+                            >
+                              {order.payment_status === 'paid' ? '✓ Paid (Chapa)' : 'Payment Pending'}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-4">
+                        <span className="font-black text-[#16a34a] text-sm">
+                          ETB {Number(order.farmer_total || order.total_amount).toLocaleString()}
+                        </span>
+                      </td>
+
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrderForSlip(order)}
+                            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold transition-colors flex items-center gap-1 shadow-2xs"
+                            title="View and print official packing slip"
+                          >
+                            <span className="material-symbols-outlined text-sm">print</span>
+                            Packing Slip
+                          </button>
+
+                          {order.order_status === 'confirmed' && (
+                            <button
+                              type="button"
+                              onClick={() => setDispatchingOrder(order)}
+                              className="px-3 py-1.5 rounded-lg bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-sm">local_shipping</span>
+                              Dispatch
+                            </button>
+                          )}
+
+                          {order.order_status === 'in_transit' && (
+                            <button
+                              type="button"
+                              onClick={() => handleStatusUpdate(currentOrderId, 'delivered')}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-sm">check_circle</span>
+                              Delivered
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
-          <div className="flex-1 max-w-xl mx-8 hidden lg:block">
-            <div className="flex items-center bg-gray-100/80 border border-gray-200 rounded-full px-4 py-2 w-full transition-all duration-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#2d9a33]/20 focus-within:border-[#2d9a33]">
-              <span className="material-symbols-outlined text-gray-400 text-[20px] mr-2">search</span>
-              <input 
-                type="text" 
-                placeholder="Search shipments..." 
-                className="w-full bg-transparent border-none focus:outline-none text-sm text-gray-700 placeholder-gray-400"
-                value={orderIdSearch}
-                onChange={(e) => setOrderIdSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-5 ml-auto">
-            <button className="relative w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
-              <span className="material-symbols-outlined text-[24px]">notifications_none</span>
-              {notifications.length > 0 && (
-                <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
-                  {notifications.length}
-                </span>
-              )}
-            </button>
-            <button className="relative w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
-              <span className="material-symbols-outlined text-[24px]">chat_bubble_outline</span>
-              {unreadMessages > 0 && (
-                <span className="absolute top-2 right-2 bg-orange-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
-                  {unreadMessages}
-                </span>
-              )}
-            </button>
-            
-            <div className="h-8 w-px bg-gray-200 mx-2"></div>
-
-            {/* USER PROFILE */}
-            <div className="flex items-center cursor-pointer group relative pl-2">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#2d9a33] to-[#74df41] p-[2px] mr-3">
-                <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden border border-white">
-                  {user?.image_url ? (
-                    <img src={user.image_url} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-[#2d9a33] font-bold text-sm">
-                      {user?.name?.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="p-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+              <span>
+                Page {page} of {totalPages} ({totalOrders} shipments recorded)
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors font-medium"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(page + 1)}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors font-medium"
+                >
+                  Next
+                </button>
               </div>
             </div>
-          </div>
-        </header>
+          )}
+        </div>
+      )}
 
-        {/* DASHBOARD CONTENT */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
-          <div className="max-w-[1440px] mx-auto space-y-6">
-            
-            <div className="flex justify-end gap-3 mb-2">
-              <button className="px-4 py-2 bg-[#2d9a33] hover:bg-[#25822a] text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">print</span>
-                Batch Print Waybills
+      {/* DISPATCH CONFIRMATION MODAL */}
+      {dispatchingOrder && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-green-50 text-[#16a34a] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-lg">local_shipping</span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Dispatch Order #GH-{dispatchingOrder.id || dispatchingOrder.order_id}</h3>
+                  <p className="text-[11px] text-gray-400">Hand off harvest produce to transport carrier</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDispatchingOrder(null)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
               </button>
             </div>
 
-            {/* TABS */}
-            <div className="bg-white rounded-t-xl border-b-2 border-transparent px-2 flex overflow-x-auto custom-scrollbar space-x-6 text-sm font-medium border-x border-t border-gray-200">
-              {tabs.map((tab) => {
-                const isActive = activeTab === tab.id;
-                let badgeClass = 'bg-gray-100 text-gray-600';
-                if (isActive) badgeClass = 'bg-[#2d9a33] text-white';
-                else if (tab.id === 'to ship' && tab.count > 0) badgeClass = 'bg-orange-100 text-orange-600';
-                else if (tab.id === 'in transit' && tab.count > 0) badgeClass = 'bg-[#fff200] text-gray-900';
+            <div className="py-4 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1.5">Logistics / Delivery Mode</label>
+                <select
+                  value={selectedCarrier}
+                  onChange={(e) => setSelectedCarrier(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30"
+                >
+                  <option value="Farm Direct Delivery">Farm Direct Delivery (Farmer vehicle / dispatch)</option>
+                  <option value="GreenHarvest Logistics Hub">GreenHarvest Central Hub Logistics</option>
+                  <option value="Ethio-Post Express">Ethio-Post Express / Inter-city Bus</option>
+                  <option value="Buyer Self-Pickup">Buyer Farm Gate Pickup</option>
+                </select>
+              </div>
 
-                return (
-                  <button 
-                    key={tab.id}
-                    onClick={() => { setActiveTab(tab.id); setPage(1); }}
-                    className={`py-4 px-2 whitespace-nowrap transition-colors flex items-center gap-2 border-b-2 ${isActive ? 'border-[#2d9a33] text-[#2d9a33]' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
-                    style={{ marginBottom: '-2px' }}
-                  >
-                    {tab.label} {tab.count !== undefined && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${badgeClass}`}>{tab.count}</span>}
-                  </button>
-                );
-              })}
-            </div>
+              <div>
+                <label className="block font-bold text-gray-700 mb-1.5">Driver / Dispatch Notes (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={trackingNotes}
+                  onChange={(e) => setTrackingNotes(e.target.value)}
+                  placeholder="e.g., Driver: Abebe (0911-000000), Isuzu Truck Plate 3-A12345, departing 9:00 AM..."
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30"
+                />
+              </div>
 
-            {/* FILTERS */}
-            <div className="bg-white border-x border-b border-gray-200 p-6 flex flex-wrap gap-4 items-end rounded-b-xl shadow-sm mb-6">
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-gray-500 mb-2">Tracking ID / Order ID</label>
-                <input 
-                  type="text" 
-                  value={orderIdSearch}
-                  onChange={(e) => setOrderIdSearch(e.target.value)}
-                  placeholder="e.g. GH-2023-..." 
-                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] text-sm"
-                />
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-gray-500 mb-2">Delivery Partner</label>
-                <input 
-                  type="text" 
-                  placeholder="Carrier name" 
-                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] text-sm"
-                />
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-gray-500 mb-2">Destination</label>
-                <input 
-                  type="text" 
-                  value={buyerSearch}
-                  onChange={(e) => setBuyerSearch(e.target.value)}
-                  placeholder="City or Buyer Info" 
-                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] text-sm"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleReset} className="px-6 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg text-sm font-bold transition-colors">
-                  Reset
-                </button>
-                <button onClick={handleSearch} className="px-6 py-2.5 bg-[#2d9a33] hover:bg-[#25822a] text-white rounded-lg text-sm font-bold transition-colors">
-                  Search
-                </button>
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 flex items-start gap-2.5 text-amber-800">
+                <span className="material-symbols-outlined text-base shrink-0 text-amber-600">info</span>
+                <p className="text-[11px] leading-relaxed">
+                  Marking this harvest as <strong>In Transit</strong> notifies the customer and triggers live delivery tracking on their portal.
+                </p>
               </div>
             </div>
 
-            {/* SHIPPING TABLE */}
-            {loading ? (
-              <div className="flex justify-center p-12">
-                <div className="w-10 h-10 border-4 border-[#2d9a33] border-t-transparent rounded-full animate-spin"></div>
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setDispatchingOrder(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() =>
+                  handleStatusUpdate(dispatchingOrder.id || dispatchingOrder.order_id, 'in_transit')
+                }
+                className="px-5 py-2 rounded-xl bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Dispatching...' : 'Confirm Dispatch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRINTABLE PACKING SLIP MODAL */}
+      {selectedOrderForSlip && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-8 shadow-2xl border border-gray-200 animate-in fade-in zoom-in-95 duration-150 my-8">
+            {/* Modal Controls (Hidden in Print) */}
+            <div className="no-print flex items-center justify-between pb-6 border-b border-gray-200 mb-6">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#16a34a]">receipt_long</span>
+                <span className="text-sm font-bold text-gray-800">Packing Slip & Commercial Waybill Preview</span>
               </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        <th className="p-4 w-12"><input type="checkbox" className="rounded border-gray-300 text-[#2d9a33] focus:ring-[#2d9a33] cursor-pointer" /></th>
-                        <th className="p-4">PARCEL INFO</th>
-                        <th className="p-4">LOGISTICS</th>
-                        <th className="p-4">DESTINATION</th>
-                        <th className="p-4">STATUS</th>
-                        <th className="p-4 text-right">ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                      {orders.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="p-12 text-center text-gray-500">
-                            <div className="flex flex-col items-center justify-center">
-                              <span className="material-symbols-outlined text-[48px] text-gray-300 mb-3">local_shipping</span>
-                              <p className="font-bold text-gray-900 text-lg">No shipments found</p>
-                              <p className="text-sm mt-1 mb-4">Try adjusting your filters or check a different tab.</p>
-                            </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handlePrintSlip}
+                  className="px-4 py-2 bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-base">print</span>
+                  Print Packing Slip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderForSlip(null)}
+                  className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-xl">close</span>
+                </button>
+              </div>
+            </div>
+
+            {/* PRINTABLE CONTAINER */}
+            <div id="printable-packing-slip" className="text-gray-800 bg-white">
+              {/* Slip Header */}
+              <div className="flex justify-between items-start border-b-2 border-gray-800 pb-6 mb-6">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-[#16a34a] flex items-center justify-center text-white font-black text-base">
+                      GH
+                    </div>
+                    <span className="text-xl font-black tracking-tight text-gray-900">GreenHarvest Solutions</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Ethiopian Direct Agro-Commerce Platform</p>
+                  <p className="text-xs text-gray-500">Addis Ababa, Ethiopia | support@greenharvest.et</p>
+                </div>
+
+                <div className="text-right">
+                  <h2 className="text-lg font-black uppercase tracking-wider text-gray-900">HARVEST DISPATCH SLIP</h2>
+                  <p className="text-xs font-mono font-bold text-[#16a34a] mt-0.5">
+                    DOC #GH-PACK-{(selectedOrderForSlip.id || selectedOrderForSlip.order_id).toString().padStart(6, '0')}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Order Ref: #GH-{selectedOrderForSlip.id || selectedOrderForSlip.order_id}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Date: {new Date(selectedOrderForSlip.created_at).toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Farmer and Buyer Columns */}
+              <div className="grid grid-cols-2 gap-8 mb-6 pb-6 border-b border-gray-200 text-xs">
+                <div>
+                  <p className="font-bold text-gray-400 uppercase tracking-wider text-[10px] mb-1">PRODUCER / DISPATCH ORIGIN</p>
+                  <p className="font-bold text-gray-900 text-sm">{farmerProfile?.name || 'Verified GreenHarvest Farmer'}</p>
+                  <p className="text-gray-600 mt-0.5">Farm: {farmerProfile?.farm_location || 'Certified Ethiopian Farm'}</p>
+                  {farmerProfile?.phone && (
+                    <p className="text-gray-600 font-mono mt-0.5">Tel: {farmerProfile.phone}</p>
+                  )}
+                  <p className="text-gray-500 mt-0.5">Email: {farmerProfile?.email || 'N/A'}</p>
+                </div>
+
+                <div>
+                  <p className="font-bold text-gray-400 uppercase tracking-wider text-[10px] mb-1">BUYER / DESTINATION</p>
+                  <p className="font-bold text-gray-900 text-sm">{selectedOrderForSlip.buyer_name}</p>
+                  <p className="text-gray-600 mt-0.5">
+                    Address: {selectedOrderForSlip.delivery_address || 'Addis Ababa / Regional Distribution Point'}
+                  </p>
+                  {selectedOrderForSlip.buyer_phone && (
+                    <p className="text-gray-600 font-mono mt-0.5">Tel: {selectedOrderForSlip.buyer_phone}</p>
+                  )}
+                  {selectedOrderForSlip.buyer_email && (
+                    <p className="text-gray-500 mt-0.5">Email: {selectedOrderForSlip.buyer_email}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="mb-6">
+                <table className="w-full text-left text-xs border border-gray-200">
+                  <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="p-3 border-b border-gray-200">#</th>
+                      <th className="p-3 border-b border-gray-200">Produce / Variety</th>
+                      <th className="p-3 border-b border-gray-200">Category</th>
+                      <th className="p-3 border-b border-gray-200 text-center">Quantity</th>
+                      <th className="p-3 border-b border-gray-200 text-right">Unit Price (ETB)</th>
+                      <th className="p-3 border-b border-gray-200 text-right">Total (ETB)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {selectedOrderForSlip.items?.map((item, idx) => {
+                      const itemTotal = Number(item.quantity) * Number(item.price);
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="p-3 font-mono text-gray-500">{idx + 1}</td>
+                          <td className="p-3 font-bold text-gray-900">{item.product_name}</td>
+                          <td className="p-3 text-gray-600">{item.category_name || 'Agricultural Produce'}</td>
+                          <td className="p-3 text-center font-bold text-gray-800">
+                            {item.quantity} {item.unit || 'kg'}
+                          </td>
+                          <td className="p-3 text-right font-mono text-gray-600">
+                            {Number(item.price).toLocaleString()}
+                          </td>
+                          <td className="p-3 text-right font-mono font-bold text-gray-900">
+                            {itemTotal.toLocaleString()}
                           </td>
                         </tr>
-                      ) : orders.map((order) => {
-                        const item = order.items && order.items[0] ? order.items[0] : null;
-                        const dateObj = new Date(order.created_at);
-                        const dateStr = dateObj.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
-                        const timeStr = dateObj.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', hour12: false});
-                        
-                        let statusBadge = null;
-                        if (order.order_status === 'pending') {
-                          statusBadge = <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">Pending</span>;
-                        } else if (order.order_status === 'confirmed') {
-                          statusBadge = <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">Ready to Ship</span>;
-                        } else if (order.order_status === 'in_transit') {
-                          statusBadge = <span className="bg-[#fff200] text-gray-900 px-3 py-1 rounded-full text-xs font-bold">In Transit</span>;
-                        } else if (order.order_status === 'delivered') {
-                          statusBadge = <span className="bg-[#4caf50] text-white px-3 py-1 rounded-full text-xs font-bold">Delivered</span>;
-                        } else if (order.order_status === 'cancelled') {
-                          statusBadge = <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold">Cancelled</span>;
-                        } else {
-                          statusBadge = <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold">{order.order_status}</span>;
-                        }
-                        
-                        return (
-                          <tr key={order.order_id} className="hover:bg-gray-50/80 transition-colors">
-                            <td className="p-4">
-                              <input type="checkbox" className="rounded border-gray-300 text-[#2d9a33] focus:ring-[#2d9a33] cursor-pointer" />
-                            </td>
-                            <td className="p-4">
-                              <p className="font-bold text-gray-900 line-clamp-1">{item?.product_name}</p>
-                              <p className="text-xs text-gray-500 font-medium mt-0.5">Order ID: GH-2023-{order.order_id.toString().padStart(5, '0')}</p>
-                              <p className="text-xs text-gray-500 font-medium mt-0.5">Weight: {item?.quantity || 0} kg</p>
-                            </td>
-                            <td className="p-4">
-                              <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-gray-400 text-[18px]">local_shipping</span>
-                                <p className="font-bold text-gray-800 text-sm">Standard Delivery</p>
-                              </div>
-                              <p className="text-xs text-gray-500 font-medium mt-0.5">Dispatched: {dateStr}</p>
-                            </td>
-                            <td className="p-4">
-                              <p className="font-bold text-gray-900">{order.buyer_name}</p>
-                              <p className="text-xs text-gray-500 font-medium">{order.buyer_email || 'No email'}</p>
-                            </td>
-                            <td className="p-4">
-                              {statusBadge}
-                            </td>
-                            <td className="p-4">
-                              <div className="flex items-center justify-end gap-3">
-                                {order.order_status === 'confirmed' ? (
-                                  <button onClick={() => handleUpdateStatus(order.order_id, 'in_transit')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                    Mark as Shipped
-                                  </button>
-                                ) : order.order_status === 'in_transit' ? (
-                                  <button onClick={() => handleUpdateStatus(order.order_id, 'delivered')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                    Mark Delivered
-                                  </button>
-                                ) : (
-                                  <button className="text-sm font-bold text-gray-500 hover:text-gray-700">Track</button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {/* PAGINATION */}
-                <div className="p-4 border-t border-gray-200 flex justify-between items-center text-sm">
-                  <span className="text-gray-500 font-medium">Showing {orders.length > 0 ? (page - 1) * 10 + 1 : 0} to {Math.min(page * 10, totalOrders)} of {totalOrders.toLocaleString()} shipments</span>
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => setPage(Math.max(1, page - 1))}
-                      disabled={page === 1}
-                      className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-                    </button>
-                    <button className="w-8 h-8 flex items-center justify-center rounded bg-[#2d9a33] text-white font-bold">{page}</button>
-                    {page < totalPages && (
-                      <button onClick={() => setPage(page + 1)} className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold">{page + 1}</button>
-                    )}
-                    {page + 1 < totalPages && (
-                      <button onClick={() => setPage(page + 2)} className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold">{page + 2}</button>
-                    )}
-                    {page + 2 < totalPages && <span className="px-2 text-gray-400">...</span>}
-                    {page + 2 < totalPages && (
-                      <button onClick={() => setPage(totalPages)} className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold">{totalPages}</button>
-                    )}
-                    <button 
-                      onClick={() => setPage(Math.min(totalPages, page + 1))}
-                      disabled={page >= totalPages}
-                      className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-                    </button>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Financial Totals */}
+              <div className="flex justify-end mb-8">
+                <div className="w-64 space-y-2 text-xs">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Payment Status:</span>
+                    <span className="font-bold uppercase text-gray-900">
+                      {selectedOrderForSlip.payment_status === 'paid' ? 'PAID (Chapa / Telebirr)' : 'PENDING'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Order Total:</span>
+                    <span className="font-mono">ETB {Number(selectedOrderForSlip.total_amount).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-300 pt-2 text-sm font-black text-[#16a34a]">
+                    <span>Harvest Value:</span>
+                    <span>ETB {Number(selectedOrderForSlip.farmer_total || selectedOrderForSlip.total_amount).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
-            )}
 
+              {/* Quality & Dispatch Declaration */}
+              <div className="border border-dashed border-gray-300 rounded-xl p-4 bg-gray-50 mb-8 text-[11px] text-gray-600 leading-relaxed">
+                <p className="font-bold text-gray-800 mb-1">Quality & Freshness Compliance Statement:</p>
+                <p>
+                  This harvest has been visually inspected for agricultural freshness, compliance with Ethiopian standard grading,
+                  and careful packaging to minimize transit perishability. For any discrepancy or dispute, report within 24 hours
+                  of receipt through GreenHarvest Returns Management.
+                </p>
+              </div>
+
+              {/* Signatures */}
+              <div className="grid grid-cols-2 gap-12 pt-4 border-t border-gray-300 text-xs">
+                <div>
+                  <div className="h-10 border-b border-gray-400 mb-2"></div>
+                  <p className="font-bold text-gray-800">Authorized Farmer / Dispatcher Signature</p>
+                  <p className="text-[10px] text-gray-400">Date: ________________________</p>
+                </div>
+                <div>
+                  <div className="h-10 border-b border-gray-400 mb-2"></div>
+                  <p className="font-bold text-gray-800">Carrier / Recipient Receiving Signature</p>
+                  <p className="text-[10px] text-gray-400">Date: ________________________</p>
+                </div>
+              </div>
+            </div>
           </div>
-        </main>
-      </div>
-    </>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function ShippingManagementPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center">
+          <div className="w-8 h-8 border-4 border-[#16a34a] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-xs text-gray-500 font-bold">Loading Shipping Management...</p>
+        </div>
+      }
+    >
+      <ShippingManagementContent />
+    </Suspense>
   );
 }
