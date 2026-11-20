@@ -67,6 +67,7 @@ const validateFarmerId = async (farmerId) => {
 };
 
 const buildProductValues = (payload = {}) => {
+	const rawImages = Array.isArray(payload.images) ? payload.images : (payload.image_url ? [payload.image_url] : []);
 	return {
 		name: payload.name !== undefined ? String(payload.name).trim() : undefined,
 		description:
@@ -80,6 +81,12 @@ const buildProductValues = (payload = {}) => {
 			? (payload.discount_price !== '' && payload.discount_price !== null ? Number(payload.discount_price) : null)
 			: undefined,
 		stock: payload.stock !== undefined ? Number(payload.stock) : undefined,
+		unit: payload.unit ? String(payload.unit).trim().toLowerCase() : "kg",
+		min_order_quantity: payload.min_order_quantity !== undefined && payload.min_order_quantity !== "" ? Number(payload.min_order_quantity) : 1,
+		harvest_date: payload.harvest_date ? String(payload.harvest_date).trim() : null,
+		shelf_life_days: payload.shelf_life_days !== undefined && payload.shelf_life_days !== "" ? Number(payload.shelf_life_days) : null,
+		is_organic: Boolean(payload.is_organic),
+		images: rawImages,
 		farm_location:
 			payload.farm_location !== undefined
 				? payload.farm_location
@@ -91,7 +98,7 @@ const buildProductValues = (payload = {}) => {
 				? payload.image_url
 					? String(payload.image_url).trim()
 					: null
-				: undefined,
+				: (rawImages.length > 0 ? rawImages[0] : null),
 	};
 };
 
@@ -154,6 +161,12 @@ const createProduct = async ({ user, payload }) => {
 		price: productValues.price,
 		discount_price: productValues.discount_price || null,
 		stock: productValues.stock,
+		unit: productValues.unit,
+		min_order_quantity: productValues.min_order_quantity,
+		harvest_date: productValues.harvest_date,
+		shelf_life_days: productValues.shelf_life_days,
+		is_organic: productValues.is_organic,
+		images: productValues.images,
 		farm_location: productValues.farm_location || null,
 		image_url: productValues.image_url || null,
 	});
@@ -254,10 +267,17 @@ const updateProduct = async ({ user, productId, payload }) => {
 		price: productValues.price !== undefined ? productValues.price : null,
 		discount_price: productValues.discount_price === null ? -1 : (productValues.discount_price !== undefined ? productValues.discount_price : null),
 		stock: productValues.stock !== undefined ? productValues.stock : null,
+		unit: productValues.unit !== undefined ? productValues.unit : null,
+		min_order_quantity: productValues.min_order_quantity !== undefined ? productValues.min_order_quantity : null,
+		harvest_date: productValues.harvest_date !== undefined ? productValues.harvest_date : null,
+		shelf_life_days: productValues.shelf_life_days !== undefined ? productValues.shelf_life_days : null,
+		is_organic: productValues.is_organic !== undefined ? productValues.is_organic : null,
+		images: productValues.images !== undefined && productValues.images.length > 0 ? productValues.images : null,
 		category_id: category_id !== undefined ? category_id : null,
 		farm_location:
 			productValues.farm_location !== undefined ? productValues.farm_location : null,
 		image_url: productValues.image_url !== undefined ? productValues.image_url : null,
+		status: payload.status !== undefined ? String(payload.status).trim().toLowerCase() : null,
 	});
 
 	return productModel.findProductById(updatedProduct.id);

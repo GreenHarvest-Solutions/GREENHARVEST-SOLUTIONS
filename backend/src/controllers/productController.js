@@ -261,6 +261,35 @@ const batchUpdateProductStatus = async (req, res) => {
   }
 };
 
+const updateProductStatus = async (req, res) => {
+  try {
+    const { status } = req.body || {};
+    const validStatuses = ["active", "draft", "deactivated"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        message: "status must be one of: active, draft, deactivated",
+      });
+    }
+
+    const product = await productService.updateProduct({
+      user: req.user,
+      productId: req.params.id,
+      payload: { status },
+    });
+
+    return res.status(200).json({
+      message: `Product status updated to ${status}`,
+      product,
+    });
+  } catch (error) {
+    return handleControllerError(res, "Update product status failed", error, {
+      userId: req.user && req.user.id,
+      productId: req.params.id,
+      body: req.body,
+    });
+  }
+};
+
 module.exports = {
   createProduct,
   updateProduct,
@@ -269,4 +298,5 @@ module.exports = {
   getProductById,
   updateProductStock,
   batchUpdateProductStatus,
+  updateProductStatus,
 };

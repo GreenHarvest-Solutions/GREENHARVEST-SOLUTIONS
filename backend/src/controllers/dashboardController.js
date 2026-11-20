@@ -278,15 +278,23 @@ const getFarmerOrders = async (req, res) => {
       `
         SELECT
           o.id AS order_id,
+          o.id,
           o.order_status,
           o.total_amount,
+          COALESCE(SUM(oi.quantity * oi.price), 0)::numeric(10,2) AS farmer_total,
+          COALESCE(p_pay.payment_status, 'pending') AS payment_status,
+          COALESCE(d.delivery_address, d.delivery_location, u.address, 'Standard Delivery Address') AS delivery_address,
+          COALESCE(d.status, d.delivery_status, o.delivery_status, 'pending') AS delivery_status,
           o.created_at,
           u.name AS buyer_name,
+          u.phone AS buyer_phone,
           u.email AS buyer_email,
           json_agg(json_build_object(
+            'product_id', p.id,
             'product_name', p.name,
             'quantity', oi.quantity,
             'price', oi.price,
+            'unit', COALESCE(p.unit, 'kg'),
             'category_name', c.name,
             'image_url', p.image_url
           )) AS items
@@ -295,8 +303,10 @@ const getFarmerOrders = async (req, res) => {
         JOIN order_items oi ON oi.order_id = o.id
         JOIN products p ON p.id = oi.product_id
         LEFT JOIN categories c ON c.id = p.category_id
+        LEFT JOIN payments p_pay ON p_pay.order_id = o.id
+        LEFT JOIN deliveries d ON d.order_id = o.id
         WHERE p.farmer_id = $1${statusFilter}${searchFilter}
-        GROUP BY o.id, u.id
+        GROUP BY o.id, u.id, p_pay.payment_status, d.delivery_address, d.delivery_location, d.status, d.delivery_status
         ORDER BY o.created_at DESC
         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
       `,
@@ -384,12 +394,20 @@ const getFarmerProducts = async (req, res) => {
           p.name,
           p.description,
           p.price,
+          p.discount_price,
           COALESCE(p.stock, 0)::int AS stock,
+          COALESCE(p.unit, 'kg') AS unit,
+          COALESCE(p.min_order_quantity, 1) AS min_order_quantity,
+          p.harvest_date,
+          p.shelf_life_days,
+          COALESCE(p.is_organic, FALSE) AS is_organic,
+          p.images,
+          COALESCE(p.status, 'active') AS status,
           CASE
             WHEN COALESCE(p.stock, 0) = 0 THEN 'out_of_stock'
             WHEN COALESCE(p.stock, 0) <= 50 THEN 'low_stock'
             ELSE 'in_stock'
-          END AS status,
+          END AS stock_status,
           p.image_url,
           p.farm_location,
           p.created_at,

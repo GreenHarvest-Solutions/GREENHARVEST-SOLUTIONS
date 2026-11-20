@@ -135,6 +135,43 @@ class APIClient {
     });
   }
 
+  // Upload endpoints
+  async uploadProductImage(file: File) {
+    const formData = new FormData();
+    formData.append('image', file);
+    return this.request<{ url: string; public_id: string }>({
+      method: 'POST',
+      url: '/upload/product-image',
+      data: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
+
+  async uploadProductImages(files: File[]) {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('images', file);
+    });
+    return this.request<{ images: { url: string; public_id: string }[]; urls: string[] }>({
+      method: 'POST',
+      url: '/upload/product-images',
+      data: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
+
+  async deleteProductImage(public_id: string) {
+    return this.request<{ message: string }>({
+      method: 'DELETE',
+      url: '/upload/product-image',
+      data: { public_id },
+    });
+  }
+
   // Product endpoints
   async getProducts(filters?: any) {
     return this.request<{ products: any[] }>({
@@ -167,10 +204,26 @@ class APIClient {
     });
   }
 
-  async deleteProduct(id: string) {
+  async deleteProduct(id: string | number) {
     return this.request({
       method: 'DELETE',
       url: `/products/${id}`,
+    });
+  }
+
+  async updateProductStatus(id: string | number, status: 'active' | 'draft' | 'deactivated') {
+    return this.request<{ product: any; message: string }>({
+      method: 'PATCH',
+      url: `/products/${id}/status`,
+      data: { status },
+    });
+  }
+
+  async batchUpdateProductsStatus(product_ids: (string | number)[], status: 'active' | 'draft' | 'deactivated') {
+    return this.request<{ message: string; affected: number }>({
+      method: 'PATCH',
+      url: '/products/batch',
+      data: { product_ids, status },
     });
   }
 
@@ -410,7 +463,7 @@ class APIClient {
   }
 
   // Task 5.1 — Returns endpoints
-  async getReturns(params?: { page?: number; limit?: number }) {
+  async getReturns(params?: { page?: number; limit?: number; status?: string; search?: string }) {
     return this.request<{ returns: any[]; pagination: any }>({
       method: 'GET',
       url: '/returns',
@@ -428,11 +481,15 @@ class APIClient {
   }
 
   // Task 5.3 — Update return (accept/reject)
-  async updateReturn(id: string | number, action: 'accept' | 'reject') {
+  async updateReturn(
+    id: string | number,
+    action: 'accept' | 'reject',
+    data?: { resolution_note?: string; restock?: boolean }
+  ) {
     return this.request<{ return: any }>({
       method: 'PATCH',
       url: `/returns/${id}`,
-      data: { action },
+      data: { action, ...data },
     });
   }
 

@@ -8,16 +8,18 @@ const productSelect = `
 		p.price,
 		p.discount_price,
 		p.stock,
+		COALESCE(p.unit, 'kg') AS unit,
+		COALESCE(p.min_order_quantity, 1) AS min_order_quantity,
+		p.harvest_date,
+		p.shelf_life_days,
+		COALESCE(p.is_organic, FALSE) AS is_organic,
+		p.images,
 		p.farm_location,
 		p.image_url,
 		p.created_at,
 		p.category_id,
 		p.farmer_id,
-		CASE
-			WHEN COALESCE(p.stock, 0) = 0 THEN 'out_of_stock'
-			WHEN COALESCE(p.stock, 0) <= 50 THEN 'low_stock'
-			ELSE 'in_stock'
-		END AS status,
+		COALESCE(p.status, 'active') AS status,
 		u.name AS farmer_name,
 		u.email AS farmer_email,
 		c.name AS category_name
@@ -34,9 +36,18 @@ const createProduct = async ({
 	price,
 	discount_price,
 	stock,
+	unit = 'kg',
+	min_order_quantity = 1,
+	harvest_date = null,
+	shelf_life_days = null,
+	is_organic = false,
+	images = [],
 	farm_location,
 	image_url,
 }) => {
+	const resolvedImageUrl = image_url || (Array.isArray(images) && images.length > 0 ? images[0] : null);
+	const resolvedImages = Array.isArray(images) && images.length > 0 ? images : (resolvedImageUrl ? [resolvedImageUrl] : []);
+
 	const result = await pool.query(
 		`
 			INSERT INTO products (
@@ -47,13 +58,36 @@ const createProduct = async ({
 				price,
 				discount_price,
 				stock,
+				unit,
+				min_order_quantity,
+				harvest_date,
+				shelf_life_days,
+				is_organic,
+				images,
 				farm_location,
-				image_url
+				image_url,
+				status
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			RETURNING id, farmer_id, category_id, name, description, price, discount_price, stock, farm_location, image_url, created_at
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'active')
+			RETURNING id, farmer_id, category_id, name, description, price, discount_price, stock, unit, min_order_quantity, harvest_date, shelf_life_days, is_organic, images, farm_location, image_url, status, created_at
 		`,
-		[farmer_id, category_id, name, description, price, discount_price, stock ?? 0, farm_location, image_url]
+		[
+			farmer_id,
+			category_id,
+			name,
+			description,
+			price,
+			discount_price,
+			stock ?? 0,
+			unit,
+			min_order_quantity,
+			harvest_date,
+			shelf_life_days,
+			is_organic,
+			resolvedImages,
+			farm_location,
+			resolvedImageUrl,
+		]
 	);
 
 	if (image_url) {
@@ -297,8 +331,26 @@ const findProductById = async (productId) => {
 
 const updateProductById = async (
 	productId,
-	{ name, description, price, discount_price, stock, category_id, farm_location, image_url }
+	{
+		name,
+		description,
+		price,
+		discount_price,
+		stock,
+		unit,
+		min_order_quantity,
+		harvest_date,
+		shelf_life_days,
+		is_organic,
+		images,
+		category_id,
+		farm_location,
+		image_url,
+		status,
+	}
 ) => {
+	const resolvedImageUrl = image_url || (Array.isArray(images) && images.length > 0 ? images[0] : null);
+
 	const result = await pool.query(
 		`
 			UPDATE products
@@ -308,13 +360,37 @@ const updateProductById = async (
 				price = COALESCE($3, price),
 				discount_price = CASE WHEN $4 = -1 THEN NULL WHEN $4 IS NULL THEN discount_price ELSE $4 END,
 				stock = COALESCE($5, stock),
-				category_id = COALESCE($6, category_id),
-				farm_location = COALESCE($7, farm_location),
-				image_url = COALESCE($8, image_url)
-			WHERE id = $9
-			RETURNING id, farmer_id, category_id, name, description, price, discount_price, stock, farm_location, image_url, created_at
+				unit = COALESCE($6, unit),
+				min_order_quantity = COALESCE($7, min_order_quantity),
+				harvest_date = COALESCE($8, harvest_date),
+				shelf_life_days = COALESCE($9, shelf_life_days),
+				is_organic = COALESCE($10, is_organic),
+				images = COALESCE($11, images),
+				category_id = COALESCE($12, category_id),
+				farm_location = COALESCE($13, farm_location),
+				image_url = COALESCE($14, image_url),
+				status = COALESCE($15, status)
+			WHERE id = $16
+			RETURNING id, farmer_id, category_id, name, description, price, discount_price, stock, unit, min_order_quantity, harvest_date, shelf_life_days, is_organic, images, farm_location, image_url, status, created_at
 		`,
-		[name, description, price, discount_price, stock, category_id, farm_location, image_url, productId]
+		[
+			name,
+			description,
+			price,
+			discount_price,
+			stock,
+			unit,
+			min_order_quantity,
+			harvest_date,
+			shelf_life_days,
+			is_organic,
+			images ? (Array.isArray(images) ? images : [images]) : null,
+			category_id,
+			farm_location,
+			resolvedImageUrl,
+			status,
+			productId,
+		]
 	);
 
 	if (result.rows.length > 0 && stock !== null && stock !== undefined) {
