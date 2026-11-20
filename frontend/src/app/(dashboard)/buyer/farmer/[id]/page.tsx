@@ -200,13 +200,34 @@ export default function FarmerStorePage() {
                 <span className="material-symbols-outlined text-yellow-300 text-xl">verified</span>
               </h1>
               <p className="text-white/80 text-sm">{farmer.bio || 'GreenHarvest Verified Farmer'}</p>
-              <div className="flex items-center gap-4 mt-3 text-xs text-white/70 justify-center sm:justify-start">
-                {farmer.address && (
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">location_on</span>{farmer.address}</span>
+              <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-white/90 justify-center sm:justify-start">
+                {(farmer.farm_location || farmer.address) && (
+                  <span className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-full backdrop-blur-xs">
+                    <span className="material-symbols-outlined text-[14px]">location_on</span>
+                    {farmer.farm_location || farmer.address}
+                  </span>
                 )}
-                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">inventory_2</span>{products.length} Products</span>
+                {farmer.farm_size && (
+                  <span className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-full backdrop-blur-xs">
+                    <span className="material-symbols-outlined text-[14px]">landscape</span>
+                    {farmer.farm_size} Hectares
+                  </span>
+                )}
+                {farmer.experience_years && (
+                  <span className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-full backdrop-blur-xs">
+                    <span className="material-symbols-outlined text-[14px]">verified_user</span>
+                    {farmer.experience_years}+ Yrs Experience
+                  </span>
+                )}
+                <span className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-full backdrop-blur-xs">
+                  <span className="material-symbols-outlined text-[14px]">inventory_2</span>
+                  {products.length} Products
+                </span>
                 {farmer.created_at && (
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_month</span>Joined {new Date(farmer.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</span>
+                  <span className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-full backdrop-blur-xs">
+                    <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+                    Joined {new Date(farmer.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+                  </span>
                 )}
               </div>
             </div>
