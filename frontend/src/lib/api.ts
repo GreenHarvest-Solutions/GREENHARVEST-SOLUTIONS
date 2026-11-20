@@ -529,15 +529,78 @@ class APIClient {
         total_orders: number;
         total_revenue: number | string;
         top_selling_products: Array<{
-          id: number;
+          id: number | string;
           name: string;
           units_sold: number;
           revenue_generated: number | string;
+        }>;
+        pending_farmers?: Array<{
+          id: number | string;
+          name: string;
+          email: string;
+          is_verified: boolean;
+          farm_name: string;
+          specialty: string;
+          location: string;
+          created_at: string;
+        }>;
+        product_moderation?: Array<{
+          id: number | string;
+          product_name: string;
+          price: number | string;
+          stock: number;
+          status: string;
+          category: string;
+          farmer_name: string;
+          created_at: string;
+        }>;
+        disputes?: Array<{
+          id: number | string;
+          order_id: number | string;
+          reason: string;
+          status: string;
+          refund_status: string;
+          buyer_name: string;
+          farmer_name: string;
+          amount: number | string;
+          created_at: string;
         }>;
       };
     }>({
       method: 'GET',
       url: '/admin/dashboard',
+    });
+  }
+
+  async verifyFarmer(farmerId: string | number, isVerified: boolean) {
+    return this.request<{ message: string; farmer: any }>({
+      method: 'PATCH',
+      url: `/admin/farmers/${farmerId}/verify`,
+      data: { is_verified: isVerified },
+    });
+  }
+
+  async moderateProduct(productId: string | number, status: 'active' | 'draft' | 'deactivated') {
+    return this.request<{ message: string; product: any }>({
+      method: 'PATCH',
+      url: `/admin/products/${productId}/moderate`,
+      data: { status },
+    });
+  }
+
+  async resolveDispute(disputeId: string | number, action: 'refund' | 'accept' | 'resolve' | 'reject') {
+    return this.request<{ message: string; dispute: any }>({
+      method: 'PATCH',
+      url: `/admin/disputes/${disputeId}/resolve`,
+      data: { action },
+    });
+  }
+
+  async broadcastAnnouncement(message: string) {
+    return this.request<{ message: string; delivered_count: number }>({
+      method: 'POST',
+      url: '/admin/broadcast',
+      data: { message },
     });
   }
 

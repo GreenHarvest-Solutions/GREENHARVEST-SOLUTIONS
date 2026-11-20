@@ -21,6 +21,12 @@ export default function AdminSidebar() {
   const router = useRouter();
   const [adminName, setAdminName] = useState('System Administrator');
   const [adminRole, setAdminRole] = useState('Superadmin • Tier 1');
+  const [counts, setCounts] = useState({
+    kyc: 2,
+    moderation: 3,
+    disputes: 2,
+    fleet: 14,
+  });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -39,6 +45,34 @@ export default function AdminSidebar() {
         // Fallback to default admin title
       }
     }
+
+    const fetchCounts = async () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+      if (!token) return;
+      try {
+        const res = await api.getAdminDashboard();
+        if (res && res.metrics) {
+          const kycPending = Array.isArray(res.metrics.pending_farmers)
+            ? res.metrics.pending_farmers.filter((f) => !f.is_verified).length
+            : 2;
+          const modPending = Array.isArray(res.metrics.product_moderation)
+            ? res.metrics.product_moderation.filter((p) => p.status !== 'active').length
+            : 3;
+          const dispOpen = Array.isArray(res.metrics.disputes)
+            ? res.metrics.disputes.filter((d) => d.status === 'pending').length
+            : 2;
+          setCounts((prev) => ({
+            ...prev,
+            kyc: kycPending,
+            moderation: modPending,
+            disputes: dispOpen,
+          }));
+        }
+      } catch {
+        // Keep defaults
+      }
+    };
+    fetchCounts();
   }, []);
 
   const handleLogout = async () => {
@@ -71,21 +105,21 @@ export default function AdminSidebar() {
           label: 'Farmer KYC Queue',
           href: '/admin/dashboard?tab=verifications',
           icon: 'fa-id-card',
-          badge: '3',
+          badge: String(counts.kyc),
           badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300',
         },
         {
           label: 'Product Moderation',
           href: '/admin/dashboard?tab=moderation',
           icon: 'fa-shield-halved',
-          badge: '2',
+          badge: String(counts.moderation),
           badgeColor: 'bg-blue-100 text-blue-900 border border-blue-300',
         },
         {
           label: 'Dispute Mediation',
           href: '/admin/dashboard?tab=disputes',
           icon: 'fa-scale-balanced',
-          badge: '2',
+          badge: String(counts.disputes),
           badgeColor: 'bg-red-100 text-red-900 border border-red-300',
         },
         {
