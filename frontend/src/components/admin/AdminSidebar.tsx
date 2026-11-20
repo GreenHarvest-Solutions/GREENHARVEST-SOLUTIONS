@@ -1,103 +1,277 @@
 'use client';
 
-import React from 'react';
-import Image from 'next/image';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
+
+interface AdminNavSection {
+  title: string;
+  items: {
+    label: string;
+    href: string;
+    icon: string;
+    badge?: string;
+    badgeColor?: string;
+  }[];
+}
 
 export default function AdminSidebar() {
-  return (
-    <aside className="w-64 bg-white/80 flex flex-col h-full border-r border-gray-100 z-10 relative shrink-0">
-      {/* Background Graphic */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent to-purple-50/50 pointer-events-none" />
+  const pathname = usePathname();
+  const router = useRouter();
+  const [adminName, setAdminName] = useState('System Administrator');
+  const [adminRole, setAdminRole] = useState('Superadmin • Tier 1');
+  const [counts, setCounts] = useState({
+    kyc: 2,
+    moderation: 3,
+    disputes: 2,
+    fleet: 14,
+  });
 
-      {/* Logo */}
-      <div className="px-8 py-10 flex items-center gap-3 relative z-10">
-        <div className="grid grid-cols-2 gap-1 w-6 h-6">
-          <div className="w-2.5 h-2.5 rounded-full bg-gray-800" />
-          <div className="w-2.5 h-2.5 rounded-full border-2 border-gray-800" />
-          <div className="w-2.5 h-2.5 rounded-full border-2 border-gray-800" />
-          <div className="w-2.5 h-2.5 rounded-full bg-gray-800" />
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          if (parsed.full_name || parsed.name) {
+            setAdminName(parsed.full_name || parsed.name);
+          }
+          if (parsed.role) {
+            setAdminRole(`${parsed.role.toUpperCase()} • Master Access`);
+          }
+        }
+      } catch {
+        // Fallback to default admin title
+      }
+    }
+
+    const fetchCounts = async () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+      if (!token) return;
+      try {
+        const res = await api.getAdminDashboard();
+        if (res && res.metrics) {
+          const kycPending = Array.isArray(res.metrics.pending_farmers)
+            ? res.metrics.pending_farmers.filter((f) => !f.is_verified).length
+            : 2;
+          const modPending = Array.isArray(res.metrics.product_moderation)
+            ? res.metrics.product_moderation.filter((p) => p.status !== 'active').length
+            : 3;
+          const dispOpen = Array.isArray(res.metrics.disputes)
+            ? res.metrics.disputes.filter((d) => d.status === 'pending').length
+            : 2;
+          setCounts((prev) => ({
+            ...prev,
+            kyc: kycPending,
+            moderation: modPending,
+            disputes: dispOpen,
+          }));
+        }
+      } catch {
+        // Keep defaults
+      }
+    };
+    fetchCounts();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Clear local storage regardless of API response
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+      }
+      router.push('/login');
+    }
+  };
+
+  const navSections: AdminNavSection[] = [
+    {
+      title: 'Command & Telemetry',
+      items: [
+        { label: 'Overview Dashboard', href: '/admin/dashboard', icon: 'fa-gauge-high' },
+        { label: 'Platform Analytics', href: '/admin/analytics', icon: 'fa-chart-line' },
+      ],
+    },
+    {
+      title: 'Marketplace Governance',
+      items: [
+        {
+          label: 'Farmer KYC Queue',
+          href: '/admin/dashboard?tab=verifications',
+          icon: 'fa-id-card',
+          badge: String(counts.kyc),
+          badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300',
+        },
+        {
+          label: 'Product Moderation',
+          href: '/admin/dashboard?tab=moderation',
+          icon: 'fa-shield-halved',
+          badge: String(counts.moderation),
+          badgeColor: 'bg-blue-100 text-blue-900 border border-blue-300',
+        },
+        {
+          label: 'Dispute Mediation',
+          href: '/admin/dashboard?tab=disputes',
+          icon: 'fa-scale-balanced',
+          badge: String(counts.disputes),
+          badgeColor: 'bg-red-100 text-red-900 border border-red-300',
+        },
+        {
+          label: 'User & Store Registry',
+          href: '/admin/users',
+          icon: 'fa-users-gear',
+        },
+      ],
+    },
+    {
+      title: 'Logistics & Settlement',
+      items: [
+        {
+          label: 'Cold-Chain Dispatch',
+          href: '/admin/deliveries',
+          icon: 'fa-truck-fast',
+          badge: '14 Active',
+          badgeColor: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+        },
+        {
+          label: 'Escrow Settlements',
+          href: '/admin/analytics',
+          icon: 'fa-money-bill-transfer',
+        },
+      ],
+    },
+    {
+      title: 'System & Security',
+      items: [
+        {
+          label: 'Platform Settings',
+          href: '/admin/settings',
+          icon: 'fa-sliders',
+        },
+      ],
+    },
+  ];
+
+  const isLinkActive = (href: string) => {
+    const cleanHref = href.split('?')[0];
+    if (cleanHref === '/admin/dashboard') {
+      return pathname === '/admin/dashboard' && (!href.includes('?') || href === pathname);
+    }
+    return pathname.startsWith(cleanHref);
+  };
+
+  return (
+    <aside className="w-64 bg-white flex flex-col h-full border-r border-gray-100 z-10 relative shrink-0">
+      {/* Background Graphic */}
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-50/15 to-emerald-50/30 pointer-events-none" />
+
+      {/* Header with Admin Console Authority */}
+      <div className="px-5 py-5 flex flex-col gap-2 relative z-10 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="grid grid-cols-2 gap-1 w-6 h-6">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#286c00]" />
+              <div className="w-2.5 h-2.5 rounded-full border-2 border-gray-800" />
+              <div className="w-2.5 h-2.5 rounded-full border-2 border-[#286c00]" />
+              <div className="w-2.5 h-2.5 rounded-full bg-gray-800" />
+            </div>
+            <span className="text-lg font-bold tracking-tight text-gray-900">
+              Green<span className="text-[#286c00]">Harvest</span>
+            </span>
+          </div>
+
+          <span className="text-xs font-bold text-[#286c00] bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full flex items-center gap-1 uppercase tracking-wider">
+            <i className="fa-solid fa-shield-halved text-[11px]" />
+            Admin
+          </span>
         </div>
-        <span className="text-xl font-bold tracking-tight">
-          Green <span className="text-[#7C3AED]">Solution</span>
-        </span>
+
+        {/* System Sub-Label */}
+        <div className="flex items-center justify-between text-xs text-gray-600 font-medium px-0.5">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-flex rounded-full h-2 w-2 bg-emerald-600" />
+            Enterprise Control
+          </span>
+          <span className="font-mono text-gray-500">v1.2</span>
+        </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-4 py-4 overflow-y-auto hide-scrollbar relative z-10 min-h-0">
-        <ul className="space-y-2">
-          <li>
-            <a className="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#">
-              <i className="fa-solid fa-border-all w-6 text-center text-gray-400" />
-              <span>Dashboard</span>
-            </a>
-          </li>
-          <li>
-            <a className="flex items-center justify-between px-4 py-3 bg-[#7C3AED] text-white rounded-xl shadow-lg shadow-[#7C3AED]/30 transition-all font-medium" href="#">
-              <div className="flex items-center">
-                <i className="fa-solid fa-briefcase w-6 text-center text-white/90" />
-                <span>Marketplace</span>
-              </div>
-              <i className="fa-solid fa-arrow-right text-sm" />
-            </a>
-          </li>
-          <li>
-            <a className="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#">
-              <i className="fa-solid fa-book w-6 text-center text-gray-400" />
-              <span>Orders</span>
-            </a>
-          </li>
-          <li>
-            <a className="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#">
-              <i className="fa-solid fa-chart-pie w-6 text-center text-gray-400" />
-              <span>Inventory</span>
-            </a>
-          </li>
-          <li>
-            <a className="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#">
-              <i className="fa-solid fa-file-invoice w-6 text-center text-gray-400" />
-              <span>Analytics</span>
-            </a>
-          </li>
-        </ul>
+      {/* Structured Admin Navigation */}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto hide-scrollbar relative z-10 min-h-0 space-y-5">
+        {navSections.map((section) => (
+          <div key={section.title}>
+            <span className="px-3 text-xs font-bold text-gray-600 uppercase tracking-wider block mb-1.5">
+              {section.title}
+            </span>
+            <ul className="space-y-1">
+              {section.items.map((item) => {
+                const active = isLinkActive(item.href);
+                return (
+                  <li key={item.label}>
+                    <Link
+                      href={item.href}
+                      className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all font-medium text-xs ${
+                        active
+                          ? 'bg-[#286c00] text-white shadow-md shadow-[#286c00]/25 font-semibold'
+                          : 'text-gray-700 hover:text-gray-900 hover:bg-emerald-50/70'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <i
+                          className={`fa-solid ${item.icon} w-4 text-center text-xs shrink-0 ${
+                            active ? 'text-white' : 'text-gray-500'
+                          }`}
+                        />
+                        <span className="truncate">{item.label}</span>
+                      </div>
 
-        <div className="mt-8">
-          <span className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">SUPPLY CHAIN</span>
-          <ul className="mt-3 space-y-2">
-            <li>
-              <a className="flex items-center justify-between px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#">
-                <div className="flex items-center">
-                  <i className="fa-solid fa-envelope-open-text w-6 text-center text-gray-400" />
-                  <span>MESSAGES</span>
-                </div>
-                <span className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center text-xs font-bold">6</span>
-              </a>
-            </li>
-            <li>
-              <a className="flex items-center px-4 py-3 text-gray-500 hover:bg-gray-50 rounded-xl transition-colors font-medium" href="#">
-                <i className="fa-solid fa-bolt w-6 text-center text-gray-400" />
-                <span>Activities</span>
-              </a>
-            </li>
-          </ul>
-        </div>
+                      {item.badge && (
+                        <span
+                          className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums shrink-0 ${
+                            active
+                              ? 'bg-white/20 text-white'
+                              : item.badgeColor || 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
-      {/* Go Pro Widget */}
-      <div className="p-6 relative z-10 shrink-0">
-        <div className="bg-white rounded-2xl p-5 shadow-xl shadow-purple-100/50 flex flex-col items-center text-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-50/50 to-transparent" />
-          <div className="w-24 h-24 mb-4 relative z-10 flex items-center justify-center">
-            <Image
-              alt="Harvest Pro"
-              className="w-full h-full object-contain relative z-10"
-              src="/images/admin/stitch/go-pro_v3.png"
-              width={96}
-              height={96}
-            />
+      {/* Admin Profile & Session Footer */}
+      <div className="p-3.5 relative z-10 shrink-0 border-t border-gray-100 bg-[#FCF9F8]">
+        <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-col gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-[#286c00] flex items-center justify-center font-bold text-xs shrink-0">
+              <i className="fa-solid fa-user-shield text-sm" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-gray-900 truncate">{adminName}</p>
+              <p className="text-xs text-gray-600 truncate">{adminRole}</p>
+            </div>
           </div>
-          <a className="text-sm font-semibold text-[#7C3AED] hover:text-[#6D28D9] transition-colors relative z-10 flex items-center gap-1" href="#">
-            Get Harvest Pro <i className="fa-solid fa-arrow-right text-xs" />
-          </a>
+
+          <button
+            onClick={handleLogout}
+            aria-label="Sign out of administrative session"
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+          >
+            <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
+            <span>Sign Out</span>
+          </button>
         </div>
       </div>
     </aside>
