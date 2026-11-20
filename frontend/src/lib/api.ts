@@ -204,10 +204,26 @@ class APIClient {
     });
   }
 
-  async deleteProduct(id: string) {
+  async deleteProduct(id: string | number) {
     return this.request({
       method: 'DELETE',
       url: `/products/${id}`,
+    });
+  }
+
+  async updateProductStatus(id: string | number, status: 'active' | 'draft' | 'deactivated') {
+    return this.request<{ product: any; message: string }>({
+      method: 'PATCH',
+      url: `/products/${id}/status`,
+      data: { status },
+    });
+  }
+
+  async batchUpdateProductsStatus(product_ids: (string | number)[], status: 'active' | 'draft' | 'deactivated') {
+    return this.request<{ message: string; affected: number }>({
+      method: 'PATCH',
+      url: '/products/batch',
+      data: { product_ids, status },
     });
   }
 

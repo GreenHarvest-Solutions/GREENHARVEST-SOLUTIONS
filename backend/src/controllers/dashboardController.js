@@ -384,12 +384,20 @@ const getFarmerProducts = async (req, res) => {
           p.name,
           p.description,
           p.price,
+          p.discount_price,
           COALESCE(p.stock, 0)::int AS stock,
+          COALESCE(p.unit, 'kg') AS unit,
+          COALESCE(p.min_order_quantity, 1) AS min_order_quantity,
+          p.harvest_date,
+          p.shelf_life_days,
+          COALESCE(p.is_organic, FALSE) AS is_organic,
+          p.images,
+          COALESCE(p.status, 'active') AS status,
           CASE
             WHEN COALESCE(p.stock, 0) = 0 THEN 'out_of_stock'
             WHEN COALESCE(p.stock, 0) <= 50 THEN 'low_stock'
             ELSE 'in_stock'
-          END AS status,
+          END AS stock_status,
           p.image_url,
           p.farm_location,
           p.created_at,

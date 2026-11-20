@@ -331,8 +331,26 @@ const findProductById = async (productId) => {
 
 const updateProductById = async (
 	productId,
-	{ name, description, price, discount_price, stock, category_id, farm_location, image_url }
+	{
+		name,
+		description,
+		price,
+		discount_price,
+		stock,
+		unit,
+		min_order_quantity,
+		harvest_date,
+		shelf_life_days,
+		is_organic,
+		images,
+		category_id,
+		farm_location,
+		image_url,
+		status,
+	}
 ) => {
+	const resolvedImageUrl = image_url || (Array.isArray(images) && images.length > 0 ? images[0] : null);
+
 	const result = await pool.query(
 		`
 			UPDATE products
@@ -342,13 +360,37 @@ const updateProductById = async (
 				price = COALESCE($3, price),
 				discount_price = CASE WHEN $4 = -1 THEN NULL WHEN $4 IS NULL THEN discount_price ELSE $4 END,
 				stock = COALESCE($5, stock),
-				category_id = COALESCE($6, category_id),
-				farm_location = COALESCE($7, farm_location),
-				image_url = COALESCE($8, image_url)
-			WHERE id = $9
-			RETURNING id, farmer_id, category_id, name, description, price, discount_price, stock, farm_location, image_url, created_at
+				unit = COALESCE($6, unit),
+				min_order_quantity = COALESCE($7, min_order_quantity),
+				harvest_date = COALESCE($8, harvest_date),
+				shelf_life_days = COALESCE($9, shelf_life_days),
+				is_organic = COALESCE($10, is_organic),
+				images = COALESCE($11, images),
+				category_id = COALESCE($12, category_id),
+				farm_location = COALESCE($13, farm_location),
+				image_url = COALESCE($14, image_url),
+				status = COALESCE($15, status)
+			WHERE id = $16
+			RETURNING id, farmer_id, category_id, name, description, price, discount_price, stock, unit, min_order_quantity, harvest_date, shelf_life_days, is_organic, images, farm_location, image_url, status, created_at
 		`,
-		[name, description, price, discount_price, stock, category_id, farm_location, image_url, productId]
+		[
+			name,
+			description,
+			price,
+			discount_price,
+			stock,
+			unit,
+			min_order_quantity,
+			harvest_date,
+			shelf_life_days,
+			is_organic,
+			images ? (Array.isArray(images) ? images : [images]) : null,
+			category_id,
+			farm_location,
+			resolvedImageUrl,
+			status,
+			productId,
+		]
 	);
 
 	if (result.rows.length > 0 && stock !== null && stock !== undefined) {

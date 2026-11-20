@@ -267,10 +267,17 @@ const updateProduct = async ({ user, productId, payload }) => {
 		price: productValues.price !== undefined ? productValues.price : null,
 		discount_price: productValues.discount_price === null ? -1 : (productValues.discount_price !== undefined ? productValues.discount_price : null),
 		stock: productValues.stock !== undefined ? productValues.stock : null,
+		unit: productValues.unit !== undefined ? productValues.unit : null,
+		min_order_quantity: productValues.min_order_quantity !== undefined ? productValues.min_order_quantity : null,
+		harvest_date: productValues.harvest_date !== undefined ? productValues.harvest_date : null,
+		shelf_life_days: productValues.shelf_life_days !== undefined ? productValues.shelf_life_days : null,
+		is_organic: productValues.is_organic !== undefined ? productValues.is_organic : null,
+		images: productValues.images !== undefined && productValues.images.length > 0 ? productValues.images : null,
 		category_id: category_id !== undefined ? category_id : null,
 		farm_location:
 			productValues.farm_location !== undefined ? productValues.farm_location : null,
 		image_url: productValues.image_url !== undefined ? productValues.image_url : null,
+		status: payload.status !== undefined ? String(payload.status).trim().toLowerCase() : null,
 	});
 
 	return productModel.findProductById(updatedProduct.id);
