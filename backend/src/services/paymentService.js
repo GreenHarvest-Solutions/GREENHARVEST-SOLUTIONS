@@ -90,8 +90,11 @@ const processPayment = async ({ user_id, order_id, payment_method, amount }) => 
 		});
 
 		await paymentModel.createTransaction(client, {
-			payment_id: payment.id,
+			order_id: parsed_order_id,
+			user_id,
 			amount: payment_amount.toFixed(2),
+			payment_method: payment_method.trim(),
+			status: payment_status,
 		});
 
 		await paymentModel.updateOrderPaymentStatus(client, {

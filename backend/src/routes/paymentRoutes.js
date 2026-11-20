@@ -1,5 +1,3 @@
-// Moved from routes/paymentRoutes.js during the structure refactor.
-// Import paths updated to use src/controllers and src/middleware.
 const express = require("express");
 
 const authMiddleware = require("../middleware/authMiddleware");
@@ -7,11 +5,16 @@ const {
   processPayment,
   getPaymentHistory,
   initializeChapaPayment,
-  verifyChapaPayment
+  verifyChapaPayment,
+  handleChapaWebhook,
 } = require("../controllers/paymentController");
 
 const router = express.Router();
 
+// Public webhook endpoint for Chapa server-to-server notifications
+router.post("/chapa/webhook", handleChapaWebhook);
+
+// Protected routes
 router.use(authMiddleware);
 
 router.post("/process", processPayment);
