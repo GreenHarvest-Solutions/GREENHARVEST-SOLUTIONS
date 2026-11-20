@@ -41,8 +41,8 @@ const getFarmerPublicProfile = async (farmerId) => {
   };
 };
 
-const updateProfile = async (userId, { name, phone, address, bio }) => {
-  const updated = await userModel.updateUserProfile({ user_id: userId, name, phone, address, bio });
+const updateProfile = async (userId, payload) => {
+  const updated = await userModel.updateUserProfile({ user_id: userId, ...payload });
 
   if (!updated) {
     throw createServiceError("User not found", 404);

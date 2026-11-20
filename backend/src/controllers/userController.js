@@ -29,9 +29,29 @@ const getMe = async (req, res) => {
 const updateMe = async (req, res) => {
   try {
     const userId = req.user.user_id || req.user.id;
-    const { name, phone, address, bio } = req.body;
+    const {
+      name,
+      phone,
+      address,
+      bio,
+      farm_name,
+      farm_type,
+      farm_location,
+      farm_size,
+      experience_years,
+    } = req.body;
 
-    const updated = await userService.updateProfile(userId, { name, phone, address, bio });
+    const updated = await userService.updateProfile(userId, {
+      name,
+      phone,
+      address,
+      bio,
+      farm_name,
+      farm_type,
+      farm_location,
+      farm_size,
+      experience_years,
+    });
 
     return res.status(200).json({ user: updated, message: 'Profile updated successfully' });
   } catch (error) {

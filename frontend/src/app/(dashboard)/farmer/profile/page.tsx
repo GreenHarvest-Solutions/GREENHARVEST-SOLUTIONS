@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useToast } from '@/contexts/ToastContext';
 
-type User = {
+type FarmerUser = {
   id: number;
   name: string;
   email: string;
@@ -14,303 +16,485 @@ type User = {
   is_verified: boolean;
   mfa_enabled: boolean;
   role: string;
-  image_url?: string;
-  bio?: string;
+  bio?: string | null;
+  farm_name?: string | null;
+  farm_type?: string | null;
+  farm_location?: string | null;
+  farm_size?: string | null;
+  experience_years?: number | null;
 };
 
+const ETHIOPIAN_REGIONS = [
+  'Oromia',
+  'Amhara',
+  'Sidama',
+  'Central Ethiopia (SNNPR)',
+  'South Ethiopia',
+  'South West Ethiopia',
+  'Tigray',
+  'Somali',
+  'Afar',
+  'Benishangul-Gumuz',
+  'Gambella',
+  'Harari',
+  'Addis Ababa',
+  'Dire Dawa',
+];
+
+const FARM_TYPES = [
+  'Cereal & Grain Farming (Teff, Wheat, Maize)',
+  'Coffee & Tea Plantation',
+  'Fresh Vegetables & Greens',
+  'Fruit Orchard',
+  'Pulses & Legumes',
+  'Oilseeds & Spices',
+  'Mixed Agro-Ecological Farming',
+];
+
 export default function FarmerProfilePage() {
-  const [user, setUser] = useState<User | null>(null);
+  const router = useRouter();
+  const { showSuccess, showError } = useToast();
+  const [user, setUser] = useState<FarmerUser | null>(null);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({ name: '', phone: '', address: '', bio: '' });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [userRes, dashRes] = await Promise.all([
-          api.getUserProfile().catch(() => ({ user: null })),
-          api.getFarmerDashboard().catch(() => ({})),
-        ]);
-        
-        setUser(userRes.user);
-        setDashboardData(dashRes || null);
-        
-        if (userRes.user) {
-          setFormData({
-            name: userRes.user.name || '',
-            phone: userRes.user.phone || '',
-            address: userRes.user.address || '',
-            bio: userRes.user.bio || ''
-          });
-        }
-      } finally {
-        setLoading(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    bio: '',
+    farm_name: '',
+    farm_type: '',
+    farm_location: '',
+    farm_size: '',
+    experience_years: '',
+  });
+
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      const [userRes, dashRes] = await Promise.all([
+        api.getUserProfile().catch(() => ({ user: null })),
+        api.getFarmerDashboard().catch(() => ({})),
+      ]);
+
+      const currentUser = userRes.user;
+      setUser(currentUser);
+      setDashboardData(dashRes || null);
+
+      if (currentUser) {
+        setFormData({
+          name: currentUser.name || '',
+          phone: currentUser.phone || '',
+          address: currentUser.address || '',
+          bio: currentUser.bio || '',
+          farm_name: currentUser.farm_name || '',
+          farm_type: currentUser.farm_type || FARM_TYPES[0],
+          farm_location: currentUser.farm_location || ETHIOPIAN_REGIONS[0],
+          farm_size: currentUser.farm_size || '',
+          experience_years: currentUser.experience_years ? String(currentUser.experience_years) : '',
+        });
       }
-    })();
+    } catch (err: any) {
+      console.error('Error fetching profile:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
   }, []);
 
-  const handleSaveProfile = async () => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
     setSaving(true);
     try {
-      await api.updateUserProfile(formData);
-      setUser((prev) => prev ? { ...prev, ...formData } : null);
+      await api.updateUserProfile({
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        address: formData.address.trim(),
+        bio: formData.bio.trim(),
+        farm_name: formData.farm_name.trim(),
+        farm_type: formData.farm_type,
+        farm_location: formData.farm_location,
+        farm_size: formData.farm_size.trim(),
+        experience_years: formData.experience_years ? Number(formData.experience_years) : null,
+      });
+
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: formData.name,
+              phone: formData.phone,
+              address: formData.address,
+              bio: formData.bio,
+              farm_name: formData.farm_name,
+              farm_type: formData.farm_type,
+              farm_location: formData.farm_location,
+              farm_size: formData.farm_size,
+              experience_years: formData.experience_years ? Number(formData.experience_years) : null,
+            }
+          : null
+      );
       setIsEditing(false);
-    } catch (error) {
-      console.error('Failed to update profile', error);
+      showSuccess('Farm and personal profile updated successfully!');
+    } catch (err: any) {
+      console.error('Failed to update profile:', err);
+      showError(err.response?.data?.message || 'Failed to update profile.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    await api.logout();
+    router.push('/login');
   };
 
-  const initials = user?.name ? user.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase() : 'GH';
+  const initials = user?.name
+    ? user.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase()
+    : 'GH';
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] flex flex-col font-sans text-gray-800">
-      
-      {/* Header */}
-      <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-8 flex-shrink-0 z-10 sticky top-0 shadow-sm">
-        <div className="flex items-center gap-4">
-          <Link href="/farmer/dashboard" className="flex items-center gap-2 text-[#2d9a33] font-bold text-xl tracking-tight hover:opacity-80 transition-opacity">
-            <span className="material-symbols-outlined">agriculture</span>
-            GreenHarvest Seller
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col font-sans text-gray-800">
+      {/* Top Header */}
+      <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 shadow-xs">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/farmer/dashboard"
+            className="flex items-center gap-2 text-[#16a34a] font-bold text-xl tracking-tight hover:opacity-85 transition-opacity"
+          >
+            <span className="material-symbols-outlined text-2xl">agriculture</span>
+            GreenHarvest Seller Center
           </Link>
-          <div className="h-6 w-px bg-gray-200 mx-2 hidden md:block"></div>
-          <span className="text-gray-500 font-medium hidden md:block">Profile Settings</span>
+          <span className="text-gray-300 hidden md:inline">|</span>
+          <span className="text-gray-500 font-medium text-sm hidden md:inline">Farmer & Farm Profile</span>
         </div>
+
         <div className="flex items-center gap-4">
-          <Link href="/farmer/dashboard" className="text-sm font-semibold text-gray-600 hover:text-[#2d9a33] transition-colors bg-gray-100 px-4 py-2 rounded-full">
-            Back to Dashboard
+          <Link
+            href="/farmer/dashboard"
+            className="text-xs md:text-sm font-semibold text-gray-700 hover:text-[#16a34a] bg-gray-100 hover:bg-gray-200/70 transition-colors px-4 py-2 rounded-xl flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-base">dashboard</span>
+            Dashboard
           </Link>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#2d9a33] to-[#74df41] p-[2px]">
-            <div className="w-full h-full rounded-full bg-white flex items-center justify-center font-bold text-[#2d9a33] border border-white">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#16a34a] to-[#4ade80] p-[2px]">
+            <div className="w-full h-full rounded-full bg-white flex items-center justify-center font-bold text-[#16a34a] text-sm">
               {initials}
             </div>
           </div>
         </div>
       </header>
 
-      {/* Body */}
-      <div className="flex-1 flex flex-col lg:flex-row w-full max-w-[1200px] mx-auto px-6 py-10 gap-8">
-        
-        {/* Sidebar */}
+      {/* Main Container */}
+      <div className="flex-1 w-full max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col lg:flex-row gap-8">
+        {/* Left Column / Summary Card */}
         <aside className="w-full lg:w-[320px] shrink-0 flex flex-col gap-6">
-          
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 flex flex-col items-center text-center">
-            {loading ? (
-              <div className="w-28 h-28 rounded-full bg-gray-100 animate-pulse mb-4" />
-            ) : (
-              <div className="w-28 h-28 rounded-full bg-green-50 border-4 border-[#2d9a33] flex items-center justify-center text-[#2d9a33] font-bold text-4xl mb-4">
-                {initials}
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col items-center text-center relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-r from-[#16a34a] to-[#22c55e] opacity-10" />
+
+            <div className="w-24 h-24 rounded-full bg-white shadow-md border-4 border-emerald-500/20 flex items-center justify-center text-[#16a34a] font-black text-3xl mb-3 relative z-10 mt-2">
+              {initials}
+            </div>
+
+            <h2 className="text-xl font-bold text-gray-900 leading-tight">
+              {user?.farm_name || user?.name || 'Verified Farm'}
+            </h2>
+            <p className="text-xs text-gray-500 mt-1 mb-3">{user?.email}</p>
+
+            {/* KYC Verification Badge */}
+            <div className="mb-4">
+              {user?.is_verified ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="material-symbols-outlined text-sm">verified</span>
+                  Verified Producer
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="material-symbols-outlined text-sm">pending</span>
+                  KYC Verification Pending
+                </span>
+              )}
+            </div>
+
+            <div className="w-full border-t border-gray-100 my-2"></div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 gap-4 w-full py-2">
+              <div className="text-left bg-gray-50/80 p-3 rounded-2xl">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Revenue</span>
+                <span className="font-bold text-gray-900 text-sm">
+                  ETB {Number(dashboardData?.summary?.total_revenue || 0).toLocaleString()}
+                </span>
               </div>
-            )}
-            
-            {loading ? (
-              <div className="h-6 w-32 bg-gray-100 rounded animate-pulse mb-2" />
-            ) : (
-              <h2 className="text-xl font-bold text-gray-900 mb-1">{user?.name ?? 'Farmer'}</h2>
-            )}
-            
-            <p className="text-sm text-gray-500 mb-4">{user?.email}</p>
-            <div className="w-full h-px bg-gray-100 mb-4"></div>
-            
-            <div className="flex justify-between w-full text-left px-2">
-              <div>
-                <p className="text-xs text-gray-400 font-semibold uppercase">Total Revenue</p>
-                <p className="font-bold text-gray-800 text-lg">ETB {Number(dashboardData?.summary?.total_revenue || 0).toLocaleString()}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-400 font-semibold uppercase">Total Orders</p>
-                <p className="font-bold text-gray-800 text-lg">{dashboardData?.summary?.total_orders_received || 0}</p>
+              <div className="text-left bg-gray-50/80 p-3 rounded-2xl">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Orders</span>
+                <span className="font-bold text-gray-900 text-sm">
+                  {dashboardData?.summary?.total_orders_received || 0}
+                </span>
               </div>
             </div>
-          </div>
 
-          <nav className="bg-white rounded-2xl p-2 shadow-sm border border-gray-200 flex flex-col gap-1">
-            <button className="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors text-left w-full border-l-4 bg-green-50 text-[#2d9a33] border-[#2d9a33]">
-              <span className="material-symbols-outlined text-[20px]">person</span>
-              Profile Details
-            </button>
-            <button className="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors text-left w-full border-l-4 text-gray-600 border-transparent hover:bg-gray-50">
-              <span className="material-symbols-outlined text-[20px]">store</span>
-              Farm Settings
-            </button>
-            <button className="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors text-left w-full border-l-4 text-gray-600 border-transparent hover:bg-gray-50">
-              <span className="material-symbols-outlined text-[20px]">payments</span>
-              Payout Methods
-            </button>
-            <hr className="border-gray-100 my-2 mx-4" />
-            <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 border-l-4 border-transparent hover:bg-red-50 transition-colors font-semibold text-sm w-full text-left">
-              <span className="material-symbols-outlined text-[20px]">logout</span>
-              Logout
-            </button>
-          </nav>
+            <div className="w-full mt-4 flex flex-col gap-2">
+              <Link
+                href="/farmer/store"
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-base">store</span>
+                Customize Storefront
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-base">logout</span>
+                Sign Out
+              </button>
+            </div>
+          </div>
         </aside>
 
-        {/* Main Content */}
+        {/* Right Column / Details Form */}
         <main className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Personal Information</h1>
-              <p className="text-sm text-gray-500 mt-1">Manage your farm's public details and contact information.</p>
-            </div>
-            {!loading && (
-              <button
-                onClick={() => {
-                  if (isEditing) {
-                    setFormData({
-                      name: user?.name || '',
-                      phone: user?.phone || '',
-                      address: user?.address || '',
-                      bio: user?.bio || ''
-                    });
-                    setIsEditing(false);
-                  } else {
-                    setIsEditing(true);
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  {isEditing ? 'close' : 'edit'}
-                </span>
-                {isEditing ? 'Cancel' : 'Edit Profile'}
-              </button>
-            )}
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-            {loading ? (
-              <div className="p-8 space-y-6">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="h-4 bg-gray-100 rounded w-1/4 mb-2"></div>
-                    <div className="h-10 bg-gray-50 rounded w-full"></div>
-                  </div>
-                ))}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-gray-100">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Farm & Personal Information</h1>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                  Manage your farm's public identity, crop specialties, and official producer profile.
+                </p>
               </div>
-            ) : (
-              <div className="p-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Name */}
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Farm Name / Full Name</label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] transition-all font-medium text-gray-900"
-                        placeholder="e.g. Abebe Farms"
-                      />
-                    ) : (
-                      <div className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl text-gray-900 font-medium">
-                        {user?.name || 'Not provided'}
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Email */}
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
-                    <div className="w-full px-4 py-3 bg-gray-100 border border-transparent rounded-xl text-gray-500 font-medium flex items-center justify-between">
-                      <span>{user?.email}</span>
-                      <span className="material-symbols-outlined text-[16px] text-gray-400">lock</span>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">Email cannot be changed directly.</p>
-                  </div>
-
-                  {/* Phone */}
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Phone Number</label>
-                    {isEditing ? (
-                      <input
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] transition-all font-medium text-gray-900"
-                        placeholder="+251 911..."
-                      />
-                    ) : (
-                      <div className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl text-gray-900 font-medium">
-                        {user?.phone || 'Not provided'}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Address */}
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Farm Location / Address</label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] transition-all font-medium text-gray-900"
-                        placeholder="123 Farm Road, Addis Ababa"
-                      />
-                    ) : (
-                      <div className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl text-gray-900 font-medium">
-                        {user?.address || 'Not provided'}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Bio */}
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Farm Bio / Description</label>
-                    {isEditing ? (
-                      <textarea
-                        rows={4}
-                        value={formData.bio}
-                        onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] transition-all font-medium text-gray-900 resize-none"
-                        placeholder="Tell buyers about your farming practices, organic certifications, and history..."
-                      />
-                    ) : (
-                      <div className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl text-gray-900 font-medium min-h-[100px] whitespace-pre-wrap">
-                        {user?.bio || 'No bio provided yet.'}
-                      </div>
-                    )}
-                  </div>
-
-                  
-                  
-                </div>
-              </div>
-            )}
-            
-            {/* Save Action */}
-            {isEditing && (
-              <div className="bg-gray-50 p-6 border-t border-gray-200 flex justify-end gap-3">
+              {!isEditing ? (
                 <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-6 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-200 cursor-pointertransition-colors"
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="px-4 py-2 bg-[#16a34a] hover:bg-[#15803d] text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-base">edit</span>
+                  Edit Details
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(false);
+                    if (user) {
+                      setFormData({
+                        name: user.name || '',
+                        phone: user.phone || '',
+                        address: user.address || '',
+                        bio: user.bio || '',
+                        farm_name: user.farm_name || '',
+                        farm_type: user.farm_type || FARM_TYPES[0],
+                        farm_location: user.farm_location || ETHIOPIAN_REGIONS[0],
+                        farm_size: user.farm_size || '',
+                        experience_years: user.experience_years ? String(user.experience_years) : '',
+                      });
+                    }
+                  }}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs sm:text-sm font-semibold transition-all"
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handleSaveProfile}
-                  disabled={saving}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-[#2d9a33] hover:bg-green-700 cursor-pointer rounded-xl text-white text-sm font-bold transition-colors shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                  {saving ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <span className="material-symbols-outlined text-[18px]">save</span>
-                  )}
-                  Save Changes
-                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="mt-8 space-y-8">
+              {/* Section 1: Farm Information */}
+              <div>
+                <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-2 mb-4">
+                  <span className="material-symbols-outlined text-base">psychiatry</span>
+                  Farm Profile & Agricultural Details
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Official Farm Name</label>
+                    <input
+                      type="text"
+                      disabled={!isEditing}
+                      value={formData.farm_name}
+                      onChange={(e) => setFormData({ ...formData, farm_name: e.target.value })}
+                      placeholder="e.g. Oromia Highland Organic Teff Farm"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] disabled:bg-gray-50 disabled:text-gray-700 font-medium transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Primary Farm Type</label>
+                    <select
+                      disabled={!isEditing}
+                      value={formData.farm_type}
+                      onChange={(e) => setFormData({ ...formData, farm_type: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] disabled:bg-gray-50 disabled:text-gray-700 font-medium transition-all bg-white"
+                    >
+                      {FARM_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Region / Location in Ethiopia</label>
+                    <select
+                      disabled={!isEditing}
+                      value={formData.farm_location}
+                      onChange={(e) => setFormData({ ...formData, farm_location: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] disabled:bg-gray-50 disabled:text-gray-700 font-medium transition-all bg-white"
+                    >
+                      {ETHIOPIAN_REGIONS.map((region) => (
+                        <option key={region} value={region}>
+                          {region}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Farm Size (e.g. Hectares / Timad)</label>
+                    <input
+                      type="text"
+                      disabled={!isEditing}
+                      value={formData.farm_size}
+                      onChange={(e) => setFormData({ ...formData, farm_size: e.target.value })}
+                      placeholder="e.g. 8 Hectares"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] disabled:bg-gray-50 disabled:text-gray-700 font-medium transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Years of Farming Experience</label>
+                    <input
+                      type="number"
+                      min="0"
+                      disabled={!isEditing}
+                      value={formData.experience_years}
+                      onChange={(e) => setFormData({ ...formData, experience_years: e.target.value })}
+                      placeholder="e.g. 12"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] disabled:bg-gray-50 disabled:text-gray-700 font-medium transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Specific Woreda / Kebele Address</label>
+                    <input
+                      type="text"
+                      disabled={!isEditing}
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      placeholder="e.g. Bishoftu Woreda, Kebele 04"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] disabled:bg-gray-50 disabled:text-gray-700 font-medium transition-all"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Farm Story & Agricultural Bio</label>
+                    <textarea
+                      rows={4}
+                      disabled={!isEditing}
+                      value={formData.bio}
+                      onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                      placeholder="Describe your soil, organic cultivation practices, harvest traditions, and what makes your farm produce unique for Ethiopian buyers."
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] disabled:bg-gray-50 disabled:text-gray-700 font-medium transition-all resize-y"
+                    />
+                  </div>
+                </div>
               </div>
-            )}
+
+              {/* Section 2: Personal Contact Information */}
+              <div className="pt-6 border-t border-gray-100">
+                <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-2 mb-4">
+                  <span className="material-symbols-outlined text-base">person</span>
+                  Primary Contact & Account Owner
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Farmer Full Name</label>
+                    <input
+                      type="text"
+                      disabled={!isEditing}
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="e.g. Abebe Bekele"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] disabled:bg-gray-50 disabled:text-gray-700 font-medium transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Phone Number (SMS & Pickup Alerts)</label>
+                    <input
+                      type="tel"
+                      disabled={!isEditing}
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="+251 91 234 5678"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] disabled:bg-gray-50 disabled:text-gray-700 font-medium transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Account Email Address</label>
+                    <input
+                      type="email"
+                      disabled
+                      value={user?.email || ''}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-gray-50 text-gray-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Account Role</label>
+                    <div className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm bg-gray-50 text-gray-600 font-semibold flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-emerald-600 text-base">eco</span>
+                      Certified Farmer / Producer
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {isEditing && (
+                <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-6 py-2.5 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-6 py-2.5 rounded-xl text-sm font-semibold bg-[#16a34a] hover:bg-[#15803d] text-white shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {saving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Saving Profile...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-base">save</span>
+                        Save Changes
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </form>
           </div>
         </main>
       </div>

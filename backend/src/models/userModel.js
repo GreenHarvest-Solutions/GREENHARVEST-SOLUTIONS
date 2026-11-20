@@ -76,11 +76,8 @@ const buildUserSelect = async (db = pool) => {
 	const passwordColumn = getFirstAvailableColumn(userColumns, ["password", "password_hash"]);
 	const hasRoleJoin = userColumns.includes("role_id") && (await tableExists("roles", db));
 	const hasUserBio = userColumns.includes("bio");
-	const hasFarmerProfileBio =
-		!hasUserBio &&
-		(await tableExists("farmer_profiles", db)) &&
-		(await getTableColumns("farmer_profiles", db)).includes("user_id") &&
-		(await getTableColumns("farmer_profiles", db)).includes("bio");
+	const hasFarmerProfile = (await tableExists("farmer_profiles", db));
+	const farmerColumns = hasFarmerProfile ? await getTableColumns("farmer_profiles", db) : [];
 	const roleValue = userColumns.includes("role")
 		? "u.role"
 		: "NULL::text";
@@ -99,7 +96,12 @@ const buildUserSelect = async (db = pool) => {
 				${passwordColumn ? `u.${passwordColumn}` : "NULL::text"} AS password,
 				${nullableColumn(userColumns, "phone")} AS phone,
 				${nullableColumn(userColumns, "address")} AS address,
-				${hasUserBio ? "u.bio" : (hasFarmerProfileBio ? "fp.bio" : "NULL::text")} AS bio,
+				${hasUserBio ? "u.bio" : (farmerColumns.includes("bio") ? "fp.bio" : "NULL::text")} AS bio,
+				${farmerColumns.includes("farm_name") ? "fp.farm_name" : "NULL::text"} AS farm_name,
+				${farmerColumns.includes("farm_type") ? "fp.farm_type" : "NULL::text"} AS farm_type,
+				${farmerColumns.includes("farm_location") ? "fp.farm_location" : "NULL::text"} AS farm_location,
+				${farmerColumns.includes("farm_size") ? "fp.farm_size" : "NULL::text"} AS farm_size,
+				${farmerColumns.includes("experience_years") ? "fp.experience_years" : "NULL::integer"} AS experience_years,
 				${nullableColumn(userColumns, "created_at", "timestamptz")} AS created_at,
 				${nullableColumn(userColumns, "role_id", "integer")} AS role_id,
 				${roleNameValue} AS role_name,
@@ -115,7 +117,7 @@ const buildUserSelect = async (db = pool) => {
 				${nullableColumn(userColumns, "last_login_at", "timestamptz")} AS last_login_at
 			FROM users u
 			${hasRoleJoin ? "LEFT JOIN roles r ON r.role_id = u.role_id" : ""}
-			${hasFarmerProfileBio ? `LEFT JOIN farmer_profiles fp ON fp.user_id = u.${userIdColumn}` : ""}
+			${hasFarmerProfile ? `LEFT JOIN farmer_profiles fp ON fp.user_id = u.${userIdColumn}` : ""}
 		`,
 		userColumns,
 	};
@@ -385,7 +387,18 @@ const clearPasswordResetToken = async (userId) => {
 	);
 };
 
-const updateUserProfile = async ({ user_id, name, phone, address, bio }) => {
+const updateUserProfile = async ({
+	user_id,
+	name,
+	phone,
+	address,
+	bio,
+	farm_name,
+	farm_type,
+	farm_location,
+	farm_size,
+	experience_years,
+}) => {
 	const client = await pool.connect();
 
 	try {
@@ -420,19 +433,37 @@ const updateUserProfile = async ({ user_id, name, phone, address, bio }) => {
 			return null;
 		}
 
-		if (bio !== undefined && profileColumns.includes("user_id") && profileColumns.includes("bio")) {
+		if (profileColumns.includes("user_id")) {
 			await client.query(
 				`
-					INSERT INTO farmer_profiles (user_id, bio)
-					SELECT u.${userSelect.userIdColumn}, $2
-					FROM users u
-					${userSelect.userColumns.includes("role_id") ? "LEFT JOIN roles r ON r.role_id = u.role_id" : ""}
-					WHERE u.${userSelect.userIdColumn} = $1
-						AND COALESCE(${userSelect.userColumns.includes("role_id") ? "r.role_name" : "NULL::text"}, ${userSelect.userColumns.includes("role") ? "u.role" : "NULL::text"}) = 'farmer'
+					INSERT INTO farmer_profiles (
+						user_id,
+						farm_name,
+						farm_type,
+						farm_location,
+						farm_size,
+						experience_years,
+						bio
+					)
+					VALUES ($1, $2, $3, $4, $5, $6, $7)
 					ON CONFLICT (user_id)
-					DO UPDATE SET bio = EXCLUDED.bio
+					DO UPDATE SET
+						farm_name = COALESCE(EXCLUDED.farm_name, farmer_profiles.farm_name),
+						farm_type = COALESCE(EXCLUDED.farm_type, farmer_profiles.farm_type),
+						farm_location = COALESCE(EXCLUDED.farm_location, farmer_profiles.farm_location),
+						farm_size = COALESCE(EXCLUDED.farm_size, farmer_profiles.farm_size),
+						experience_years = COALESCE(EXCLUDED.experience_years, farmer_profiles.experience_years),
+						bio = COALESCE(EXCLUDED.bio, farmer_profiles.bio)
 				`,
-				[user_id, bio ?? null]
+				[
+					user_id,
+					farm_name ?? null,
+					farm_type ?? null,
+					farm_location ?? null,
+					farm_size ?? null,
+					experience_years ? Number(experience_years) : null,
+					bio ?? null,
+				]
 			);
 		}
 
