@@ -4,3 +4,4 @@ export * from './DataListCard';
 export * from './ChartCard';
 export * from './TagSummaryReport';
 export * from './TelemetryDiagnosticsWidgets';
+export * from './DonutBreakdownCard';

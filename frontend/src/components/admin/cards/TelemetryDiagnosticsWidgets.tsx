@@ -62,7 +62,7 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
         <div className="px-5 py-3 border-b border-gray-300 flex items-center justify-between bg-white">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-none bg-[#007a6c]" />
-            <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight [text-wrap:balance]">
               Temperature &amp; Life Remaining Telemetry
             </h2>
           </div>

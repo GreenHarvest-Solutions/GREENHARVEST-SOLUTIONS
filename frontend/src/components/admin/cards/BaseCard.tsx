@@ -11,6 +11,7 @@ export interface BaseCardProps extends Omit<HTMLMotionProps<'div'>, 'title'> {
   index?: number;
   interactive?: boolean;
   noPadding?: boolean;
+  rounded?: boolean;
   className?: string;
   children: React.ReactNode;
 }
@@ -36,6 +37,7 @@ export const BaseCard: React.FC<BaseCardProps> = ({
   index = 0,
   interactive = true,
   noPadding = false,
+  rounded = false,
   className = '',
   children,
   ...motionProps
@@ -49,19 +51,18 @@ export const BaseCard: React.FC<BaseCardProps> = ({
       whileHover={
         interactive
           ? {
-              y: -4,
-              borderColor: '#00A896',
-              boxShadow: '0 14px 28px -6px rgba(0, 168, 150, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.04)',
-              transition: { duration: 0.25, ease: 'easeOut' },
+              y: -3,
+              borderColor: '#007a6c',
+              transition: { duration: 0.22, ease: 'easeOut' },
             }
           : undefined
       }
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-      className={`bg-white rounded-2xl border border-gray-200/90 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] transition-colors overflow-hidden flex flex-col ${className}`}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      className={`bg-white ${rounded ? 'rounded-2xl' : 'rounded-none'} border border-gray-300 transition-colors overflow-hidden flex flex-col ${className}`}
       {...motionProps}
     >
       {(title || action || badge) && (
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4 bg-white/80 backdrop-blur-xs">
+        <div className="px-6 py-4 border-b border-gray-300 flex items-center justify-between gap-4 bg-white">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
               {typeof title === 'string' ? (

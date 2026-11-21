@@ -55,7 +55,7 @@ export const DataListCard: React.FC<DataListCardProps> = ({
       layout
     >
       <div className="w-full overflow-hidden">
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-gray-300">
           <AnimatePresence initial={false}>
             {visibleItems.map((item, idx) => (
               <motion.li
@@ -77,11 +77,11 @@ export const DataListCard: React.FC<DataListCardProps> = ({
                     />
                   )}
                   <div>
-                    <span className="font-semibold text-gray-600 block uppercase tracking-wider text-[11px] md:text-xs">
+                    <span className="font-semibold text-gray-600 block uppercase tracking-wider text-xs">
                       {item.label}
                     </span>
                     {item.hint && (
-                      <span className="text-[11px] text-gray-400 block mt-0.5">
+                      <span className="text-xs text-gray-500 block mt-0.5">
                         {item.hint}
                       </span>
                     )}
