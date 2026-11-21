@@ -606,11 +606,125 @@ class APIClient {
     });
   }
 
-  async broadcastAnnouncement(message: string) {
-    return this.request<{ message: string; delivered_count: number }>({
+  async broadcastAnnouncement(message: string, targetAudience = 'all', title = 'Platform Advisory') {
+    return this.request<{ message: string; delivered_count: number; announcement?: any }>({
       method: 'POST',
       url: '/admin/broadcast',
-      data: { message },
+      data: { message, targetAudience, title },
+    });
+  }
+
+  async getAdminMe() {
+    return this.request<{
+      status: string;
+      admin: {
+        id: number | string;
+        name: string;
+        email: string;
+        role: string;
+        account_status: string;
+        admin_role: { id: number; name: string; description?: string };
+        permissions: Array<{ id: number; code: string; name: string; category: string }>;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/me',
+    });
+  }
+
+  async getAdminSettings() {
+    return this.request<{
+      settings: Record<string, any>;
+      raw: Array<{ key: string; value: any; updated_by?: number; updated_at?: string }>;
+    }>({
+      method: 'GET',
+      url: '/admin/settings',
+    });
+  }
+
+  async updateAdminSettings(settings: Record<string, any>) {
+    return this.request<{ message: string; settings: Record<string, any> }>({
+      method: 'PUT',
+      url: '/admin/settings',
+      data: settings,
+    });
+  }
+
+  async getSettingsHistory(limit = 50) {
+    return this.request<{ history: any[] }>({
+      method: 'GET',
+      url: `/admin/settings/history?limit=${limit}`,
+    });
+  }
+
+  async getAdminAuditLogs(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    action?: string;
+    entity_type?: string;
+    actor_id?: number | string;
+    from?: string;
+    to?: string;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.action) query.append('action', params.action);
+    if (params?.entity_type) query.append('entity_type', params.entity_type);
+    if (params?.actor_id) query.append('actor_id', String(params.actor_id));
+    if (params?.from) query.append('from', params.from);
+    if (params?.to) query.append('to', params.to);
+    const qs = query.toString();
+    return this.request<{
+      logs: Array<{
+        id: string | number;
+        actor_id: number | null;
+        actor_name: string | null;
+        actor_email: string | null;
+        actor_role: string | null;
+        action: string;
+        entity_type: string;
+        entity_id: string | null;
+        before_state: any;
+        after_state: any;
+        reason: string | null;
+        ip_address: string | null;
+        user_agent: string | null;
+        created_at: string;
+      }>;
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: `/admin/audit-logs${qs ? `?${qs}` : ''}`,
+    });
+  }
+
+  async getAdminTeam() {
+    return this.request<{ team: any[] }>({
+      method: 'GET',
+      url: '/admin/team',
+    });
+  }
+
+  async getAdminRoles() {
+    return this.request<{ roles: any[] }>({
+      method: 'GET',
+      url: '/admin/team/roles',
+    });
+  }
+
+  async updateAdminRole(userId: string | number, adminRoleId: number) {
+    return this.request<{ message: string; user: any }>({
+      method: 'PATCH',
+      url: `/admin/team/${userId}/role`,
+      data: { admin_role_id: adminRoleId },
     });
   }
 

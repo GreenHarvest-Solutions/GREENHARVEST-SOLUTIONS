@@ -23,8 +23,8 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
   className = '',
   systemData,
 }) => {
-  // Mode switcher: Reference Image exact telemetry vs Live Freight Corridor Telemetry
-  const [useLiveTelemetry, setUseLiveTelemetry] = useState(false);
+  // Live Freight Corridor Telemetry
+  const [useLiveTelemetry, setUseLiveTelemetry] = useState(true);
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
   // Reference visual data matching the uploaded image exactly

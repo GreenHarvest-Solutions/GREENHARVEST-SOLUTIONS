@@ -20,49 +20,57 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [adminName, setAdminName] = useState('System Administrator');
-  const [adminRole, setAdminRole] = useState('Superadmin • Tier 1');
+  const [adminRole, setAdminRole] = useState('Super Admin');
   const [counts, setCounts] = useState({
     kyc: 0,
     moderation: 0,
     disputes: 0,
-    fleet: 0,
+    fleetBreaches: 0,
   });
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    const fetchAdminInfo = async () => {
       try {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          if (parsed.full_name || parsed.name) {
-            setAdminName(parsed.full_name || parsed.name);
-          }
-          if (parsed.role) {
-            setAdminRole(`${parsed.role.toUpperCase()} • Master Access`);
-          }
+        const meRes = await api.getAdminMe();
+        if (meRes?.admin) {
+          setAdminName(meRes.admin.name || 'System Administrator');
+          const roleDisplay = (meRes.admin.admin_role?.name || meRes.admin.role || 'Admin')
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+          setAdminRole(roleDisplay);
         }
       } catch {
-        // Fallback to default admin title
+        // Fallback to local storage if API call fails
+        if (typeof window !== 'undefined') {
+          try {
+            const stored = localStorage.getItem('user');
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (parsed.name || parsed.full_name) setAdminName(parsed.name || parsed.full_name);
+              if (parsed.role) setAdminRole(parsed.role.toUpperCase());
+            }
+          } catch {}
+        }
       }
-    }
+    };
 
     const fetchCounts = async () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-      if (!token) return;
       try {
         const res = await api.getAdminDashboard();
         if (res && res.metrics) {
           setCounts({
-            kyc: Number(res.metrics.kyc_pending_count ?? (Array.isArray(res.metrics.pending_farmers) ? res.metrics.pending_farmers.filter((f: any) => !f.is_verified).length : 0)),
-            moderation: Number(res.metrics.moderation_pending_count ?? (Array.isArray(res.metrics.product_moderation) ? res.metrics.product_moderation.filter((p: any) => p.status !== 'active').length : 0)),
-            disputes: Number(res.metrics.disputes_open_count ?? (Array.isArray(res.metrics.disputes) ? res.metrics.disputes.filter((d: any) => d.status === 'pending').length : 0)),
-            fleet: Number(res.metrics.active_fleet_trucks ?? 0),
+            kyc: Number(res.metrics.kyc_pending_count || 0),
+            moderation: Number(res.metrics.moderation_pending_count || 0),
+            disputes: Number(res.metrics.disputes_open_count || 0),
+            fleetBreaches: Number(res.metrics.fleet_breaches_count || 0),
           });
         }
       } catch {
-        // Keep 0
+        // Keep 0 on error
       }
     };
+
+    fetchAdminInfo();
     fetchCounts();
   }, []);
 
@@ -86,6 +94,7 @@ export default function AdminSidebar() {
       title: 'Command & Telemetry',
       items: [
         { label: 'Overview Dashboard', href: '/admin/dashboard', icon: 'fa-gauge-high' },
+        { label: 'Alerts & SLA', href: '/admin/alerts', icon: 'fa-bell' },
         { label: 'Platform Analytics', href: '/admin/analytics', icon: 'fa-chart-line' },
       ],
     },
@@ -93,58 +102,80 @@ export default function AdminSidebar() {
       title: 'Marketplace Governance',
       items: [
         {
-          label: 'Farmer KYC Queue',
-          href: '/admin/dashboard?tab=verifications',
+          label: 'Farmer KYC',
+          href: '/admin/kyc',
           icon: 'fa-id-card',
-          badge: String(counts.kyc),
+          badge: counts.kyc > 0 ? String(counts.kyc) : undefined,
           badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300',
         },
         {
-          label: 'Product Moderation',
-          href: '/admin/dashboard?tab=moderation',
+          label: 'Products & Moderation',
+          href: '/admin/products',
           icon: 'fa-shield-halved',
-          badge: String(counts.moderation),
+          badge: counts.moderation > 0 ? String(counts.moderation) : undefined,
           badgeColor: 'bg-blue-100 text-blue-900 border border-blue-300',
         },
+        { label: 'Categories & Attributes', href: '/admin/categories', icon: 'fa-tags' },
+        { label: 'Reviews', href: '/admin/reviews', icon: 'fa-star-half-stroke' },
+        { label: 'Campaigns', href: '/admin/campaigns', icon: 'fa-bullhorn' },
+        { label: 'Price Governance', href: '/admin/pricing', icon: 'fa-chart-simple' },
+      ],
+    },
+    {
+      title: 'Commerce & Settlement',
+      items: [
+        { label: 'Orders', href: '/admin/orders', icon: 'fa-cart-shopping' },
+        { label: 'Payments', href: '/admin/payments', icon: 'fa-credit-card' },
+        { label: 'Escrow & Payouts', href: '/admin/escrow', icon: 'fa-money-bill-transfer' },
         {
-          label: 'Dispute Mediation',
-          href: '/admin/dashboard?tab=disputes',
+          label: 'Disputes',
+          href: '/admin/disputes',
           icon: 'fa-scale-balanced',
-          badge: String(counts.disputes),
+          badge: counts.disputes > 0 ? String(counts.disputes) : undefined,
           badgeColor: 'bg-red-100 text-red-900 border border-red-300',
         },
-        {
-          label: 'User & Store Registry',
-          href: '/admin/users',
-          icon: 'fa-users-gear',
-        },
+        { label: 'Returns', href: '/admin/returns', icon: 'fa-arrow-rotate-left' },
       ],
     },
     {
-      title: 'Logistics & Settlement',
+      title: 'Logistics',
       items: [
         {
-          label: 'Cold-Chain Dispatch',
+          label: 'Fleet & Telemetry',
           href: '/admin/deliveries',
           icon: 'fa-truck-fast',
-          badge: '14 Active',
-          badgeColor: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+          badge: counts.fleetBreaches > 0 ? `${counts.fleetBreaches} Alert` : undefined,
+          badgeColor: 'bg-red-100 text-red-900 border border-red-300',
         },
-        {
-          label: 'Escrow Settlements',
-          href: '/admin/analytics',
-          icon: 'fa-money-bill-transfer',
-        },
+        { label: 'Carriers', href: '/admin/logistics/carriers', icon: 'fa-building-shield' },
+        { label: 'Hubs & Routes', href: '/admin/logistics/hubs', icon: 'fa-route' },
+        { label: 'Incidents', href: '/admin/logistics/incidents', icon: 'fa-triangle-exclamation' },
       ],
     },
     {
-      title: 'System & Security',
+      title: 'People',
       items: [
-        {
-          label: 'Platform Settings',
-          href: '/admin/settings',
-          icon: 'fa-sliders',
-        },
+        { label: 'Users', href: '/admin/users', icon: 'fa-users-gear' },
+        { label: 'Field Agents', href: '/admin/field-agents', icon: 'fa-user-pen' },
+        { label: 'Delivery Partners', href: '/admin/delivery-partners', icon: 'fa-people-carry-box' },
+        { label: 'Admin Team', href: '/admin/team', icon: 'fa-user-shield' },
+      ],
+    },
+    {
+      title: 'Engagement',
+      items: [
+        { label: 'Announcements', href: '/admin/announcements', icon: 'fa-tower-broadcast' },
+        { label: 'Support Inbox', href: '/admin/support', icon: 'fa-headset' },
+      ],
+    },
+    {
+      title: 'Risk & System',
+      items: [
+        { label: 'Risk & Fraud', href: '/admin/risk', icon: 'fa-shield-virus' },
+        { label: 'Reports', href: '/admin/reports', icon: 'fa-file-invoice' },
+        { label: 'System Health', href: '/admin/system/health', icon: 'fa-heart-pulse' },
+        { label: 'Audit Log', href: '/admin/system/audit', icon: 'fa-clock-rotate-left' },
+        { label: 'Platform Settings', href: '/admin/settings', icon: 'fa-sliders' },
       ],
     },
   ];
@@ -189,7 +220,7 @@ export default function AdminSidebar() {
             <span className="inline-flex rounded-full h-2 w-2 bg-emerald-600" />
             Enterprise Control
           </span>
-          <span className="font-mono text-gray-500">v1.2</span>
+          <span className="font-mono text-gray-500">v2.0</span>
         </div>
       </div>
 

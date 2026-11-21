@@ -1,12 +1,13 @@
 const adminModel = require("../models/adminModel");
+const auditService = require("./auditService");
 
 const getDashboardAnalytics = async () => {
-	const [summary, topSellingProducts, pendingFarmers, moderationProducts, disputes, regionalAnalytics] = await Promise.all([
+	const [summary, topSellingProducts, pendingFarmersData, moderationProductsData, disputesData, regionalAnalytics] = await Promise.all([
 		adminModel.getSummaryMetrics(),
 		adminModel.getTopSellingProducts(10),
-		adminModel.getPendingFarmers(10),
-		adminModel.getProductsForModeration(10),
-		adminModel.getDisputes(10),
+		adminModel.getPendingFarmers({ page: 1, limit: 10 }),
+		adminModel.getProductsForModeration({ page: 1, limit: 10 }),
+		adminModel.getDisputes({ page: 1, limit: 10 }),
 		adminModel.getRegionalAnalytics(10),
 	]);
 
@@ -25,63 +26,96 @@ const getDashboardAnalytics = async () => {
 		disputes_open_count: summary.disputes_open_count,
 		fleet_breaches_count: summary.fleet_breaches_count,
 		top_selling_products: topSellingProducts,
-		pending_farmers: pendingFarmers,
-		product_moderation: moderationProducts,
-		disputes: disputes,
+		pending_farmers: pendingFarmersData.farmers,
+		product_moderation: moderationProductsData.products,
+		disputes: disputesData.disputes,
 		regional_analytics: regionalAnalytics,
 	};
 };
 
-const getPendingFarmers = async () => {
-	return adminModel.getPendingFarmers();
+const getAdminMe = async (userId) => {
+	return adminModel.getAdminMe(userId);
 };
 
-const verifyFarmer = async (farmerId, isVerified) => {
-	return adminModel.verifyFarmer(farmerId, isVerified);
+const getPendingFarmers = async (options) => {
+	return adminModel.getPendingFarmers(options);
 };
 
-const getProductsForModeration = async () => {
-	return adminModel.getProductsForModeration();
+const verifyFarmer = async (farmerId, isVerified, actorId = null, reason = null) => {
+	return adminModel.verifyFarmer(farmerId, isVerified, actorId, reason);
 };
 
-const moderateProduct = async (productId, status) => {
-	return adminModel.moderateProduct(productId, status);
+const getProductsForModeration = async (options) => {
+	return adminModel.getProductsForModeration(options);
 };
 
-const getDisputes = async () => {
-	return adminModel.getDisputes();
+const moderateProduct = async (productId, status, actorId = null, reason = null) => {
+	return adminModel.moderateProduct(productId, status, actorId, reason);
 };
 
-const resolveDispute = async (disputeId, action) => {
-	return adminModel.resolveDispute(disputeId, action);
+const getDisputes = async (options) => {
+	return adminModel.getDisputes(options);
 };
 
-const broadcastAnnouncement = async (adminUserId, message) => {
-	return adminModel.broadcastAnnouncement(adminUserId, message);
+const resolveDispute = async (disputeId, action, actorId = null, reason = null) => {
+	return adminModel.resolveDispute(disputeId, action, actorId, reason);
+};
+
+const broadcastAnnouncement = async (adminUserId, message, targetAudience = "all", title = "Platform Advisory") => {
+	return adminModel.broadcastAnnouncement(adminUserId, message, targetAudience, title);
 };
 
 const getFleetShipments = async (filters) => {
 	return adminModel.getFleetShipments(filters);
 };
 
-const assignDispatchBatch = async (data) => {
-	return adminModel.assignDispatchBatch(data);
+const assignDispatchBatch = async (data, actorId = null) => {
+	return adminModel.assignDispatchBatch(data, actorId);
 };
 
-const emergencyRerouteTruck = async (id, data) => {
-	return adminModel.emergencyRerouteTruck(id, data);
+const emergencyRerouteTruck = async (id, data, actorId = null) => {
+	return adminModel.emergencyRerouteTruck(id, data, actorId);
 };
 
 const getRegionalAnalytics = async (limit = 10) => {
 	return adminModel.getRegionalAnalytics(limit);
 };
 
-const updateUserStatus = async (userId, status) => {
-	return adminModel.updateUserStatus(userId, status);
+const updateUserStatus = async (userId, status, actorId = null, reason = null) => {
+	return adminModel.updateUserStatus(userId, status, actorId, reason);
+};
+
+const getPlatformSettings = async () => {
+	return adminModel.getPlatformSettings();
+};
+
+const updatePlatformSettings = async (settings, actorId = null) => {
+	return adminModel.updatePlatformSettings(settings, actorId);
+};
+
+const getSettingsHistory = async (limit = 50) => {
+	return adminModel.getSettingsHistory(limit);
+};
+
+const getAuditLogs = async (query) => {
+	return auditService.getAuditLogs(query);
+};
+
+const getAdminTeam = async () => {
+	return adminModel.getAdminTeam();
+};
+
+const getAdminRoles = async () => {
+	return adminModel.getAdminRoles();
+};
+
+const updateAdminRole = async (userId, adminRoleId, actorId = null) => {
+	return adminModel.updateAdminRole(userId, adminRoleId, actorId);
 };
 
 module.exports = {
 	getDashboardAnalytics,
+	getAdminMe,
 	getPendingFarmers,
 	verifyFarmer,
 	getProductsForModeration,
@@ -94,4 +128,11 @@ module.exports = {
 	emergencyRerouteTruck,
 	getRegionalAnalytics,
 	updateUserStatus,
+	getPlatformSettings,
+	updatePlatformSettings,
+	getSettingsHistory,
+	getAuditLogs,
+	getAdminTeam,
+	getAdminRoles,
+	updateAdminRole,
 };
