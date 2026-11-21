@@ -888,6 +888,256 @@ class APIClient {
     });
   }
 
+  // ==========================================
+  // Phase 4: Support Tickets & Inquiries
+  // ==========================================
+
+  async getAdminTickets(params?: {
+    status?: string;
+    priority?: string;
+    category?: string;
+    assigned_to?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      tickets: any[];
+      metrics: {
+        total_tickets: number;
+        open_tickets: number;
+        in_progress_tickets: number;
+        urgent_tickets: number;
+        waiting_customer: number;
+        resolved_today: number;
+      };
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/tickets',
+      params,
+    });
+  }
+
+  async getAdminTicketDossier(id: string | number) {
+    return this.request<{
+      ticket: any;
+      messages: any[];
+    }>({
+      method: 'GET',
+      url: `/admin/tickets/${id}`,
+    });
+  }
+
+  async createAdminTicket(data: {
+    user_id?: number | string;
+    subject: string;
+    category?: string;
+    priority?: string;
+    initial_message?: string;
+    assigned_to?: number | string;
+    order_id?: number | string;
+    shipment_id?: string;
+  }) {
+    return this.request<{ message: string; ticket: any }>({
+      method: 'POST',
+      url: '/admin/tickets',
+      data,
+    });
+  }
+
+  async updateAdminTicket(id: string | number, data: {
+    status?: string;
+    priority?: string;
+    category?: string;
+    assigned_to?: number | string | null;
+  }) {
+    return this.request<{ message: string; ticket: any }>({
+      method: 'PATCH',
+      url: `/admin/tickets/${id}`,
+      data,
+    });
+  }
+
+  async addAdminTicketMessage(ticketId: string | number, data: {
+    message: string;
+    is_internal?: boolean;
+    attachments?: any[];
+  }) {
+    return this.request<{ message: string; ticket_message: any }>({
+      method: 'POST',
+      url: `/admin/tickets/${ticketId}/messages`,
+      data,
+    });
+  }
+
+  async assignAdminTicket(ticketId: string | number, assignedTo: number | string) {
+    return this.request<{ message: string; ticket: any }>({
+      method: 'POST',
+      url: `/admin/tickets/${ticketId}/assign`,
+      data: { assigned_to: assignedTo },
+    });
+  }
+
+  async escalateAdminTicket(ticketId: string | number, reason?: string) {
+    return this.request<{ message: string; ticket: any }>({
+      method: 'POST',
+      url: `/admin/tickets/${ticketId}/escalate`,
+      data: { reason },
+    });
+  }
+
+  // ==========================================
+  // Phase 4: Announcements & Broadcast Communications
+  // ==========================================
+
+  async getAdminAnnouncements(params?: {
+    status?: string;
+    category?: string;
+    priority?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      announcements: any[];
+      metrics: {
+        total_broadcasts: number;
+        sent_count: number;
+        scheduled_count: number;
+        draft_count: number;
+        total_recipients_reached: number;
+      };
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/announcements',
+      params,
+    });
+  }
+
+  async getAdminAnnouncementDossier(id: string | number) {
+    return this.request<{
+      announcement: any;
+      deliveries: any[];
+    }>({
+      method: 'GET',
+      url: `/admin/announcements/${id}`,
+    });
+  }
+
+  async estimateAdminAudience(data: {
+    target_audience: string;
+    target_filter?: {
+      role?: string;
+      region?: string;
+      kyc_tier?: string;
+    };
+  }) {
+    return this.request<{ estimated_reach: number }>({
+      method: 'POST',
+      url: '/admin/announcements/estimate',
+      data,
+    });
+  }
+
+  async createAdminAnnouncement(data: {
+    title: string;
+    message: string;
+    target_audience: string;
+    target_filter?: any;
+    priority?: string;
+    category?: string;
+    channels?: string[];
+    scheduled_at?: string | null;
+    expires_at?: string | null;
+    is_dismissible?: boolean;
+    status?: string;
+  }) {
+    return this.request<{ message: string; announcement: any }>({
+      method: 'POST',
+      url: '/admin/announcements',
+      data,
+    });
+  }
+
+  async updateAdminAnnouncement(id: string | number, data: any) {
+    return this.request<{ message: string; announcement: any }>({
+      method: 'PATCH',
+      url: `/admin/announcements/${id}`,
+      data,
+    });
+  }
+
+  async sendAdminAnnouncement(id: string | number) {
+    return this.request<{
+      message: string;
+      announcement: any;
+      delivered_count: number;
+    }>({
+      method: 'POST',
+      url: `/admin/announcements/${id}/send`,
+    });
+  }
+
+  async cancelAdminAnnouncement(id: string | number) {
+    return this.request<{ message: string; announcement: any }>({
+      method: 'POST',
+      url: `/admin/announcements/${id}/cancel`,
+    });
+  }
+
+  // ==========================================
+  // Phase 4: Notification Templates
+  // ==========================================
+
+  async getAdminNotificationTemplates() {
+    return this.request<{ templates: any[] }>({
+      method: 'GET',
+      url: '/admin/notification-templates',
+    });
+  }
+
+  async createAdminNotificationTemplate(data: {
+    title: string;
+    code: string;
+    channel?: string;
+    subject?: string;
+    body: string;
+    variables?: string[];
+  }) {
+    return this.request<{ message: string; template: any }>({
+      method: 'POST',
+      url: '/admin/notification-templates',
+      data,
+    });
+  }
+
+  async updateAdminNotificationTemplate(id: string | number, data: any) {
+    return this.request<{ message: string; template: any }>({
+      method: 'PATCH',
+      url: `/admin/notification-templates/${id}`,
+      data,
+    });
+  }
+
+  async deleteAdminNotificationTemplate(id: string | number) {
+    return this.request<{ message: string }>({
+      method: 'DELETE',
+      url: `/admin/notification-templates/${id}`,
+    });
+  }
+
   async getAdminAnalytics() {
     return this.request<{ analytics: any[] }>({
       method: 'GET',

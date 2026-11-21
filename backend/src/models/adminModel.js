@@ -8,6 +8,8 @@ const escrowAdminModel = require("./escrowAdminModel");
 const disputeAdminModel = require("./disputeAdminModel");
 const paymentAdminModel = require("./paymentAdminModel");
 const logisticsAdminModel = require("./logisticsAdminModel");
+const supportAdminModel = require("./supportAdminModel");
+const announcementAdminModel = require("./announcementAdminModel");
 
 const getAdminMe = async (userId) => {
 	const result = await pool.query(
@@ -1090,4 +1092,7 @@ module.exports = {
 	...paymentAdminModel,
 	// Phase 3: Cold-Chain Logistics, Fleet, Carriers, Hubs, Incidents
 	...logisticsAdminModel,
+	// Phase 4: Support & Broadcast Communications
+	...supportAdminModel,
+	...announcementAdminModel,
 };

@@ -318,6 +318,235 @@ const resolveIncident = async (incidentId, data, actorId, ipAddress, userAgent) 
 	return adminModel.resolveIncident(incidentId, data, actorId, ipAddress, userAgent);
 };
 
+// Phase 4: Support & Broadcast Communications
+const getTicketsAdmin = async (options) => {
+	return adminModel.getTicketsAdmin(options);
+};
+
+const getTicketDossier = async (id) => {
+	return adminModel.getTicketDossier(id);
+};
+
+const createTicketAdmin = async (data, actorId, ipAddress, userAgent) => {
+	const ticket = await adminModel.createTicketAdmin({ ...data, creator_id: actorId });
+	await auditService.record({
+		actorId,
+		action: "SUPPORT_TICKET_CREATED",
+		entityType: "support_tickets",
+		entityId: ticket.id,
+		beforeValues: null,
+		afterValues: ticket,
+		reason: `Ticket ${ticket.ticket_number} created`,
+		ipAddress,
+		userAgent,
+	});
+	return ticket;
+};
+
+const updateTicketAdmin = async (id, data, actorId, ipAddress, userAgent) => {
+	const existing = await adminModel.getTicketDossier(id);
+	const updated = await adminModel.updateTicketAdmin(id, data);
+	await auditService.record({
+		actorId,
+		action: "SUPPORT_TICKET_UPDATED",
+		entityType: "support_tickets",
+		entityId: id,
+		beforeValues: existing?.ticket || null,
+		afterValues: updated,
+		reason: `Updated status to ${data.status || 'current'}, priority to ${data.priority || 'current'}`,
+		ipAddress,
+		userAgent,
+	});
+	return updated;
+};
+
+const addTicketMessage = async (ticketId, data, actorId, ipAddress, userAgent) => {
+	const msg = await adminModel.addTicketMessage({
+		ticket_id: ticketId,
+		sender_id: actorId,
+		sender_type: "admin",
+		message: data.message,
+		is_internal: Boolean(data.is_internal),
+		attachments: data.attachments || [],
+	});
+	await auditService.record({
+		actorId,
+		action: data.is_internal ? "SUPPORT_INTERNAL_NOTE_ADDED" : "SUPPORT_CUSTOMER_REPLY_ADDED",
+		entityType: "ticket_messages",
+		entityId: msg.id,
+		beforeValues: null,
+		afterValues: { ticket_id: ticketId, is_internal: data.is_internal },
+		reason: data.is_internal ? "Internal operator note" : "Customer response delivered",
+		ipAddress,
+		userAgent,
+	});
+	return msg;
+};
+
+const assignTicketAdmin = async (ticketId, assignedTo, actorId, ipAddress, userAgent) => {
+	const updated = await adminModel.assignTicketAdmin(ticketId, assignedTo, actorId);
+	await auditService.record({
+		actorId,
+		action: "SUPPORT_TICKET_ASSIGNED",
+		entityType: "support_tickets",
+		entityId: ticketId,
+		beforeValues: null,
+		afterValues: { assigned_to: assignedTo },
+		reason: `Assigned ticket to user ${assignedTo}`,
+		ipAddress,
+		userAgent,
+	});
+	return updated;
+};
+
+const escalateTicketAdmin = async (ticketId, data, actorId, ipAddress, userAgent) => {
+	const updated = await adminModel.escalateTicketAdmin(ticketId, {
+		reason: data.reason,
+		actor_id: actorId,
+	});
+	await auditService.record({
+		actorId,
+		action: "SUPPORT_TICKET_ESCALATED",
+		entityType: "support_tickets",
+		entityId: ticketId,
+		beforeValues: null,
+		afterValues: { priority: "urgent" },
+		reason: data.reason || "Operational escalation to urgent priority",
+		ipAddress,
+		userAgent,
+	});
+	return updated;
+};
+
+const getAnnouncementsAdmin = async (options) => {
+	return adminModel.getAnnouncementsAdmin(options);
+};
+
+const getAnnouncementDossier = async (id) => {
+	return adminModel.getAnnouncementDossier(id);
+};
+
+const estimateAudienceReach = async (targetAudience, targetFilter) => {
+	return adminModel.estimateAudienceReach(targetAudience, targetFilter);
+};
+
+const createAnnouncementAdmin = async (data, actorId, ipAddress, userAgent) => {
+	const ann = await adminModel.createAnnouncementAdmin({ ...data, created_by: actorId });
+	await auditService.record({
+		actorId,
+		action: "ANNOUNCEMENT_CREATED",
+		entityType: "announcements",
+		entityId: ann.id,
+		beforeValues: null,
+		afterValues: ann,
+		reason: `Created announcement: ${ann.title}`,
+		ipAddress,
+		userAgent,
+	});
+	return ann;
+};
+
+const updateAnnouncementAdmin = async (id, data, actorId, ipAddress, userAgent) => {
+	const existing = await adminModel.getAnnouncementDossier(id);
+	const updated = await adminModel.updateAnnouncementAdmin(id, data);
+	await auditService.record({
+		actorId,
+		action: "ANNOUNCEMENT_UPDATED",
+		entityType: "announcements",
+		entityId: id,
+		beforeValues: existing?.announcement || null,
+		afterValues: updated,
+		reason: `Updated announcement ${id}`,
+		ipAddress,
+		userAgent,
+	});
+	return updated;
+};
+
+const sendAnnouncementAdmin = async (id, actorId, ipAddress, userAgent) => {
+	const result = await adminModel.sendAnnouncementAdmin(id, actorId);
+	await auditService.record({
+		actorId,
+		action: "ANNOUNCEMENT_DISPATCHED",
+		entityType: "announcements",
+		entityId: id,
+		beforeValues: null,
+		afterValues: { delivered_count: result.deliveredCount },
+		reason: `Dispatched announcement to ${result.deliveredCount} recipients`,
+		ipAddress,
+		userAgent,
+	});
+	return result;
+};
+
+const cancelAnnouncementAdmin = async (id, actorId, ipAddress, userAgent) => {
+	const cancelled = await adminModel.cancelAnnouncementAdmin(id, actorId);
+	await auditService.record({
+		actorId,
+		action: "ANNOUNCEMENT_CANCELLED",
+		entityType: "announcements",
+		entityId: id,
+		beforeValues: null,
+		afterValues: { status: "cancelled" },
+		reason: `Cancelled broadcast announcement ${id}`,
+		ipAddress,
+		userAgent,
+	});
+	return cancelled;
+};
+
+const getNotificationTemplatesAdmin = async () => {
+	return adminModel.getNotificationTemplatesAdmin();
+};
+
+const createNotificationTemplateAdmin = async (data, actorId, ipAddress, userAgent) => {
+	const tmpl = await adminModel.createNotificationTemplateAdmin(data);
+	await auditService.record({
+		actorId,
+		action: "NOTIFICATION_TEMPLATE_CREATED",
+		entityType: "notification_templates",
+		entityId: tmpl.id,
+		beforeValues: null,
+		afterValues: tmpl,
+		reason: `Created template ${tmpl.code}`,
+		ipAddress,
+		userAgent,
+	});
+	return tmpl;
+};
+
+const updateNotificationTemplateAdmin = async (id, data, actorId, ipAddress, userAgent) => {
+	const updated = await adminModel.updateNotificationTemplateAdmin(id, data);
+	await auditService.record({
+		actorId,
+		action: "NOTIFICATION_TEMPLATE_UPDATED",
+		entityType: "notification_templates",
+		entityId: id,
+		beforeValues: null,
+		afterValues: updated,
+		reason: `Updated template ${id}`,
+		ipAddress,
+		userAgent,
+	});
+	return updated;
+};
+
+const deleteNotificationTemplateAdmin = async (id, actorId, ipAddress, userAgent) => {
+	const deleted = await adminModel.deleteNotificationTemplateAdmin(id);
+	await auditService.record({
+		actorId,
+		action: "NOTIFICATION_TEMPLATE_DELETED",
+		entityType: "notification_templates",
+		entityId: id,
+		beforeValues: null,
+		afterValues: null,
+		reason: `Deleted template ${id}`,
+		ipAddress,
+		userAgent,
+	});
+	return deleted;
+};
+
 module.exports = {
 	getDashboardAnalytics,
 	getAdminMe,
@@ -393,4 +622,23 @@ module.exports = {
 	upsertHubAdmin,
 	getIncidentsAdmin,
 	resolveIncident,
+	// Phase 4 exports
+	getTicketsAdmin,
+	getTicketDossier,
+	createTicketAdmin,
+	updateTicketAdmin,
+	addTicketMessage,
+	assignTicketAdmin,
+	escalateTicketAdmin,
+	getAnnouncementsAdmin,
+	getAnnouncementDossier,
+	estimateAudienceReach,
+	createAnnouncementAdmin,
+	updateAnnouncementAdmin,
+	sendAnnouncementAdmin,
+	cancelAnnouncementAdmin,
+	getNotificationTemplatesAdmin,
+	createNotificationTemplateAdmin,
+	updateNotificationTemplateAdmin,
+	deleteNotificationTemplateAdmin,
 };

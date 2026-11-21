@@ -79,6 +79,25 @@ const {
 	upsertHub,
 	getIncidents,
 	resolveIncident,
+	// Phase 4 Controllers
+	getTickets,
+	getTicketById,
+	createTicket,
+	updateTicket,
+	addTicketMessage,
+	assignTicket,
+	escalateTicket,
+	getAnnouncements,
+	getAnnouncementById,
+	estimateAudienceReach,
+	createAnnouncement,
+	updateAnnouncement,
+	sendAnnouncement,
+	cancelAnnouncement,
+	getNotificationTemplates,
+	createNotificationTemplate,
+	updateNotificationTemplate,
+	deleteNotificationTemplate,
 } = require("../controllers/adminController");
 
 const router = express.Router();
@@ -204,6 +223,36 @@ router.post("/logistics/hubs", permissionMiddleware("logistics.hubs.manage"), up
 // Incidents & SLA Resolution
 router.get("/logistics/incidents", permissionMiddleware("logistics.incidents.read"), getIncidents);
 router.post("/logistics/incidents/:id/resolve", permissionMiddleware("logistics.incidents.resolve"), resolveIncident);
+
+// ==========================================
+// Phase 4: Customer & Farmer Support Tickets
+// ==========================================
+router.get("/tickets", permissionMiddleware("support.tickets.read"), getTickets);
+router.post("/tickets", permissionMiddleware("support.tickets.manage"), createTicket);
+router.get("/tickets/:id", permissionMiddleware("support.tickets.read"), getTicketById);
+router.patch("/tickets/:id", permissionMiddleware("support.tickets.manage"), updateTicket);
+router.post("/tickets/:id/messages", permissionMiddleware("support.tickets.manage"), addTicketMessage);
+router.post("/tickets/:id/assign", permissionMiddleware("support.tickets.assign"), assignTicket);
+router.post("/tickets/:id/escalate", permissionMiddleware("support.tickets.manage"), escalateTicket);
+
+// ==========================================
+// Phase 4: Announcements & Targeted Broadcasts
+// ==========================================
+router.get("/announcements", permissionMiddleware("broadcast.send"), getAnnouncements);
+router.post("/announcements", permissionMiddleware("announcements.manage"), createAnnouncement);
+router.post("/announcements/estimate", permissionMiddleware("broadcast.send"), estimateAudienceReach);
+router.get("/announcements/:id", permissionMiddleware("broadcast.send"), getAnnouncementById);
+router.patch("/announcements/:id", permissionMiddleware("announcements.manage"), updateAnnouncement);
+router.post("/announcements/:id/send", permissionMiddleware("broadcast.send"), sendAnnouncement);
+router.post("/announcements/:id/cancel", permissionMiddleware("announcements.manage"), cancelAnnouncement);
+
+// ==========================================
+// Phase 4: Notification Templates
+// ==========================================
+router.get("/notification-templates", permissionMiddleware("templates.manage"), getNotificationTemplates);
+router.post("/notification-templates", permissionMiddleware("templates.manage"), createNotificationTemplate);
+router.patch("/notification-templates/:id", permissionMiddleware("templates.manage"), updateNotificationTemplate);
+router.delete("/notification-templates/:id", permissionMiddleware("templates.manage"), deleteNotificationTemplate);
 
 // Platform Global Settings
 router.get("/settings", permissionMiddleware("settings.read"), getPlatformSettings);

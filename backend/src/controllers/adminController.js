@@ -1456,6 +1456,312 @@ const resolveIncident = async (req, res) => {
 	}
 };
 
+// Phase 4: Support & Broadcast Communications Controllers
+
+const getTickets = async (req, res) => {
+	try {
+		const { status, priority, category, assigned_to, search, page = 1, limit = 20 } = req.query;
+		const result = await adminService.getTicketsAdmin({
+			status,
+			priority,
+			category,
+			assigned_to,
+			search,
+			page: parseInt(page, 10),
+			limit: parseInt(limit, 10),
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get tickets failed", error);
+	}
+};
+
+const getTicketById = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const dossier = await adminService.getTicketDossier(id);
+		if (!dossier) {
+			return res.status(404).json({ status: "error", message: `Ticket #${id} not found` });
+		}
+		return res.status(200).json(dossier);
+	} catch (error) {
+		return handleControllerError(res, "Get ticket failed", error);
+	}
+};
+
+const createTicket = async (req, res) => {
+	try {
+		const { user_id, subject, category, priority, initial_message, assigned_to, order_id, shipment_id } = req.body;
+		if (!subject || !subject.trim()) {
+			return res.status(400).json({ status: "error", message: "Ticket subject is required" });
+		}
+		const ticket = await adminService.createTicketAdmin(
+			{ user_id, subject, category, priority, initial_message, assigned_to, order_id, shipment_id },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		return res.status(201).json({ message: "Support ticket created successfully", ticket });
+	} catch (error) {
+		return handleControllerError(res, "Create ticket failed", error);
+	}
+};
+
+const updateTicket = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { status, priority, category, assigned_to } = req.body;
+		const updated = await adminService.updateTicketAdmin(
+			id,
+			{ status, priority, category, assigned_to },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!updated) {
+			return res.status(404).json({ status: "error", message: `Ticket #${id} not found` });
+		}
+		return res.status(200).json({ message: "Ticket updated successfully", ticket: updated });
+	} catch (error) {
+		return handleControllerError(res, "Update ticket failed", error);
+	}
+};
+
+const addTicketMessage = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { message, is_internal, attachments } = req.body;
+		if (!message || !message.trim()) {
+			return res.status(400).json({ status: "error", message: "Message content cannot be empty" });
+		}
+		const msg = await adminService.addTicketMessage(
+			id,
+			{ message, is_internal, attachments },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		return res.status(201).json({ message: "Message recorded successfully", ticket_message: msg });
+	} catch (error) {
+		return handleControllerError(res, "Add message failed", error);
+	}
+};
+
+const assignTicket = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { assigned_to } = req.body;
+		if (!assigned_to) {
+			return res.status(400).json({ status: "error", message: "Target assignee ID is required" });
+		}
+		const updated = await adminService.assignTicketAdmin(
+			id,
+			assigned_to,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		return res.status(200).json({ message: "Ticket assigned successfully", ticket: updated });
+	} catch (error) {
+		return handleControllerError(res, "Assign ticket failed", error);
+	}
+};
+
+const escalateTicket = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { reason } = req.body;
+		const updated = await adminService.escalateTicketAdmin(
+			id,
+			{ reason },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		return res.status(200).json({ message: "Ticket escalated to urgent priority", ticket: updated });
+	} catch (error) {
+		return handleControllerError(res, "Escalate ticket failed", error);
+	}
+};
+
+const getAnnouncements = async (req, res) => {
+	try {
+		const { status, category, priority, search, page = 1, limit = 20 } = req.query;
+		const result = await adminService.getAnnouncementsAdmin({
+			status,
+			category,
+			priority,
+			search,
+			page: parseInt(page, 10),
+			limit: parseInt(limit, 10),
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get announcements failed", error);
+	}
+};
+
+const getAnnouncementById = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const dossier = await adminService.getAnnouncementDossier(id);
+		if (!dossier) {
+			return res.status(404).json({ status: "error", message: `Announcement #${id} not found` });
+		}
+		return res.status(200).json(dossier);
+	} catch (error) {
+		return handleControllerError(res, "Get announcement failed", error);
+	}
+};
+
+const estimateAudienceReach = async (req, res) => {
+	try {
+		const { target_audience, target_filter } = req.body;
+		const count = await adminService.estimateAudienceReach(target_audience, target_filter);
+		return res.status(200).json({ estimated_reach: count });
+	} catch (error) {
+		return handleControllerError(res, "Estimate audience reach failed", error);
+	}
+};
+
+const createAnnouncement = async (req, res) => {
+	try {
+		const { title, message, target_audience, target_filter, priority, category, channels, scheduled_at, expires_at, is_dismissible, status } = req.body;
+		if (!title || !title.trim() || !message || !message.trim()) {
+			return res.status(400).json({ status: "error", message: "Title and message content are required" });
+		}
+		const ann = await adminService.createAnnouncementAdmin(
+			{ title, message, target_audience, target_filter, priority, category, channels, scheduled_at, expires_at, is_dismissible, status },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		return res.status(201).json({ message: "Announcement created successfully", announcement: ann });
+	} catch (error) {
+		return handleControllerError(res, "Create announcement failed", error);
+	}
+};
+
+const updateAnnouncement = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const updated = await adminService.updateAnnouncementAdmin(
+			id,
+			req.body,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!updated) {
+			return res.status(404).json({ status: "error", message: `Announcement #${id} not found` });
+		}
+		return res.status(200).json({ message: "Announcement updated successfully", announcement: updated });
+	} catch (error) {
+		return handleControllerError(res, "Update announcement failed", error);
+	}
+};
+
+const sendAnnouncement = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const result = await adminService.sendAnnouncementAdmin(
+			id,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		return res.status(200).json({
+			message: `Broadcast delivered successfully to ${result.deliveredCount} recipients`,
+			announcement: result.announcement,
+			delivered_count: result.deliveredCount,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Send announcement failed", error);
+	}
+};
+
+const cancelAnnouncement = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const cancelled = await adminService.cancelAnnouncementAdmin(
+			id,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!cancelled) {
+			return res.status(400).json({ status: "error", message: `Cannot cancel sent or non-existent announcement #${id}` });
+		}
+		return res.status(200).json({ message: "Announcement cancelled successfully", announcement: cancelled });
+	} catch (error) {
+		return handleControllerError(res, "Cancel announcement failed", error);
+	}
+};
+
+const getNotificationTemplates = async (req, res) => {
+	try {
+		const templates = await adminService.getNotificationTemplatesAdmin();
+		return res.status(200).json({ templates });
+	} catch (error) {
+		return handleControllerError(res, "Get notification templates failed", error);
+	}
+};
+
+const createNotificationTemplate = async (req, res) => {
+	try {
+		const { title, code, channel, subject, body, variables } = req.body;
+		if (!title || !code || !body) {
+			return res.status(400).json({ status: "error", message: "Title, unique code, and template body are required" });
+		}
+		const tmpl = await adminService.createNotificationTemplateAdmin(
+			{ title, code, channel, subject, body, variables },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		return res.status(201).json({ message: "Template created successfully", template: tmpl });
+	} catch (error) {
+		return handleControllerError(res, "Create template failed", error);
+	}
+};
+
+const updateNotificationTemplate = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const updated = await adminService.updateNotificationTemplateAdmin(
+			id,
+			req.body,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!updated) {
+			return res.status(404).json({ status: "error", message: `Template #${id} not found` });
+		}
+		return res.status(200).json({ message: "Template updated successfully", template: updated });
+	} catch (error) {
+		return handleControllerError(res, "Update template failed", error);
+	}
+};
+
+const deleteNotificationTemplate = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const deleted = await adminService.deleteNotificationTemplateAdmin(
+			id,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!deleted) {
+			return res.status(404).json({ status: "error", message: `Template #${id} not found` });
+		}
+		return res.status(200).json({ message: "Template deleted successfully" });
+	} catch (error) {
+		return handleControllerError(res, "Delete template failed", error);
+	}
+};
+
 module.exports = {
 	getAdminMe,
 	getAdminDashboard,
@@ -1530,4 +1836,23 @@ module.exports = {
 	upsertHub,
 	getIncidents,
 	resolveIncident,
+	// Phase 4 Controllers
+	getTickets,
+	getTicketById,
+	createTicket,
+	updateTicket,
+	addTicketMessage,
+	assignTicket,
+	escalateTicket,
+	getAnnouncements,
+	getAnnouncementById,
+	estimateAudienceReach,
+	createAnnouncement,
+	updateAnnouncement,
+	sendAnnouncement,
+	cancelAnnouncement,
+	getNotificationTemplates,
+	createNotificationTemplate,
+	updateNotificationTemplate,
+	deleteNotificationTemplate,
 };
