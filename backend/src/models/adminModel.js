@@ -7,6 +7,7 @@ const orderAdminModel = require("./orderAdminModel");
 const escrowAdminModel = require("./escrowAdminModel");
 const disputeAdminModel = require("./disputeAdminModel");
 const paymentAdminModel = require("./paymentAdminModel");
+const logisticsAdminModel = require("./logisticsAdminModel");
 
 const getAdminMe = async (userId) => {
 	const result = await pool.query(
@@ -1087,4 +1088,6 @@ module.exports = {
 	...escrowAdminModel,
 	...disputeAdminModel,
 	...paymentAdminModel,
+	// Phase 3: Cold-Chain Logistics, Fleet, Carriers, Hubs, Incidents
+	...logisticsAdminModel,
 };

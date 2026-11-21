@@ -11,6 +11,7 @@ export interface AdminTableColumn<T> {
   align?: 'left' | 'center' | 'right';
   width?: string;
   render?: (row: T, index: number) => React.ReactNode;
+  accessor?: (row: T, index: number) => React.ReactNode;
 }
 
 interface AdminTableProps<T> {
@@ -119,6 +120,8 @@ export function AdminTable<T>({
                     >
                       {col.render
                         ? col.render(row, rowIdx)
+                        : col.accessor
+                        ? col.accessor(row, rowIdx)
                         : col.accessorKey
                         ? String(row[col.accessorKey] ?? '')
                         : null}

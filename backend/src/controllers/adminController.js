@@ -229,16 +229,42 @@ const broadcastAnnouncement = async (req, res) => {
 
 const getFleetShipments = async (req, res) => {
 	try {
-		const shipments = await adminService.getFleetShipments(req.query);
-		return res.status(200).json({ shipments });
+		const { status, carrier, temp_status, search, page, limit } = req.query;
+		const result = await adminService.getFleetShipmentsAdmin({
+			status,
+			carrier,
+			temp_status,
+			search,
+			page: parseInt(page) || 1,
+			limit: parseInt(limit) || 20,
+		});
+		return res.status(200).json(result);
 	} catch (error) {
 		return handleControllerError(res, "Get fleet shipments failed", error);
 	}
 };
 
+const getShipmentById = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const dossier = await adminService.getShipmentDossier(id);
+		if (!dossier) {
+			return res.status(404).json({ status: "error", message: `Shipment #${id} not found` });
+		}
+		return res.status(200).json({ shipment: dossier });
+	} catch (error) {
+		return handleControllerError(res, "Get shipment telemetry dossier failed", error);
+	}
+};
+
 const assignDispatchBatch = async (req, res) => {
 	try {
-		const newShipment = await adminService.assignDispatchBatch(req.body, req.user.id);
+		const newShipment = await adminService.assignDispatchBatch(
+			req.body,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
 		return res.status(201).json({
 			message: "Produce batch assigned and dispatched to refrigerated carrier successfully",
 			shipment: newShipment,
@@ -251,7 +277,16 @@ const assignDispatchBatch = async (req, res) => {
 const emergencyRerouteTruck = async (req, res) => {
 	try {
 		const { id } = req.params;
-		const rerouted = await adminService.emergencyRerouteTruck(id, req.body, req.user.id);
+		const rerouted = await adminService.emergencyRerouteTruck(
+			id,
+			req.body,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!rerouted) {
+			return res.status(404).json({ status: "error", message: `Shipment #${id} not found` });
+		}
 		return res.status(200).json({
 			message: `Emergency cold-chain diversion executed for ${id}. Driver notified.`,
 			shipment: rerouted,
@@ -1287,6 +1322,140 @@ const updateReturnStatus = async (req, res) => {
 	}
 };
 
+// ==========================================
+// --- Phase 3: Carriers, Hubs, and Incidents Controllers ---
+// ==========================================
+
+const getCarriers = async (req, res) => {
+	try {
+		const { status, search, page, limit } = req.query;
+		const result = await adminService.getCarriersAdmin({
+			status,
+			search,
+			page: parseInt(page) || 1,
+			limit: parseInt(limit) || 20,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get carriers failed", error);
+	}
+};
+
+const createCarrier = async (req, res) => {
+	try {
+		const { name, code, contact_person, phone, email, status, total_fleet_count, cold_chain_sla_score, coverage_regions, notes } = req.body;
+
+		if (!name || !code || !phone) {
+			return res.status(400).json({ status: "error", message: "name, code, and phone are required to onboard carrier" });
+		}
+
+		const carrier = await adminService.createCarrierAdmin(
+			{ name, code, contact_person, phone, email, status, total_fleet_count, cold_chain_sla_score, coverage_regions, notes },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		return res.status(201).json({ message: "Freight carrier partner onboarded successfully", carrier });
+	} catch (error) {
+		return handleControllerError(res, "Create carrier failed", error);
+	}
+};
+
+const updateCarrier = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const carrier = await adminService.updateCarrierAdmin(
+			id,
+			req.body,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		if (!carrier) {
+			return res.status(404).json({ status: "error", message: `Carrier #${id} not found` });
+		}
+
+		return res.status(200).json({ message: "Carrier partner updated successfully", carrier });
+	} catch (error) {
+		return handleControllerError(res, "Update carrier failed", error);
+	}
+};
+
+const getHubs = async (req, res) => {
+	try {
+		const { region, hub_type, search } = req.query;
+		const result = await adminService.getHubsAdmin({ region, hub_type, search });
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get logistics hubs failed", error);
+	}
+};
+
+const upsertHub = async (req, res) => {
+	try {
+		const { name, region, city, address } = req.body;
+		if (!name || !region || !city || !address) {
+			return res.status(400).json({ status: "error", message: "name, region, city, and address are required for logistics hub" });
+		}
+
+		const hub = await adminService.upsertHubAdmin(
+			req.body,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		return res.status(200).json({ message: "Logistics hub saved successfully", hub });
+	} catch (error) {
+		return handleControllerError(res, "Upsert logistics hub failed", error);
+	}
+};
+
+const getIncidents = async (req, res) => {
+	try {
+		const { severity, resolved, search, page, limit } = req.query;
+		const result = await adminService.getIncidentsAdmin({
+			severity,
+			resolved,
+			search,
+			page: parseInt(page) || 1,
+			limit: parseInt(limit) || 20,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get logistics incidents failed", error);
+	}
+};
+
+const resolveIncident = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { resolution_notes, corrective_action } = req.body;
+
+		if (!resolution_notes || !resolution_notes.trim()) {
+			return res.status(400).json({ status: "error", message: "resolution_notes are mandatory to resolve logistics incident" });
+		}
+
+		const resolved = await adminService.resolveIncident(
+			id,
+			{ resolution_notes, corrective_action },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		if (!resolved) {
+			return res.status(404).json({ status: "error", message: `Incident #${id} not found` });
+		}
+
+		return res.status(200).json({ message: "Cold-chain SLA incident resolved successfully", incident: resolved });
+	} catch (error) {
+		return handleControllerError(res, "Resolve incident failed", error);
+	}
+};
+
 module.exports = {
 	getAdminMe,
 	getAdminDashboard,
@@ -1352,4 +1521,13 @@ module.exports = {
 	settleDisputeSplit,
 	getReturnsAdmin,
 	updateReturnStatus,
+	// Phase 3 Controllers
+	getShipmentById,
+	getCarriers,
+	createCarrier,
+	updateCarrier,
+	getHubs,
+	upsertHub,
+	getIncidents,
+	resolveIncident,
 };

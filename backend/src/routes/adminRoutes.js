@@ -70,6 +70,15 @@ const {
 	settleDisputeSplit,
 	getReturnsAdmin,
 	updateReturnStatus,
+	// Phase 3 Controllers
+	getShipmentById,
+	getCarriers,
+	createCarrier,
+	updateCarrier,
+	getHubs,
+	upsertHub,
+	getIncidents,
+	resolveIncident,
 } = require("../controllers/adminController");
 
 const router = express.Router();
@@ -173,10 +182,28 @@ router.patch("/returns/:id/status", permissionMiddleware("returns.manage"), upda
 // Targeted Platform Broadcasts
 router.post("/broadcast", permissionMiddleware("broadcast.send"), broadcastAnnouncement);
 
-// Cold-Chain Logistics & Reefer Telemetry
+// ==========================================
+// Phase 3: Cold-Chain Logistics, Carriers, Fleet Telemetry, and Incidents
+// ==========================================
 router.get("/logistics/fleet", permissionMiddleware("logistics.read"), getFleetShipments);
+router.get("/logistics/fleet/:id", permissionMiddleware("logistics.read"), getShipmentById);
+router.post("/logistics/dispatch", permissionMiddleware("logistics.manage"), assignDispatchBatch);
 router.post("/logistics/assign", permissionMiddleware("logistics.manage"), assignDispatchBatch);
+router.patch("/logistics/shipments/:id/reroute", permissionMiddleware("logistics.manage"), emergencyRerouteTruck);
 router.patch("/logistics/:id/reroute", permissionMiddleware("logistics.manage"), emergencyRerouteTruck);
+
+// Carrier Governance
+router.get("/logistics/carriers", permissionMiddleware("logistics.carriers.read"), getCarriers);
+router.post("/logistics/carriers", permissionMiddleware("logistics.carriers.manage"), createCarrier);
+router.patch("/logistics/carriers/:id", permissionMiddleware("logistics.carriers.manage"), updateCarrier);
+
+// Cold Storage Hubs & Depots
+router.get("/logistics/hubs", permissionMiddleware("logistics.hubs.read"), getHubs);
+router.post("/logistics/hubs", permissionMiddleware("logistics.hubs.manage"), upsertHub);
+
+// Incidents & SLA Resolution
+router.get("/logistics/incidents", permissionMiddleware("logistics.incidents.read"), getIncidents);
+router.post("/logistics/incidents/:id/resolve", permissionMiddleware("logistics.incidents.resolve"), resolveIncident);
 
 // Platform Global Settings
 router.get("/settings", permissionMiddleware("settings.read"), getPlatformSettings);

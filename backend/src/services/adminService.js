@@ -281,6 +281,43 @@ const reconcilePayment = async (paymentId, data, actorId, ipAddress, userAgent) 
 	return adminModel.reconcilePayment(paymentId, data, actorId, ipAddress, userAgent);
 };
 
+// --- Phase 3: Cold-Chain Logistics, Carriers, Hubs, Incidents Services ---
+const getFleetShipmentsAdmin = async (options) => {
+	return adminModel.getFleetShipmentsAdmin(options);
+};
+
+const getShipmentDossier = async (shipmentId) => {
+	return adminModel.getShipmentDossier(shipmentId);
+};
+
+const getCarriersAdmin = async (options) => {
+	return adminModel.getCarriersAdmin(options);
+};
+
+const createCarrierAdmin = async (data, actorId, ipAddress, userAgent) => {
+	return adminModel.createCarrierAdmin(data, actorId, ipAddress, userAgent);
+};
+
+const updateCarrierAdmin = async (id, data, actorId, ipAddress, userAgent) => {
+	return adminModel.updateCarrierAdmin(id, data, actorId, ipAddress, userAgent);
+};
+
+const getHubsAdmin = async (options) => {
+	return adminModel.getHubsAdmin(options);
+};
+
+const upsertHubAdmin = async (data, actorId, ipAddress, userAgent) => {
+	return adminModel.upsertHubAdmin(data, actorId, ipAddress, userAgent);
+};
+
+const getIncidentsAdmin = async (options) => {
+	return adminModel.getIncidentsAdmin(options);
+};
+
+const resolveIncident = async (incidentId, data, actorId, ipAddress, userAgent) => {
+	return adminModel.resolveIncident(incidentId, data, actorId, ipAddress, userAgent);
+};
+
 module.exports = {
 	getDashboardAnalytics,
 	getAdminMe,
@@ -346,4 +383,14 @@ module.exports = {
 	getPaymentsAdmin,
 	getPaymentDossier,
 	reconcilePayment,
+	// Phase 3 exports
+	getFleetShipmentsAdmin,
+	getShipmentDossier,
+	getCarriersAdmin,
+	createCarrierAdmin,
+	updateCarrierAdmin,
+	getHubsAdmin,
+	upsertHubAdmin,
+	getIncidentsAdmin,
+	resolveIncident,
 };

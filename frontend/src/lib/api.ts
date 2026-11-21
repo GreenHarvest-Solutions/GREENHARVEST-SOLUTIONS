@@ -728,14 +728,43 @@ class APIClient {
     });
   }
 
-  async getFleetShipments(params?: { status?: string; search?: string }) {
-    const query = new URLSearchParams();
-    if (params?.status && params.status !== 'all') query.append('status', params.status);
-    if (params?.search) query.append('search', params.search);
-    const queryString = query.toString();
-    return this.request<{ shipments: any[] }>({
+  async getFleetShipments(params?: {
+    status?: string;
+    carrier?: string;
+    temp_status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      shipments: any[];
+      metrics?: {
+        total_shipments: number;
+        active_trucks: number;
+        optimal_count: number;
+        elevated_count: number;
+        breached_count: number;
+        avg_speed_kmh: number;
+        cold_chain_compliance_pct: number;
+        active_cargo_weight_kg: number;
+      };
+      pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
       method: 'GET',
-      url: `/admin/logistics/fleet${queryString ? `?${queryString}` : ''}`,
+      url: '/admin/logistics/fleet',
+      params,
+    });
+  }
+
+  async getShipmentDossier(id: string) {
+    return this.request<{ shipment: any }>({
+      method: 'GET',
+      url: `/admin/logistics/fleet/${id}`,
     });
   }
 
@@ -751,6 +780,110 @@ class APIClient {
     return this.request<{ message: string; shipment: any }>({
       method: 'PATCH',
       url: `/admin/logistics/${id}/reroute`,
+      data,
+    });
+  }
+
+  // --- Phase 3: Carriers, Hubs, and Incidents ---
+
+  async getAdminCarriers(params?: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      carriers: any[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/logistics/carriers',
+      params,
+    });
+  }
+
+  async createAdminCarrier(data: {
+    name: string;
+    code: string;
+    contact_person?: string;
+    phone: string;
+    email?: string;
+    status?: string;
+    total_fleet_count?: number;
+    cold_chain_sla_score?: number;
+    coverage_regions?: string[];
+    notes?: string;
+  }) {
+    return this.request<{ message: string; carrier: any }>({
+      method: 'POST',
+      url: '/admin/logistics/carriers',
+      data,
+    });
+  }
+
+  async updateAdminCarrier(id: string | number, data: any) {
+    return this.request<{ message: string; carrier: any }>({
+      method: 'PATCH',
+      url: `/admin/logistics/carriers/${id}`,
+      data,
+    });
+  }
+
+  async getAdminHubs(params?: { region?: string; hub_type?: string; search?: string }) {
+    return this.request<{ hubs: any[] }>({
+      method: 'GET',
+      url: '/admin/logistics/hubs',
+      params,
+    });
+  }
+
+  async upsertAdminHub(data: any) {
+    return this.request<{ message: string; hub: any }>({
+      method: 'POST',
+      url: '/admin/logistics/hubs',
+      data,
+    });
+  }
+
+  async getAdminIncidents(params?: {
+    severity?: string;
+    resolved?: string | boolean;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      incidents: any[];
+      metrics: {
+        total_incidents: number;
+        unresolved_count: number;
+        critical_unresolved: number;
+        temperature_breaches: number;
+        route_deviations: number;
+        mechanical_failures: number;
+      };
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/logistics/incidents',
+      params,
+    });
+  }
+
+  async resolveAdminIncident(id: string | number, data: { resolution_notes: string; corrective_action?: string }) {
+    return this.request<{ message: string; incident: any }>({
+      method: 'POST',
+      url: `/admin/logistics/incidents/${id}/resolve`,
       data,
     });
   }
