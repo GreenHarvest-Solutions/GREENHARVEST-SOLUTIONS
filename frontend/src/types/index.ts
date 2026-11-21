@@ -54,6 +54,11 @@ export interface CartItem {
   quantity: number;
   created_at: string;
   product?: Product;
+  product_name?: string;
+  name?: string;
+  product_price?: number;
+  farmer_name?: string;
+  image_url?: string;
 }
 
 export interface OrderItem {
