@@ -318,23 +318,25 @@ function AdminDashboardContent() {
                 value={Number(metrics.total_revenue)}
                 prefix="ETB "
                 decimals={0}
-               
+                subText="from live orders"
               />
               <MetricCard
                 isStripItem
                 label="Total orders"
                 value={metrics.total_orders}
+                subText={`${metrics.fulfillment_rate}% fulfilled`}
               />
               <MetricCard
                 isStripItem
                 label="Total alerts"
                 value={metrics.fleet_breaches_count || 0}
+                subText="at cold hubs"
               />
               <MetricCard
                 isStripItem
                 label="Active trucks"
                 value={metrics.active_fleet_trucks}
-               
+                subText="at freight corridors"
               />
               <MetricCard
                 isStripItem
@@ -342,19 +344,19 @@ function AdminDashboardContent() {
                 value={Number(metrics.cold_chain_compliance)}
                 suffix="%"
                 decimals={1}
-                
+                subText="2.0° - 6.0°C"
               />
               <MetricCard
                 isStripItem
                 label="Farmer accounts"
                 value={metrics.total_farmers}
-                
+                subText={pendingFarmerCount > 0 ? `${pendingFarmerCount} pending KYC` : 'accredited'}
               />
               <MetricCard
                 isStripItem
                 label="Platform users"
                 value={metrics.total_users}
-                
+                subText={`${metrics.active_today} active today`}
               />
             </MetricStrip>
           </div>

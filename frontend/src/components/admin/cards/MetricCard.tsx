@@ -100,7 +100,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   const content = (
     <>
       {/* Top Label */}
-      <div className="flex items-center justify-center gap-1.5 text-center min-h-[1.25rem]">
+      <div className="flex items-center justify-center gap-1.5 text-center min-h-[1.5rem] w-full">
         {icon && (
           <i
             className={`fa-solid ${icon} text-xs text-[#007a6c] shrink-0`}
@@ -112,43 +112,45 @@ export const MetricCard: React.FC<MetricCardProps> = ({
         </span>
       </div>
 
-      {/* Main Metric Number */}
-      <div className="text-3xl md:text-4xl font-normal text-gray-900 tracking-tight my-1.5 text-center tabular-nums">
-        {isNumeric ? (
-          <AnimatedNumber
-            value={value as number}
-            decimals={decimals}
-            prefix={prefix}
-            suffix={suffix}
-          />
-        ) : (
-          <span className="font-normal text-gray-900">
-            {prefix}{value}{suffix}
-          </span>
-        )}
+      {/* Main Metric Number - Centered Horizontally & Vertically */}
+      <div className="flex-1 flex items-center justify-center text-center my-auto py-2 w-full">
+        <div className="text-3xl md:text-4xl font-normal text-gray-900 tracking-tight text-center tabular-nums">
+          {isNumeric ? (
+            <AnimatedNumber
+              value={value as number}
+              decimals={decimals}
+              prefix={prefix}
+              suffix={suffix}
+            />
+          ) : (
+            <span className="font-normal text-gray-900">
+              {prefix}{value}{suffix}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Bottom Sub-text (with subtle underline matching uploaded image) */}
-      <div className="min-h-[1.25rem] flex items-center justify-center text-center">
+      <div className="min-h-[1.5rem] flex items-center justify-center text-center w-full">
         {subText ? (
           subTextLink ? (
             <a
               href={subTextLink}
-              className="text-xs text-gray-500 font-normal underline underline-offset-4 decoration-gray-300 hover:decoration-gray-700 hover:text-gray-800 transition-colors cursor-pointer"
+              className="text-xs text-gray-500 font-normal underline underline-offset-4 decoration-gray-400 hover:decoration-gray-700 hover:text-gray-800 transition-colors cursor-pointer"
             >
               {subText}
             </a>
           ) : (
-            <span className="text-xs text-gray-500 font-normal underline underline-offset-4 decoration-gray-300">
+            <span className="text-xs text-gray-500 font-normal underline underline-offset-4 decoration-gray-400">
               {subText}
             </span>
           )
         ) : trend ? (
           <span
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-semibold tabular-nums text-xs ${
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-none border font-semibold tabular-nums text-xs ${
               trend.isPositive
-                ? 'bg-emerald-50 text-emerald-800'
-                : 'bg-rose-50 text-rose-800'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-rose-50 text-rose-800 border-rose-200'
             }`}
           >
             <i
@@ -168,7 +170,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   if (isStripItem) {
     return (
       <div
-        className={`p-4 md:py-6 md:px-5 flex flex-col items-center justify-center text-center hover:bg-gray-50/60 transition-colors ${className}`}
+        className={`p-4 md:py-5 md:px-3 min-h-[130px] md:min-h-[150px] flex flex-col items-center justify-between text-center bg-[#FCF9F8] hover:bg-[#F2ECE8] transition-colors ${className}`}
       >
         {content}
       </div>
@@ -186,11 +188,10 @@ export const MetricCard: React.FC<MetricCardProps> = ({
         ease: [0.25, 0.1, 0.25, 1] as const,
       }}
       whileHover={{
-        y: -3,
-        boxShadow: '0 12px 24px -6px rgba(0, 122, 108, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04)',
-        transition: { duration: 0.22, ease: 'easeOut' },
+        y: -2,
+        transition: { duration: 0.2, ease: 'easeOut' },
       }}
-      className={`bg-white rounded-2xl p-6 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.03)] flex flex-col items-center justify-center text-center ${className}`}
+      className={`bg-[#FCF9F8] rounded-none border border-gray-300 p-6 min-h-[140px] flex flex-col items-center justify-between text-center hover:bg-[#F2ECE8] transition-colors ${className}`}
     >
       {content}
     </motion.div>
@@ -199,7 +200,8 @@ export const MetricCard: React.FC<MetricCardProps> = ({
 
 /**
  * MetricStrip Component
- * Exactly reproduces the horizontal strip from the Tag Summary report with delicate vertical dividers and no outer border.
+ * Reproduces the horizontal strip with unrounded straight line borders,
+ * dashboard-matching background, and vertical column dividers.
  */
 export const MetricStrip: React.FC<{
   children: React.ReactNode;
@@ -212,7 +214,7 @@ export const MetricStrip: React.FC<{
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: index * 0.08 }}
-      className={`bg-white rounded-2xl overflow-hidden grid grid-flow-row sm:grid-flow-col auto-cols-fr divide-y sm:divide-y-0 sm:divide-x divide-gray-200/80 ${className}`}
+      className={`bg-[#FCF9F8] rounded-none border border-gray-300 grid grid-flow-row sm:grid-flow-col auto-cols-fr divide-y sm:divide-y-0 sm:divide-x divide-gray-300 ${className}`}
     >
       {children}
     </motion.div>
