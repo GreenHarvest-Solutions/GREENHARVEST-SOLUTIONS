@@ -4,7 +4,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -16,6 +16,24 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // If credentials accidentally leaked into the query string via a native GET submit, recover them and wipe the URL
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search) {
+      const params = new URLSearchParams(window.location.search);
+      const emailParam = params.get('email');
+      const passParam = params.get('password');
+      if (emailParam) {
+        setFormData((prev) => ({
+          ...prev,
+          email: emailParam,
+          password: passParam || prev.password,
+        }));
+      }
+      // Immediately remove credentials from the browser address bar for security
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -26,8 +44,8 @@ export default function LoginPage() {
 
   const validateForm = () => {
     const newErrors: typeof errors = {};
-    if (!formData.email) newErrors.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Enter a valid email';
+    if (!formData.email.trim()) newErrors.email = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(formData.email.trim())) newErrors.email = 'Enter a valid email';
     if (!formData.password) newErrors.password = 'Password is required';
     else if (formData.password.length < 6) newErrors.password = 'At least 6 characters';
     setErrors(newErrors);
@@ -36,21 +54,28 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!validateForm()) return;
     setLoading(true);
     setErrors({});
     try {
-      const response = await api.login(formData.email, formData.password);
+      const response = await api.login(formData.email.trim(), formData.password);
       const role = response.user?.role;
       const redirectMap: Record<string, string> = {
         admin: '/admin/dashboard',
         farmer: '/farmer/dashboard',
         delivery_partner: '/delivery/dashboard',
+        buyer: '/buyer/dashboard',
       };
-      router.push(redirectMap[role] ?? '/buyer/dashboard');
-    } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
-      setErrors({ general: err.response?.data?.message || 'Invalid email or password.' });
+      const destination = redirectMap[role] ?? '/farmer/dashboard';
+      window.location.href = destination;
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      const serverMsg = error.response?.data?.message;
+      const networkMsg = error.message === 'Network Error'
+        ? 'Cannot reach backend server. Please verify backend service is running on port 5000.'
+        : 'Invalid email or password.';
+      setErrors({ general: serverMsg || networkMsg });
     } finally {
       setLoading(false);
     }
@@ -118,7 +143,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} method="POST" action="#" className="space-y-6">
             <div>
               <label htmlFor="email" className="block font-label-lg text-label-lg text-on-background mb-2">
                 Email Address
