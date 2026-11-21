@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { BaseCard, MetricCard, MetricStrip, DataListCard } from '@/components/admin/cards';
+import { BaseCard, MetricCard, MetricStrip, DataListCard, TelemetryDiagnosticsWidgets } from '@/components/admin/cards';
 
 interface TopProduct {
   id: string | number;
@@ -85,11 +85,13 @@ function AdminDashboardContent() {
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'verifications' | 'moderation' | 'disputes' | 'fleet'>('verifications');
+  const [mainSectionView, setMainSectionView] = useState<'telemetry' | 'operations'>('telemetry');
 
   useEffect(() => {
     const tabQuery = searchParams.get('tab');
     if (tabQuery && ['verifications', 'moderation', 'disputes', 'fleet'].includes(tabQuery)) {
       setActiveTab(tabQuery as any);
+      setMainSectionView('operations');
     }
   }, [searchParams]);
   const [broadcastMessage, setBroadcastMessage] = useState('');
@@ -305,59 +307,7 @@ function AdminDashboardContent() {
         <div className="flex-1 flex flex-col min-w-[540px]">
 
           {/* Executive Admin Banner */}
-          <section className="bg-gradient-to-r from-[#F4F9F1] via-[#EDF6EA] to-[#E5F2E1] rounded-[2rem] p-8 flex flex-wrap md:flex-nowrap items-center justify-between gap-6 relative overflow-hidden mb-6 shrink-0 border border-emerald-100/80 shadow-xs">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-60 translate-x-1/3 -translate-y-1/3 pointer-events-none" />
-            <div className="absolute bottom-0 right-32 w-48 h-48 bg-lime-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-60 translate-y-1/3 pointer-events-none" />
-
-            <div className="max-w-lg relative z-10 shrink-1">
-              
-              <h1 className="text-3xl font-extrabold leading-tight mb-2 text-gray-900 tracking-tight [text-wrap:balance]">
-                GreenHarvest Administration
-              </h1>
-              <p className="text-gray-700 mb-6 text-xs leading-relaxed [text-wrap:pretty]">
-                Centralized authority for producer credentials, product quality moderation, financial settlement, and logistics dispatch.
-              </p>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  onClick={fetchDashboardData}
-                  aria-label="Synchronize platform metrics"
-                  className="bg-[#286c00] hover:bg-[#1f5400] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#286c00] focus-visible:ring-offset-2 text-white px-4 py-2.5 rounded-xl font-medium shadow-md shadow-[#286c00]/25 transition-all flex items-center gap-2 text-xs"
-                >
-                  <i className={`fa-solid fa-arrows-rotate text-xs ${loading ? 'animate-spin' : ''}`} />
-                  Sync Metrics
-                </button>
-
-                <button
-                  onClick={() => setShowBroadcastModal(true)}
-                  aria-label="Broadcast notice to platform participants"
-                  className="bg-white hover:bg-emerald-50/80 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#286c00] focus-visible:ring-offset-2 text-[#286c00] border border-emerald-200 px-4 py-2.5 rounded-xl font-medium shadow-2xs transition-all flex items-center gap-2 text-xs"
-                >
-                  <i className="fa-solid fa-bullhorn text-xs" />
-                  Broadcast Alert
-                </button>
-
-                {lastUpdated && (
-                  <span className="text-xs text-gray-600 font-medium ml-1">
-                    Updated {lastUpdated}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* 3D Illustration */}
-            <div className="relative w-64 h-56 z-10 flex items-center justify-center shrink-0">
-              <Image
-                alt="GreenHarvest 3D Hero"
-                className="w-full h-full object-contain relative z-10 drop-shadow-sm"
-                src="/images/admin/stitch/hero_v3.png"
-                width={256}
-                height={224}
-                priority
-              />
-            </div>
-          </section>
+        
 
           {/* ════════════════ EXACT TAG SUMMARY METRIC STRIP ════════════════ */}
           <div className="mb-8">
@@ -368,7 +318,7 @@ function AdminDashboardContent() {
                 value={Number(metrics.total_revenue)}
                 prefix="ETB "
                 decimals={0}
-                subText="from live orders"
+               
               />
               <MetricCard
                 isStripItem
@@ -384,7 +334,7 @@ function AdminDashboardContent() {
                 isStripItem
                 label="Active trucks"
                 value={metrics.active_fleet_trucks}
-                subText="at freight corridors"
+               
               />
               <MetricCard
                 isStripItem
@@ -392,91 +342,141 @@ function AdminDashboardContent() {
                 value={Number(metrics.cold_chain_compliance)}
                 suffix="%"
                 decimals={1}
-                subText="at cold hubs"
+                
               />
               <MetricCard
                 isStripItem
                 label="Farmer accounts"
                 value={metrics.total_farmers}
-                subText="at farmgate"
+                
               />
               <MetricCard
                 isStripItem
                 label="Platform users"
                 value={metrics.total_users}
-                subText={`${metrics.active_today} active today`}
+                
               />
             </MetricStrip>
           </div>
 
-          {/* ════════════════ ADMIN ACTION & MODERATION CENTER ════════════════ */}
-          <BaseCard
-            index={4}
-            className="flex-1 min-h-[420px]"
-            title={
-              <div className="flex items-center gap-2">
-                <i className="fa-solid fa-list-check text-[#007a6c] text-sm" />
-                <h2 className="text-sm font-bold text-[#007a6c] tracking-wider uppercase">
-                  Administrative Operations
-                </h2>
-              </div>
-            }
-            subtitle="Review pending authorizations, produce batch listings, and dispute mediations"
-            action={
-              <div className="flex items-center gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-100">
-                <button
-                  onClick={() => setActiveTab('verifications')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    activeTab === 'verifications'
-                      ? 'bg-white text-[#007a6c] shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <i className="fa-solid fa-id-card text-xs" />
-                  <span>Farmer KYC</span>
-                  {pendingFarmerCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold flex items-center justify-center">
-                      {pendingFarmerCount}
-                    </span>
-                  )}
-                </button>
+          {/* ════════════════ MAIN OPERATIONS / TELEMETRY DIAGNOSTICS VIEW ════════════════ */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <i className={`fa-solid ${mainSectionView === 'telemetry' ? 'fa-chart-area' : 'fa-list-check'} text-[#007a6c] text-sm`} />
+              <h2 className="text-sm font-bold text-gray-900 tracking-wider uppercase">
+                {mainSectionView === 'telemetry' ? 'Produce & Cold-Chain Telemetry Diagnostics' : 'Administrative Operations'}
+              </h2>
+            </div>
+            <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-gray-200/80 text-xs shadow-2xs">
+              <button
+                onClick={() => setMainSectionView('telemetry')}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                  mainSectionView === 'telemetry'
+                    ? 'bg-[#007a6c] text-white shadow-2xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <i className="fa-solid fa-temperature-half text-xs" />
+                <span>Diagnostics Widgets</span>
+              </button>
+              <button
+                onClick={() => setMainSectionView('operations')}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                  mainSectionView === 'operations'
+                    ? 'bg-[#007a6c] text-white shadow-2xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <i className="fa-solid fa-list-check text-xs" />
+                <span>Operational Queues</span>
+                {(pendingFarmerCount + pendingModerationCount + openDisputeCount) > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold tabular-nums">
+                    {pendingFarmerCount + pendingModerationCount + openDisputeCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
 
-                <button
-                  onClick={() => setActiveTab('moderation')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    activeTab === 'moderation'
-                      ? 'bg-white text-[#007a6c] shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <i className="fa-solid fa-shield-halved text-xs" />
-                  <span>Product Moderation</span>
-                  {pendingModerationCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-300 text-xs font-bold flex items-center justify-center">
-                      {pendingModerationCount}
-                    </span>
-                  )}
-                </button>
+          {mainSectionView === 'telemetry' ? (
+            <TelemetryDiagnosticsWidgets
+              index={4}
+              systemData={{
+                currentTemp: Number(metrics.cold_chain_compliance ? (4.2).toFixed(1) : 16),
+                pointsScore: 61,
+                status: metrics.fleet_breaches_count > 0 ? 'MONITORED' : 'ACTIVE',
+                location: 'Modjo Hub Corridor (WV-882)',
+                coldCompliancePercent: Number(metrics.cold_chain_compliance || 98.4),
+              }}
+            />
+          ) : (
+            <BaseCard
+              index={4}
+              className="flex-1 min-h-[420px]"
+              title={
+                <div className="flex items-center gap-2">
+                  <i className="fa-solid fa-list-check text-[#007a6c] text-sm" />
+                  <h3 className="text-sm font-bold text-[#007a6c] tracking-wider uppercase">
+                    Administrative Operations
+                  </h3>
+                </div>
+              }
+              subtitle="Review pending authorizations, produce batch listings, and dispute mediations"
+              action={
+                <div className="flex items-center gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-100">
+                  <button
+                    onClick={() => setActiveTab('verifications')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                      activeTab === 'verifications'
+                        ? 'bg-white text-[#007a6c] shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <i className="fa-solid fa-id-card text-xs" />
+                    <span>Farmer KYC</span>
+                    {pendingFarmerCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold flex items-center justify-center">
+                        {pendingFarmerCount}
+                      </span>
+                    )}
+                  </button>
 
-                <button
-                  onClick={() => setActiveTab('disputes')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    activeTab === 'disputes'
-                      ? 'bg-white text-[#007a6c] shadow-xs'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <i className="fa-solid fa-scale-balanced text-xs" />
-                  <span>Disputes &amp; Refunds</span>
-                  {openDisputeCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-900 border border-red-300 text-xs font-bold flex items-center justify-center">
-                      {openDisputeCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-            }
-          >
+                  <button
+                    onClick={() => setActiveTab('moderation')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                      activeTab === 'moderation'
+                        ? 'bg-white text-[#007a6c] shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <i className="fa-solid fa-shield-halved text-xs" />
+                    <span>Product Moderation</span>
+                    {pendingModerationCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-300 text-xs font-bold flex items-center justify-center">
+                        {pendingModerationCount}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('disputes')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                      activeTab === 'disputes'
+                        ? 'bg-white text-[#007a6c] shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <i className="fa-solid fa-scale-balanced text-xs" />
+                    <span>Disputes &amp; Refunds</span>
+                    {openDisputeCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-900 border border-red-300 text-xs font-bold flex items-center justify-center">
+                        {openDisputeCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              }
+            >
 
             {/* Tab 1: Farmer KYC Queue */}
             {activeTab === 'verifications' && (
@@ -694,7 +694,8 @@ function AdminDashboardContent() {
               </div>
             )}
           </BaseCard>
-        </div>
+        )}
+      </div>
 
         {/* ════════════════ RIGHT / OVERSIGHT COLUMN ════════════════ */}
         <div className="w-80 flex flex-col shrink-0 gap-6">
