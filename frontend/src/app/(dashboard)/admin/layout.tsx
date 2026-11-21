@@ -22,7 +22,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
       <div
-        className="flex h-screen w-screen overflow-hidden text-gray-800 bg-[#FDFCFE]"
+        className="flex h-screen w-screen overflow-hidden text-gray-800 bg-white"
         style={{
           fontFamily: "'Poppins', sans-serif",
         }}
@@ -31,7 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <AdminSidebar />
 
         {/* Full-height Main View Container */}
-        <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-[#FDFCFE]">
+        <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-white">
           {children}
         </main>
       </div>

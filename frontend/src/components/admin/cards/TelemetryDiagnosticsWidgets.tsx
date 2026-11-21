@@ -56,12 +56,12 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, delay: index * 0.05, ease: [0.25, 0.1, 0.25, 1] as const }}
-        className="bg-white  border border-gray-200/90 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col"
+        className="bg-white rounded-none border border-gray-300 overflow-hidden flex flex-col"
       >
         {/* Optional Control Header */}
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+        <div className="px-5 py-3 border-b border-gray-300 flex items-center justify-between bg-white">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#007a6c]" />
+            <span className="w-2.5 h-2.5 rounded-none bg-[#007a6c]" />
             <h2 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
               Temperature &amp; Life Remaining Telemetry
             </h2>
@@ -70,7 +70,7 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
             <span className="text-gray-500 font-medium">Source:</span>
             <button
               onClick={() => setUseLiveTelemetry(!useLiveTelemetry)}
-              className="px-2.5 py-1 rounded-md bg-white border border-gray-200 text-[#007a6c] font-semibold hover:border-[#007a6c] transition-colors shadow-2xs"
+              className="px-2.5 py-1 rounded-none bg-white border border-gray-300 text-[#007a6c] font-semibold hover:border-[#007a6c] transition-colors"
             >
               {useLiveTelemetry ? 'Live Freight Telemetry' : 'Reference Tag Mode'}
             </button>
@@ -297,10 +297,10 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
           </div>
 
           {/* Right Legend Sidebar (~25% width) matching uploaded image */}
-          <div className="w-full lg:w-56 border-t lg:border-t-0 lg:border-l border-gray-200/90 bg-white flex flex-col text-xs shrink-0">
+          <div className="w-full lg:w-56 border-t lg:border-t-0 lg:border-l border-gray-300 bg-white flex flex-col text-xs shrink-0">
             {/* Lines Section */}
-            <div className="border-b border-gray-100">
-              <div className="bg-gray-50/90 py-2 px-4 text-center font-bold text-gray-700 tracking-wide border-b border-gray-100">
+            <div className="border-b border-gray-300">
+              <div className="bg-white py-2 px-4 text-center font-bold text-gray-700 tracking-wide border-b border-gray-300">
                 Lines
               </div>
               <div className="p-3 flex flex-col gap-2.5">
@@ -325,7 +325,7 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
 
             {/* Markers Section */}
             <div className="flex-1">
-              <div className="bg-gray-50/90 py-2 px-4 text-center font-bold text-gray-700 tracking-wide border-b border-gray-100">
+              <div className="bg-white py-2 px-4 text-center font-bold text-gray-700 tracking-wide border-b border-gray-300">
                 Markers
               </div>
               <div className="p-3 flex flex-col gap-2.5">
@@ -361,7 +361,7 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: index * 0.07, ease: [0.25, 0.1, 0.25, 1] as const }}
-          className="lg:col-span-7 bg-white border border-gray-200/90 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)] p-5 md:p-6 flex flex-col justify-between"
+          className="lg:col-span-7 bg-white rounded-none border border-gray-300 p-5 md:p-6 flex flex-col justify-between"
         >
           <div className="relative w-full h-[190px]">
             <svg viewBox="0 0 540 190" className="w-full h-full select-none">
@@ -437,10 +437,10 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: index * 0.09, ease: [0.25, 0.1, 0.25, 1] as const }}
-          className="lg:col-span-3 bg-white rounded-2xl border border-gray-200/90 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col"
+          className="lg:col-span-3 bg-white rounded-none border border-gray-300 overflow-hidden flex flex-col"
         >
           {/* Card Header */}
-          <div className="py-2.5 px-4 text-center font-bold text-gray-800 text-xs border-b border-gray-100 bg-gray-50/80 uppercase tracking-wider">
+          <div className="py-2.5 px-4 text-center font-bold text-gray-800 text-xs border-b border-gray-300 bg-white uppercase tracking-wider">
             Last Seen
           </div>
 
@@ -494,10 +494,10 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
             {/* Status Button / Badge */}
             <div className="w-full">
               <span
-                className={`w-full block py-1.5 px-3 rounded-md text-xs font-semibold text-center uppercase tracking-widest border ${
+                className={`w-full block py-1.5 px-3 rounded-none text-xs font-semibold text-center uppercase tracking-widest border ${
                   current.status === 'STOPPED'
-                    ? 'border-red-300 text-red-700 bg-red-50/40'
-                    : 'border-emerald-300 text-emerald-800 bg-emerald-50/40'
+                    ? 'border-red-300 text-red-700 bg-white'
+                    : 'border-emerald-300 text-emerald-800 bg-white'
                 }`}
               >
                 {current.status}
@@ -505,7 +505,7 @@ export const TelemetryDiagnosticsWidgets: React.FC<TelemetryDiagnosticsProps> = 
             </div>
 
             {/* Location & Date Rows with Icons */}
-            <div className="flex flex-col gap-2.5 pt-2 border-t border-gray-100 text-xs">
+            <div className="flex flex-col gap-2.5 pt-2 border-t border-gray-300 text-xs">
               <div className="flex items-center gap-3 text-gray-800">
                 <i className="fa-solid fa-location-dot text-gray-900 text-base shrink-0" aria-hidden="true" />
                 <span className="font-semibold text-gray-900 truncate">

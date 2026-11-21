@@ -299,7 +299,7 @@ function AdminDashboardContent() {
   const openDisputeCount = disputes.filter((d) => d.status === 'open').length;
 
   return (
-    <div className="w-full h-full flex flex-col overflow-hidden bg-[#FCF9F8]">
+    <div className="w-full h-full flex flex-col overflow-hidden bg-white">
       {/* ════════════════ SCROLLABLE VIEWPORT CONTAINER ════════════════ */}
       <div className="flex-1 overflow-y-auto hide-scrollbar p-8 flex gap-8">
 
@@ -369,10 +369,10 @@ function AdminDashboardContent() {
                 {mainSectionView === 'telemetry' ? 'Produce & Cold-Chain Telemetry Diagnostics' : 'Administrative Operations'}
               </h2>
             </div>
-            <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-gray-200/80 text-xs shadow-2xs">
+            <div className="flex items-center gap-1 bg-white p-1 rounded-none border border-gray-300 text-xs shadow-2xs">
               <button
                 onClick={() => setMainSectionView('telemetry')}
-                className={`px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-none font-semibold transition-all flex items-center gap-1.5 ${
                   mainSectionView === 'telemetry'
                     ? 'bg-[#007a6c] text-white shadow-2xs'
                     : 'text-gray-600 hover:text-gray-900'
@@ -383,7 +383,7 @@ function AdminDashboardContent() {
               </button>
               <button
                 onClick={() => setMainSectionView('operations')}
-                className={`px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-none font-semibold transition-all flex items-center gap-1.5 ${
                   mainSectionView === 'operations'
                     ? 'bg-[#007a6c] text-white shadow-2xs'
                     : 'text-gray-600 hover:text-gray-900'
@@ -392,7 +392,7 @@ function AdminDashboardContent() {
                 <i className="fa-solid fa-list-check text-xs" />
                 <span>Operational Queues</span>
                 {(pendingFarmerCount + pendingModerationCount + openDisputeCount) > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold tabular-nums">
+                  <span className="px-1.5 py-0.5 rounded-none bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold tabular-nums">
                     {pendingFarmerCount + pendingModerationCount + openDisputeCount}
                   </span>
                 )}
@@ -710,7 +710,7 @@ function AdminDashboardContent() {
             <div className="relative">
               <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs" />
               <input
-                className="w-full bg-[#FCF9F8] border border-gray-200 rounded-xl pl-8 pr-3 py-2 text-xs font-medium text-gray-800 placeholder-gray-500 focus:outline-none focus:border-[#007a6c] focus:ring-1 focus:ring-[#007a6c]/20 focus:bg-white transition-all shadow-2xs"
+                className="w-full bg-white border border-gray-300 rounded-none pl-8 pr-3 py-2 text-xs font-medium text-gray-800 placeholder-gray-500 focus:outline-none focus:border-[#007a6c] focus:ring-1 focus:ring-[#007a6c]/20 transition-all shadow-2xs"
                 placeholder="Search products, farmers, orders..."
                 aria-label="Search platform registry for products, farmers, and orders"
                 type="text"
@@ -776,7 +776,7 @@ function AdminDashboardContent() {
 
             <Link
               href="/admin/deliveries"
-              className="w-full bg-[#FCF9F8] hover:bg-teal-50 text-[#007a6c] border border-teal-200/80 py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-xs"
+              className="w-full bg-white hover:bg-teal-50 text-[#007a6c] border border-teal-300 py-2.5 rounded-none font-semibold transition-all flex items-center justify-center gap-2 text-xs"
             >
               <span>Manage Dispatch Partners</span>
               <i className="fa-solid fa-arrow-right text-xs" />
