@@ -151,6 +151,29 @@ const emergencyRerouteTruck = async (req, res) => {
 	}
 };
 
+const getRegionalAnalytics = async (req, res) => {
+	try {
+		const analytics = await adminService.getRegionalAnalytics(req.query.limit || 10);
+		return res.status(200).json({ analytics });
+	} catch (error) {
+		return handleControllerError(res, "Get regional analytics failed", error);
+	}
+};
+
+const updateUserStatus = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { status } = req.body;
+		const updated = await adminService.updateUserStatus(id, status);
+		return res.status(200).json({
+			message: `User ${id} status updated to ${status} successfully`,
+			user: updated,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Update user status failed", error);
+	}
+};
+
 module.exports = {
 	getAdminDashboard,
 	getFarmersKYC,
@@ -163,4 +186,6 @@ module.exports = {
 	getFleetShipments,
 	assignDispatchBatch,
 	emergencyRerouteTruck,
+	getRegionalAnalytics,
+	updateUserStatus,
 };

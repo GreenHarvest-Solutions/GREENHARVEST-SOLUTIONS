@@ -22,10 +22,10 @@ export default function AdminSidebar() {
   const [adminName, setAdminName] = useState('System Administrator');
   const [adminRole, setAdminRole] = useState('Superadmin • Tier 1');
   const [counts, setCounts] = useState({
-    kyc: 2,
-    moderation: 3,
-    disputes: 2,
-    fleet: 14,
+    kyc: 0,
+    moderation: 0,
+    disputes: 0,
+    fleet: 0,
   });
 
   useEffect(() => {
@@ -52,24 +52,15 @@ export default function AdminSidebar() {
       try {
         const res = await api.getAdminDashboard();
         if (res && res.metrics) {
-          const kycPending = Array.isArray(res.metrics.pending_farmers)
-            ? res.metrics.pending_farmers.filter((f) => !f.is_verified).length
-            : 2;
-          const modPending = Array.isArray(res.metrics.product_moderation)
-            ? res.metrics.product_moderation.filter((p) => p.status !== 'active').length
-            : 3;
-          const dispOpen = Array.isArray(res.metrics.disputes)
-            ? res.metrics.disputes.filter((d) => d.status === 'pending').length
-            : 2;
-          setCounts((prev) => ({
-            ...prev,
-            kyc: kycPending,
-            moderation: modPending,
-            disputes: dispOpen,
-          }));
+          setCounts({
+            kyc: Number(res.metrics.kyc_pending_count ?? (Array.isArray(res.metrics.pending_farmers) ? res.metrics.pending_farmers.filter((f: any) => !f.is_verified).length : 0)),
+            moderation: Number(res.metrics.moderation_pending_count ?? (Array.isArray(res.metrics.product_moderation) ? res.metrics.product_moderation.filter((p: any) => p.status !== 'active').length : 0)),
+            disputes: Number(res.metrics.disputes_open_count ?? (Array.isArray(res.metrics.disputes) ? res.metrics.disputes.filter((d: any) => d.status === 'pending').length : 0)),
+            fleet: Number(res.metrics.active_fleet_trucks ?? 0),
+          });
         }
       } catch {
-        // Keep defaults
+        // Keep 0
       }
     };
     fetchCounts();

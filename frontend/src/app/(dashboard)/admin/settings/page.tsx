@@ -74,7 +74,7 @@ export default function AdminSettingsPage() {
                   onChange={(e) => setCommissionRate(parseFloat(e.target.value) || 0)}
                   className="w-full bg-[#FCF9F8] border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-900 focus:outline-none focus:border-[#286c00] focus:ring-1 focus:ring-[#286c00]/20"
                 />
-                <p className="text-[11px] text-gray-600 mt-1">Deducted automatically upon buyer order completion via Chapa.</p>
+                <p className="text-xs text-gray-600 mt-1 [text-wrap:pretty]">Deducted automatically upon buyer order completion via Chapa.</p>
               </div>
 
               <div>
@@ -87,9 +87,9 @@ export default function AdminSettingsPage() {
                   max="168"
                   value={escrowHoldHours}
                   onChange={(e) => setEscrowHoldHours(parseInt(e.target.value) || 48)}
-                  className="w-full bg-[#FCF9F8] border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-900 focus:outline-none focus:border-[#286c00] focus:ring-1 focus:ring-[#286c00]/20"
+                  className="w-full bg-[#FCF9F8] border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-900 focus:outline-none focus:border-[#1f5400] focus:ring-1 focus:ring-[#1f5400]/20"
                 />
-                <p className="text-[11px] text-gray-600 mt-1">Buyer dispute inspection window before automated farmer payout.</p>
+                <p className="text-xs text-gray-600 mt-1 [text-wrap:pretty]">Buyer dispute inspection window before automated farmer payout.</p>
               </div>
             </div>
           </div>
@@ -134,7 +134,7 @@ export default function AdminSettingsPage() {
           <div className="flex items-center justify-end gap-3">
             <button
               type="submit"
-              className="px-5 py-2.5 bg-[#286c00] hover:bg-[#1f5400] text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+              className="px-5 py-2.5 bg-[#1f5400] hover:bg-[#163c00] text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
             >
               Save Configuration
             </button>

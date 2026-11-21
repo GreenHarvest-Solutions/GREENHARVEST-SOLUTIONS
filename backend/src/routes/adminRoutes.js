@@ -14,6 +14,8 @@ const {
 	getFleetShipments,
 	assignDispatchBatch,
 	emergencyRerouteTruck,
+	getRegionalAnalytics,
+	updateUserStatus,
 } = require("../controllers/adminController");
 
 const router = express.Router();
@@ -23,6 +25,10 @@ router.use(roleMiddleware("admin"));
 
 // Dashboard Telemetry
 router.get("/dashboard", getAdminDashboard);
+router.get("/analytics", getRegionalAnalytics);
+
+// User Governance
+router.patch("/users/:id/status", updateUserStatus);
 
 // Farmer KYC & Verification
 router.get("/farmers/kyc", getFarmersKYC);

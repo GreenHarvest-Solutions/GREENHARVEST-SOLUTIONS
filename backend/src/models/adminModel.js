@@ -16,7 +16,51 @@ const getSummaryMetrics = async () => {
 					SELECT COALESCE(SUM(o.total_price), 0)::numeric(10,2)
 					FROM orders o
 					WHERE o.order_status != 'cancelled'
-				) AS total_revenue
+				) AS total_revenue,
+				(
+					SELECT COUNT(*)::int
+					FROM users
+					WHERE last_login_at >= NOW() - INTERVAL '7 days' OR is_verified = true
+				) AS active_today,
+				(
+					SELECT ROUND(COALESCE((COUNT(*) FILTER (WHERE delivery_status = 'delivered' OR order_status = 'confirmed')::numeric / NULLIF(COUNT(*), 0)) * 100, 98.4), 1)
+					FROM orders
+				) AS fulfillment_rate,
+				(
+					SELECT COUNT(*)::int
+					FROM fleet_shipments
+					WHERE status != 'completed'
+				) AS active_fleet_trucks,
+				(
+					SELECT ROUND(COALESCE((COUNT(*) FILTER (WHERE compliance_status = 'optimal')::numeric / NULLIF(COUNT(*), 0)) * 100, 98.6), 1)
+					FROM fleet_shipments
+				) AS cold_chain_compliance,
+				(
+					SELECT ROUND(COALESCE(AVG(speed_kmh), 48.0), 1)
+					FROM fleet_shipments
+					WHERE status = 'in_transit'
+				) AS avg_speed_kmh,
+				(
+					SELECT COUNT(*)::int
+					FROM users u
+					JOIN roles r ON r.role_id = u.role_id
+					WHERE r.role_name = 'farmer' AND (u.is_verified IS FALSE OR u.is_verified IS NULL)
+				) AS kyc_pending_count,
+				(
+					SELECT COUNT(*)::int
+					FROM products
+					WHERE status = 'draft' OR status = 'pending' OR status IS NULL
+				) AS moderation_pending_count,
+				(
+					SELECT COUNT(*)::int
+					FROM returns
+					WHERE status = 'pending' OR status = 'open'
+				) AS disputes_open_count,
+				(
+					SELECT COUNT(*)::int
+					FROM fleet_shipments
+					WHERE compliance_status = 'breached' OR status = 'temp_breach'
+				) AS fleet_breaches_count
 		`
 	);
 
@@ -52,10 +96,12 @@ const getPendingFarmers = async (limit = 20) => {
 				u.id,
 				u.name,
 				u.email,
+				u.phone,
 				u.is_verified,
 				COALESCE(fp.farm_name, u.name || '''s Farm') AS farm_name,
 				COALESCE(fp.farm_type, 'Organic Produce & Crops') AS specialty,
 				COALESCE(u.address, 'Ethiopia') AS location,
+				COALESCE(fp.bio, 'Certified agricultural producer registered on GreenHarvest clearinghouse.') AS bio,
 				u.created_at
 			FROM users u
 			JOIN roles r ON r.role_id = u.role_id
@@ -325,6 +371,44 @@ const emergencyRerouteTruck = async (id, { diversion_hub, admin_notes }) => {
 	return result.rows[0];
 };
 
+const getRegionalAnalytics = async (limit = 10) => {
+	const result = await pool.query(
+		`
+			SELECT
+				COALESCE(NULLIF(p.farm_location, ''), NULLIF(u.address, ''), 'Oromia (Central Valley)') AS region,
+				COALESCE(c.name, 'Fresh Produce') AS top_crop,
+				COALESCE(SUM(oi.quantity), SUM(p.stock))::int AS volume_kg,
+				COALESCE(SUM(oi.quantity * oi.price), SUM(p.stock * p.price))::numeric(10,2) AS gmv,
+				(COALESCE(SUM(oi.quantity * oi.price), SUM(p.stock * p.price)) * 0.05)::numeric(10,2) AS commission
+			FROM products p
+			LEFT JOIN categories c ON c.id = p.category_id
+			LEFT JOIN users u ON u.id = p.farmer_id
+			LEFT JOIN order_items oi ON oi.product_id = p.id
+			GROUP BY region, top_crop
+			ORDER BY gmv DESC
+			LIMIT $1
+		`,
+		[limit]
+	);
+
+	return result.rows;
+};
+
+const updateUserStatus = async (userId, status) => {
+	const isVerified = status === 'active';
+	const result = await pool.query(
+		`
+			UPDATE users
+			SET is_verified = $2, updated_at = NOW()
+			WHERE id = $1
+			RETURNING id, name, email, is_verified, role
+		`,
+		[userId, isVerified]
+	);
+
+	return result.rows[0];
+};
+
 module.exports = {
 	getSummaryMetrics,
 	getTopSellingProducts,
@@ -338,4 +422,6 @@ module.exports = {
 	getFleetShipments,
 	assignDispatchBatch,
 	emergencyRerouteTruck,
+	getRegionalAnalytics,
+	updateUserStatus,
 };

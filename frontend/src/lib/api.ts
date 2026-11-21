@@ -528,6 +528,16 @@ class APIClient {
         total_farmers: number;
         total_orders: number;
         total_revenue: number | string;
+        active_today?: number;
+        fulfillment_rate?: number;
+        active_fleet_trucks?: number;
+        cold_chain_compliance?: number;
+        avg_speed_kmh?: number;
+        kyc_pending_count?: number;
+        moderation_pending_count?: number;
+        disputes_open_count?: number;
+        fleet_breaches_count?: number;
+        regional_analytics?: any[];
         top_selling_products: Array<{
           id: number | string;
           name: string;
@@ -628,6 +638,21 @@ class APIClient {
       method: 'PATCH',
       url: `/admin/logistics/${id}/reroute`,
       data,
+    });
+  }
+
+  async getAdminAnalytics() {
+    return this.request<{ analytics: any[] }>({
+      method: 'GET',
+      url: '/admin/analytics',
+    });
+  }
+
+  async updateUserStatus(id: string | number, status: 'active' | 'suspended') {
+    return this.request<{ message: string; user: any }>({
+      method: 'PATCH',
+      url: `/admin/users/${id}/status`,
+      data: { status },
     });
   }
 
