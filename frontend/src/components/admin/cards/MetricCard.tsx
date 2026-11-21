@@ -187,11 +187,10 @@ export const MetricCard: React.FC<MetricCardProps> = ({
       }}
       whileHover={{
         y: -3,
-        borderColor: accentColor,
-        boxShadow: '0 12px 24px -6px rgba(0, 122, 108, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.04)',
+        boxShadow: '0 12px 24px -6px rgba(0, 122, 108, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04)',
         transition: { duration: 0.22, ease: 'easeOut' },
       }}
-      className={`bg-white rounded-2xl p-6 border border-gray-200/90 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.05)] flex flex-col items-center justify-center text-center ${className}`}
+      className={`bg-white rounded-2xl p-6 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.03)] flex flex-col items-center justify-center text-center ${className}`}
     >
       {content}
     </motion.div>
@@ -200,7 +199,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
 
 /**
  * MetricStrip Component
- * Exactly reproduces the horizontal strip from the Tag Summary report with delicate vertical dividers.
+ * Exactly reproduces the horizontal strip from the Tag Summary report with delicate vertical dividers and no outer border.
  */
 export const MetricStrip: React.FC<{
   children: React.ReactNode;
@@ -213,7 +212,7 @@ export const MetricStrip: React.FC<{
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: index * 0.08 }}
-      className={`bg-white rounded-2xl border border-gray-200/90 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] overflow-hidden grid grid-flow-row sm:grid-flow-col auto-cols-fr divide-y sm:divide-y-0 sm:divide-x divide-gray-200/80 ${className}`}
+      className={`bg-white rounded-2xl overflow-hidden grid grid-flow-row sm:grid-flow-col auto-cols-fr divide-y sm:divide-y-0 sm:divide-x divide-gray-200/80 ${className}`}
     >
       {children}
     </motion.div>

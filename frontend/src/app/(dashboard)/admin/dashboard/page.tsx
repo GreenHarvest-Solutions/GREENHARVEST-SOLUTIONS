@@ -374,13 +374,11 @@ function AdminDashboardContent() {
                 isStripItem
                 label="Total orders"
                 value={metrics.total_orders}
-                subText={`${metrics.fulfillment_rate}% fulfilled`}
               />
               <MetricCard
                 isStripItem
                 label="Total alerts"
                 value={metrics.fleet_breaches_count || 0}
-                subText="at cold hubs"
               />
               <MetricCard
                 isStripItem
@@ -394,13 +392,13 @@ function AdminDashboardContent() {
                 value={Number(metrics.cold_chain_compliance)}
                 suffix="%"
                 decimals={1}
-                subText="2.0° - 6.0°C"
+                subText="at cold hubs"
               />
               <MetricCard
                 isStripItem
                 label="Farmer accounts"
                 value={metrics.total_farmers}
-                subText={pendingFarmerCount > 0 ? `${pendingFarmerCount} pending KYC` : 'accredited'}
+                subText="at farmgate"
               />
               <MetricCard
                 isStripItem
