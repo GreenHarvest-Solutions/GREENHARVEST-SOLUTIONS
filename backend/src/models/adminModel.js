@@ -202,6 +202,129 @@ const broadcastAnnouncement = async (adminUserId, message) => {
 	return { delivered_count: result.rowCount };
 };
 
+const getFleetShipments = async (filters = {}) => {
+	let query = `
+		SELECT
+			id,
+			vehicle_plate,
+			truck_type,
+			driver_name,
+			driver_phone,
+			carrier_partner,
+			cargo_batch,
+			cargo_weight_kg,
+			origin_hub,
+			destination_hub,
+			current_checkpoint,
+			reefer_temp_celsius,
+			target_temp_min,
+			target_temp_max,
+			compliance_status,
+			status,
+			speed_kmh,
+			eta,
+			nearest_cold_hub,
+			notes,
+			created_at,
+			updated_at
+		FROM fleet_shipments
+		WHERE 1=1
+	`;
+	const params = [];
+
+	if (filters.status && filters.status !== 'all') {
+		params.push(filters.status);
+		query += ` AND status = $${params.length}`;
+	}
+
+	if (filters.search) {
+		params.push(`%${filters.search}%`);
+		query += ` AND (
+			driver_name ILIKE $${params.length} OR
+			vehicle_plate ILIKE $${params.length} OR
+			cargo_batch ILIKE $${params.length} OR
+			origin_hub ILIKE $${params.length} OR
+			destination_hub ILIKE $${params.length}
+		)`;
+	}
+
+	query += ` ORDER BY CASE WHEN compliance_status = 'breached' THEN 1 ELSE 2 END, created_at DESC`;
+
+	const result = await pool.query(query, params);
+	return result.rows;
+};
+
+const assignDispatchBatch = async (data) => {
+	const {
+		id,
+		vehicle_plate,
+		truck_type,
+		driver_name,
+		driver_phone,
+		carrier_partner,
+		cargo_batch,
+		cargo_weight_kg,
+		origin_hub,
+		destination_hub,
+		reefer_temp_celsius = 3.5,
+		nearest_cold_hub = 'Debre Zeit Cold Hub Depot',
+	} = data;
+
+	const newId = id || `FL-${Math.floor(200 + Math.random() * 800)}`;
+
+	const result = await pool.query(
+		`
+			INSERT INTO fleet_shipments (
+				id, vehicle_plate, truck_type, driver_name, driver_phone,
+				carrier_partner, cargo_batch, cargo_weight_kg, origin_hub,
+				destination_hub, current_checkpoint, reefer_temp_celsius,
+				compliance_status, status, speed_kmh, eta, nearest_cold_hub, notes
+			) VALUES (
+				$1, $2, $3, $4, $5,
+				$6, $7, $8, $9,
+				$10, 'Departing Origin Hub', $11,
+				'optimal', 'in_transit', 45, '1.5 hours', $12, 'Newly dispatched batch'
+			)
+			RETURNING *
+		`,
+		[
+			newId,
+			vehicle_plate,
+			truck_type || '10-Ton Refrigerated Reefer',
+			driver_name,
+			driver_phone,
+			carrier_partner || 'Ethio Cold-Chain Logistics',
+			cargo_batch,
+			cargo_weight_kg || 1500,
+			origin_hub,
+			destination_hub,
+			reefer_temp_celsius,
+			nearest_cold_hub,
+		]
+	);
+
+	return result.rows[0];
+};
+
+const emergencyRerouteTruck = async (id, { diversion_hub, admin_notes }) => {
+	const result = await pool.query(
+		`
+			UPDATE fleet_shipments
+			SET
+				status = 'rerouted',
+				destination_hub = $2,
+				current_checkpoint = 'Diverting to Emergency Cold Depot',
+				notes = COALESCE($3, 'Emergency cold-chain breach intervention applied'),
+				updated_at = NOW()
+			WHERE id = $1
+			RETURNING *
+		`,
+		[id, diversion_hub || 'Nearest Regional Cold Hub Depot', admin_notes]
+	);
+
+	return result.rows[0];
+};
+
 module.exports = {
 	getSummaryMetrics,
 	getTopSellingProducts,
@@ -212,4 +335,7 @@ module.exports = {
 	getDisputes,
 	resolveDispute,
 	broadcastAnnouncement,
+	getFleetShipments,
+	assignDispatchBatch,
+	emergencyRerouteTruck,
 };

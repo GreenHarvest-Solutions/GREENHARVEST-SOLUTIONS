@@ -11,6 +11,9 @@ const {
 	getDisputes,
 	resolveDispute,
 	broadcastAnnouncement,
+	getFleetShipments,
+	assignDispatchBatch,
+	emergencyRerouteTruck,
 } = require("../controllers/adminController");
 
 const router = express.Router();
@@ -35,5 +38,10 @@ router.patch("/disputes/:id/resolve", resolveDispute);
 
 // Platform Broadcasts
 router.post("/broadcast", broadcastAnnouncement);
+
+// Cold-Chain Logistics & Reefer Telemetry
+router.get("/logistics/fleet", getFleetShipments);
+router.post("/logistics/assign", assignDispatchBatch);
+router.patch("/logistics/:id/reroute", emergencyRerouteTruck);
 
 module.exports = router;

@@ -49,6 +49,18 @@ const broadcastAnnouncement = async (adminUserId, message) => {
 	return adminModel.broadcastAnnouncement(adminUserId, message);
 };
 
+const getFleetShipments = async (filters) => {
+	return adminModel.getFleetShipments(filters);
+};
+
+const assignDispatchBatch = async (data) => {
+	return adminModel.assignDispatchBatch(data);
+};
+
+const emergencyRerouteTruck = async (id, data) => {
+	return adminModel.emergencyRerouteTruck(id, data);
+};
+
 module.exports = {
 	getDashboardAnalytics,
 	getPendingFarmers,
@@ -58,4 +70,7 @@ module.exports = {
 	getDisputes,
 	resolveDispute,
 	broadcastAnnouncement,
+	getFleetShipments,
+	assignDispatchBatch,
+	emergencyRerouteTruck,
 };

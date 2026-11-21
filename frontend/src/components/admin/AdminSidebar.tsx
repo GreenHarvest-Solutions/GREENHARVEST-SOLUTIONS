@@ -218,7 +218,7 @@ export default function AdminSidebar() {
                       href={item.href}
                       className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all font-medium text-xs ${
                         active
-                          ? 'bg-[#286c00] text-white shadow-md shadow-[#286c00]/25 font-semibold'
+                          ? 'bg-[#1f5400] text-white shadow-sm font-semibold'
                           : 'text-gray-700 hover:text-gray-900 hover:bg-emerald-50/70'
                       }`}
                     >
@@ -235,7 +235,7 @@ export default function AdminSidebar() {
                         <span
                           className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums shrink-0 ${
                             active
-                              ? 'bg-white/20 text-white'
+                              ? 'bg-white text-[#1f5400]'
                               : item.badgeColor || 'bg-gray-100 text-gray-700'
                           }`}
                         >

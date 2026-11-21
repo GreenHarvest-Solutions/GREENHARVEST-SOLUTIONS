@@ -604,6 +604,33 @@ class APIClient {
     });
   }
 
+  async getFleetShipments(params?: { status?: string; search?: string }) {
+    const query = new URLSearchParams();
+    if (params?.status && params.status !== 'all') query.append('status', params.status);
+    if (params?.search) query.append('search', params.search);
+    const queryString = query.toString();
+    return this.request<{ shipments: any[] }>({
+      method: 'GET',
+      url: `/admin/logistics/fleet${queryString ? `?${queryString}` : ''}`,
+    });
+  }
+
+  async assignDispatchBatch(data: any) {
+    return this.request<{ message: string; shipment: any }>({
+      method: 'POST',
+      url: '/admin/logistics/assign',
+      data,
+    });
+  }
+
+  async emergencyRerouteTruck(id: string, data: { diversion_hub?: string; admin_notes?: string }) {
+    return this.request<{ message: string; shipment: any }>({
+      method: 'PATCH',
+      url: `/admin/logistics/${id}/reroute`,
+      data,
+    });
+  }
+
   async listUsers(params?: any) {
     return this.request<{ users: any[] }>({
       method: 'GET',

@@ -117,6 +117,40 @@ const broadcastAnnouncement = async (req, res) => {
 	}
 };
 
+const getFleetShipments = async (req, res) => {
+	try {
+		const shipments = await adminService.getFleetShipments(req.query);
+		return res.status(200).json({ shipments });
+	} catch (error) {
+		return handleControllerError(res, "Get fleet shipments failed", error);
+	}
+};
+
+const assignDispatchBatch = async (req, res) => {
+	try {
+		const newShipment = await adminService.assignDispatchBatch(req.body);
+		return res.status(201).json({
+			message: "Produce batch assigned and dispatched to refrigerated carrier successfully",
+			shipment: newShipment,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Assign dispatch batch failed", error);
+	}
+};
+
+const emergencyRerouteTruck = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const rerouted = await adminService.emergencyRerouteTruck(id, req.body);
+		return res.status(200).json({
+			message: `Emergency cold-chain diversion executed for ${id}. Driver notified.`,
+			shipment: rerouted,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Emergency reroute truck failed", error);
+	}
+};
+
 module.exports = {
 	getAdminDashboard,
 	getFarmersKYC,
@@ -126,4 +160,7 @@ module.exports = {
 	getDisputes,
 	resolveDispute,
 	broadcastAnnouncement,
+	getFleetShipments,
+	assignDispatchBatch,
+	emergencyRerouteTruck,
 };
