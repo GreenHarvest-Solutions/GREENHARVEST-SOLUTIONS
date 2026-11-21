@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { BaseCard, MetricCard, DataListCard } from '@/components/admin/cards';
 
 interface TopProduct {
   id: string | number;
@@ -358,98 +359,60 @@ function AdminDashboardContent() {
             </div>
           </section>
 
-          {/* Core Platform Financial & Operational KPI Cards */}
+          {/* Core Platform Financial & Operational Metric Cards (Tag Summary Inspired) */}
           <div className="grid grid-cols-4 gap-4 mb-8">
-            {/* Total Platform Revenue */}
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-700">Gross Marketplace GMV</span>
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#286c00] flex items-center justify-center text-xs">
-                  <i className="fa-solid fa-sack-dollar" />
-                </div>
-              </div>
-              <div className="text-lg font-bold text-gray-900 truncate tabular-nums">
-                ETB {Number(metrics.total_revenue).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </div>
-              <div className="text-xs text-emerald-800 font-medium mt-1 flex items-center justify-between">
-                <span>Commission (5%):</span>
-                <span className="font-bold tabular-nums">ETB {(Number(metrics.total_revenue) * 0.05).toLocaleString('en-US', { minimumFractionDigits: 0 })}</span>
-              </div>
-            </div>
-
-            {/* Total Orders / Fulfillment */}
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-700">Total Transactions</span>
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs">
-                  <i className="fa-solid fa-boxes-packing" />
-                </div>
-              </div>
-              <div className="text-lg font-bold text-gray-900 tabular-nums">
-                {metrics.total_orders.toLocaleString()}
-              </div>
-              <div className="text-xs text-gray-700 font-medium mt-1 flex items-center justify-between">
-                <span>Fulfillment Rate:</span>
-                <span className="text-emerald-700 font-bold tabular-nums">{metrics.fulfillment_rate}%</span>
-              </div>
-            </div>
-
-            {/* Verified Farmers & Pending KYC */}
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-700">Producer Accounts</span>
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center text-xs">
-                  <i className="fa-solid fa-tractor" />
-                </div>
-              </div>
-              <div className="text-lg font-bold text-gray-900 tabular-nums">
-                {metrics.total_farmers.toLocaleString()} Active
-              </div>
-              <div className="text-xs font-medium mt-1 flex items-center justify-between">
-                <span className="text-gray-700">KYC Applications:</span>
-                <span className={`tabular-nums ${pendingFarmerCount > 0 ? 'text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded' : 'text-gray-700'}`}>
-                  {pendingFarmerCount} Pending
-                </span>
-              </div>
-            </div>
-
-            {/* Registered Users */}
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-700">Total Users</span>
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#286c00] flex items-center justify-center text-xs">
-                  <i className="fa-solid fa-users-gear" />
-                </div>
-              </div>
-              <div className="text-lg font-bold text-gray-900 tabular-nums">
-                {metrics.total_users.toLocaleString()}
-              </div>
-              <div className="text-xs text-gray-700 font-medium mt-1 flex items-center justify-between">
-                <span>Active Today:</span>
-                <span className="text-emerald-700 font-bold tabular-nums">{metrics.active_today} online</span>
-              </div>
-            </div>
+            <MetricCard
+              index={0}
+              label="Gross Marketplace GMV"
+              value={Number(metrics.total_revenue)}
+              decimals={2}
+              prefix="ETB "
+              subText={`5% Escrow Comm: ETB ${(Number(metrics.total_revenue) * 0.05).toLocaleString('en-US', { minimumFractionDigits: 0 })}`}
+              icon="fa-sack-dollar"
+            />
+            <MetricCard
+              index={1}
+              label="Total Transactions"
+              value={metrics.total_orders}
+              subText={`${metrics.fulfillment_rate}% fulfillment rate`}
+              icon="fa-boxes-packing"
+            />
+            <MetricCard
+              index={2}
+              label="Producer Accounts"
+              value={metrics.total_farmers}
+              subText={`${pendingFarmerCount} KYC pending review`}
+              icon="fa-tractor"
+            />
+            <MetricCard
+              index={3}
+              label="Registered Users"
+              value={metrics.total_users}
+              subText={`${metrics.active_today} active today`}
+              icon="fa-users-gear"
+            />
           </div>
 
           {/* ════════════════ ADMIN ACTION & MODERATION CENTER ════════════════ */}
-          <section className="bg-white rounded-2xl border border-gray-100 shadow-xs p-6 flex flex-col flex-1 min-h-[420px]">
-            {/* Header & Tabs */}
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-5">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <i className="fa-solid fa-list-check text-[#286c00] text-sm" />
+          <BaseCard
+            index={4}
+            className="flex-1 min-h-[420px]"
+            title={
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-list-check text-[#007a6c] text-sm" />
+                <h2 className="text-sm font-bold text-[#007a6c] tracking-wider uppercase">
                   Administrative Operations
                 </h2>
-                <p className="text-xs text-gray-600">Review pending authorizations and dispute mediations</p>
               </div>
-
-              {/* Navigation Tabs */}
+            }
+            subtitle="Review pending authorizations, produce batch listings, and dispute mediations"
+            action={
               <div className="flex items-center gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-100">
                 <button
                   onClick={() => setActiveTab('verifications')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                     activeTab === 'verifications'
-                      ? 'bg-white text-[#286c00] shadow-xs'
+                      ? 'bg-white text-[#007a6c] shadow-xs'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
@@ -466,7 +429,7 @@ function AdminDashboardContent() {
                   onClick={() => setActiveTab('moderation')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                     activeTab === 'moderation'
-                      ? 'bg-white text-[#286c00] shadow-xs'
+                      ? 'bg-white text-[#007a6c] shadow-xs'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
@@ -483,7 +446,7 @@ function AdminDashboardContent() {
                   onClick={() => setActiveTab('disputes')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                     activeTab === 'disputes'
-                      ? 'bg-white text-[#286c00] shadow-xs'
+                      ? 'bg-white text-[#007a6c] shadow-xs'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
@@ -496,7 +459,8 @@ function AdminDashboardContent() {
                   )}
                 </button>
               </div>
-            </div>
+            }
+          >
 
             {/* Tab 1: Farmer KYC Queue */}
             {activeTab === 'verifications' && (
@@ -713,21 +677,21 @@ function AdminDashboardContent() {
                 )}
               </div>
             )}
-          </section>
+          </BaseCard>
         </div>
 
         {/* ════════════════ RIGHT / OVERSIGHT COLUMN ════════════════ */}
         <div className="w-80 flex flex-col shrink-0 gap-6">
 
           {/* Quick Search across platform */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex flex-col gap-3">
-            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+          <BaseCard index={5} noPadding className="p-4 flex flex-col gap-3">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
               Platform Registry Search
             </span>
             <div className="relative">
-              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-xs" />
+              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs" />
               <input
-                className="w-full bg-[#FCF9F8] border border-gray-200 rounded-xl pl-8 pr-3 py-2 text-xs font-medium text-gray-800 placeholder-gray-500 focus:outline-none focus:border-[#286c00] focus:ring-1 focus:ring-[#286c00]/20 focus:bg-white transition-all shadow-2xs"
+                className="w-full bg-[#FCF9F8] border border-gray-200 rounded-xl pl-8 pr-3 py-2 text-xs font-medium text-gray-800 placeholder-gray-500 focus:outline-none focus:border-[#007a6c] focus:ring-1 focus:ring-[#007a6c]/20 focus:bg-white transition-all shadow-2xs"
                 placeholder="Search products, farmers, orders..."
                 aria-label="Search platform registry for products, farmers, and orders"
                 type="text"
@@ -735,20 +699,23 @@ function AdminDashboardContent() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-          </div>
+          </BaseCard>
 
           {/* Fleet & Logistics Dispatch Status (Admin Overview) */}
-          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex flex-col">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-[#286c00] uppercase tracking-wider flex items-center gap-1.5">
+          <BaseCard
+            index={6}
+            title={
+              <span className="text-xs font-bold text-[#007a6c] uppercase tracking-wider flex items-center gap-1.5">
                 <i className="fa-solid fa-truck-fast text-xs" />
                 Fleet Logistics Status
               </span>
-              <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
+            }
+            badge={
+              <span className="text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full">
                 Active Fleet
               </span>
-            </div>
-
+            }
+          >
             <div className="grid grid-cols-2 divide-x divide-gray-100 py-3 mb-4 border-y border-gray-100">
               <div className="pr-3">
                 <p className="text-xs text-gray-600 font-medium">On-Route Fleets</p>
@@ -758,7 +725,7 @@ function AdminDashboardContent() {
               </div>
               <div className="pl-3">
                 <p className="text-xs text-gray-600 font-medium">Avg Fleet Speed</p>
-                <p className="text-base font-bold text-emerald-800 mt-0.5 tabular-nums">
+                <p className="text-base font-bold text-[#007a6c] mt-0.5 tabular-nums">
                   {metrics.avg_speed_kmh ? `${metrics.avg_speed_kmh} km/h` : '62 km/h'}
                 </p>
               </div>
@@ -771,7 +738,7 @@ function AdminDashboardContent() {
               </div>
               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                  className="h-full bg-teal-600 rounded-full transition-all duration-500"
                   style={{ width: `${Math.min(100, Math.max(0, Number(metrics.cold_chain_compliance)))}%` }}
                 />
               </div>
@@ -782,7 +749,7 @@ function AdminDashboardContent() {
               </div>
               <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-[#1f5400] rounded-full transition-all duration-500"
+                  className="h-full bg-[#007a6c] rounded-full transition-all duration-500"
                   style={{ width: `${Math.min(100, Math.max(0, Number(metrics.fulfillment_rate)))}%` }}
                 />
               </div>
@@ -790,70 +757,52 @@ function AdminDashboardContent() {
 
             <Link
               href="/admin/deliveries"
-              className="w-full bg-[#FCF9F8] hover:bg-emerald-50 text-[#286c00] border border-emerald-200/80 py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-xs"
+              className="w-full bg-[#FCF9F8] hover:bg-teal-50 text-[#007a6c] border border-teal-200/80 py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 text-xs"
             >
               <span>Manage Dispatch Partners</span>
               <i className="fa-solid fa-arrow-right text-xs" />
             </Link>
-          </div>
+          </BaseCard>
 
-          {/* Top Producing Farms & Crops */}
-          <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex-1 flex flex-col min-h-0">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                Top Revenue Producers
-              </h3>
-              <span className="text-xs text-gray-600 font-mono">Volume</span>
-            </div>
-
-            <div className="space-y-2.5 overflow-y-auto hide-scrollbar flex-1">
-              {filteredProducts.length === 0 ? (
-                <p className="text-xs text-gray-600 text-center py-4">No matching records found</p>
-              ) : (
-                filteredProducts.slice(0, 5).map((prod, index) => (
-                  <div
-                    key={prod.id || index}
-                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-emerald-50/50 transition-colors border border-transparent hover:border-emerald-100"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-5 h-5 rounded-md bg-emerald-100/70 text-[#286c00] font-bold text-xs flex items-center justify-center shrink-0">
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-gray-800 truncate">{prod.name}</p>
-                        <p className="text-xs text-gray-600">{prod.units_sold} units transacted</p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-bold text-[#286c00] shrink-0">
-                      ETB {Number(prod.revenue_generated).toLocaleString('en-US', { minimumFractionDigits: 0 })}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Quick Link to Users/Stores */}
-            <div className="pt-3 mt-2 border-t border-gray-100">
+          {/* Top Producing Farms & Crops (DataListCard) */}
+          <DataListCard
+            index={7}
+            title="Top Revenue Producers"
+            subtitle="Volume cleared & transacted"
+            maxVisibleItems={5}
+            items={filteredProducts.slice(0, 5).map((prod, index) => ({
+              id: prod.id || index,
+              label: prod.name,
+              hint: `${prod.units_sold} units transacted`,
+              icon: 'fa-wheat-awn',
+              value: `ETB ${Number(prod.revenue_generated).toLocaleString('en-US', { minimumFractionDigits: 0 })}`,
+              badge: (
+                <span className="w-5 h-5 rounded-md bg-teal-50 text-[#007a6c] font-bold text-xs flex items-center justify-center shrink-0 border border-teal-200">
+                  {index + 1}
+                </span>
+              ),
+            }))}
+            action={
               <Link
                 href="/admin/users"
-                className="w-full text-center block text-xs font-semibold text-gray-700 hover:text-[#286c00] transition-colors"
+                className="text-xs font-bold text-[#007a6c] hover:text-[#005a50]"
               >
-                View Full Producer Directory →
+                Directory →
               </Link>
-            </div>
-          </div>
+            }
+          />
 
           {/* Infrastructure Health Status */}
-          <div className="bg-[#1e4d03] rounded-2xl p-4 text-white shadow-md shadow-[#1e4d03]/15">
+          <BaseCard index={8} noPadding className="bg-gradient-to-br from-teal-950 to-emerald-950 p-4 text-white border-teal-900 shadow-md">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">
+              <span className="text-xs font-bold text-teal-300 uppercase tracking-wider">
                 System Infrastructure
               </span>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-400" />
             </div>
             <p className="text-xs font-semibold text-white">PostgreSQL &amp; Redis Online</p>
-            <p className="text-xs text-emerald-100 mt-0.5">Database latency: 18ms • Chapa Escrow synced</p>
-          </div>
+            <p className="text-xs text-teal-200/90 mt-0.5 [text-wrap:pretty]">Database latency: 18ms • Chapa Escrow synced</p>
+          </BaseCard>
 
         </div>
 

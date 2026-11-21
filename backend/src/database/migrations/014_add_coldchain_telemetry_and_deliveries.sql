@@ -57,3 +57,4 @@ INSERT INTO fleet_shipments (
  'Certified Organic Blueberries & Herbs', 950.00, 'Debre Zeit Berries Co-op', 'Addis Ababa (Bole Medhanialem)', 'Bole Airport Cargo Terminal Gate 4',
  3.2, 2.0, 6.0, 'optimal', 'completed', 0, 'Delivered', 'Addis Central Cold Store', 'Consignment received and signed off with 100% cold compliance.')
 ON CONFLICT (id) DO NOTHING;
+

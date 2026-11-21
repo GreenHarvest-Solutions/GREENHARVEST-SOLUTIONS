@@ -104,7 +104,7 @@ export const DataListCard: React.FC<DataListCardProps> = ({
           <div className="px-6 py-3 bg-gray-50/80 border-t border-gray-100 flex items-center justify-center">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="text-xs font-bold text-[#00A896] hover:text-[#008073] flex items-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00A896] rounded px-2 py-1"
+              className="text-xs font-bold text-[#007a6c] hover:text-[#005a50] flex items-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007a6c] rounded px-2 py-1"
             >
               <span>{isExpanded ? 'Show Less' : `View All ${items.length} Records`}</span>
               <motion.i
@@ -119,3 +119,4 @@ export const DataListCard: React.FC<DataListCardProps> = ({
     </BaseCard>
   );
 };
+

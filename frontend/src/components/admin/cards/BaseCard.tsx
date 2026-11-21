@@ -65,7 +65,7 @@ export const BaseCard: React.FC<BaseCardProps> = ({
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
               {typeof title === 'string' ? (
-                <h3 className="text-sm font-bold text-[#00A896] tracking-wider uppercase">
+                <h3 className="text-sm font-bold text-[#007a6c] tracking-wider uppercase">
                   {title}
                 </h3>
               ) : (

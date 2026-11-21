@@ -119,7 +119,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
       <div className="flex items-center gap-1.5 mb-2">
         {icon && (
           <i
-            className={`fa-solid ${icon} text-xs text-[#00A896]`}
+            className={`fa-solid ${icon} text-xs text-[#007a6c]`}
             aria-hidden="true"
           />
         )}
