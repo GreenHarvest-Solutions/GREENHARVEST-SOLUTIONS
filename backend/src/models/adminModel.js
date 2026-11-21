@@ -3,6 +3,10 @@ const auditService = require("../services/auditService");
 const kycModel = require("./kycModel");
 const user360Model = require("./user360Model");
 const productModerationModel = require("./productModerationModel");
+const orderAdminModel = require("./orderAdminModel");
+const escrowAdminModel = require("./escrowAdminModel");
+const disputeAdminModel = require("./disputeAdminModel");
+const paymentAdminModel = require("./paymentAdminModel");
 
 const getAdminMe = async (userId) => {
 	const result = await pool.query(
@@ -1078,4 +1082,9 @@ module.exports = {
 	...user360Model,
 	// Product Governance
 	...productModerationModel,
+	// Phase 2: Commerce, Escrow, Disputes, Payments
+	...orderAdminModel,
+	...escrowAdminModel,
+	...disputeAdminModel,
+	...paymentAdminModel,
 };

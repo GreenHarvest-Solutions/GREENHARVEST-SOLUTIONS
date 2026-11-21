@@ -1100,6 +1100,272 @@ class APIClient {
     });
   }
 
+  // --- Phase 2: Commerce, Payments, Escrow, Disputes API ---
+
+  async getAdminOrders(params?: {
+    status?: string;
+    payment_status?: string;
+    delivery_status?: string;
+    search?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      orders: any[];
+      metrics: {
+        total_orders: number;
+        pending_count: number;
+        confirmed_count: number;
+        in_transit_count: number;
+        delivered_count: number;
+        cancelled_count: number;
+        refunded_count: number;
+        total_gmv: number | string;
+      };
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/orders',
+      params,
+    });
+  }
+
+  async getAdminOrderById(orderId: string | number) {
+    return this.request<{ order: any }>({
+      method: 'GET',
+      url: `/admin/orders/${orderId}`,
+    });
+  }
+
+  async updateAdminOrderStatus(orderId: string | number, data: { status: string; reason: string }) {
+    return this.request<{ message: string; order: any }>({
+      method: 'PATCH',
+      url: `/admin/orders/${orderId}/status`,
+      data,
+    });
+  }
+
+  async refundAdminOrder(
+    orderId: string | number,
+    data: { amount?: number; reason: string; idempotencyKey?: string; refundFull?: boolean }
+  ) {
+    return this.request<{
+      message: string;
+      result: {
+        success: boolean;
+        order: any;
+        refundAmount: number;
+        totalRefunded: number;
+        isFullRefund: boolean;
+      };
+    }>({
+      method: 'POST',
+      url: `/admin/orders/${orderId}/refund`,
+      data,
+    });
+  }
+
+  async getAdminPayments(params?: {
+    status?: string;
+    method?: string;
+    from?: string;
+    to?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      payments: any[];
+      metrics: {
+        total_payments: number;
+        completed_count: number;
+        pending_count: number;
+        refunded_count: number;
+        unreconciled_count: number;
+        total_settled_volume: number | string;
+        telebirr_volume: number | string;
+        chapa_volume: number | string;
+        total_refunded_volume: number | string;
+      };
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/payments',
+      params,
+    });
+  }
+
+  async getAdminPaymentById(paymentId: string | number) {
+    return this.request<{ payment: any }>({
+      method: 'GET',
+      url: `/admin/payments/${paymentId}`,
+    });
+  }
+
+  async reconcileAdminPayment(paymentId: string | number, data: { status?: string; notes?: string }) {
+    return this.request<{ message: string; payment: any }>({
+      method: 'POST',
+      url: `/admin/payments/${paymentId}/reconcile`,
+      data,
+    });
+  }
+
+  async getAdminActiveEscrow(params?: {
+    release_status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      ledger: any[];
+      metrics: {
+        total_records: number;
+        held_count: number;
+        cleared_count: number;
+        disputed_count: number;
+        refunded_count: number;
+        total_held_amount: number | string;
+        total_cleared_payout: number | string;
+        total_platform_fees: number | string;
+      };
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/escrow/active',
+      params,
+    });
+  }
+
+  async releaseAdminEscrow(
+    escrowId: string | number,
+    data: { notes?: string; makerCheckerApproved?: boolean }
+  ) {
+    return this.request<{ message: string; escrow: any }>({
+      method: 'POST',
+      url: `/admin/escrow/${escrowId}/release`,
+      data,
+    });
+  }
+
+  async holdAdminEscrow(
+    escrowId: string | number,
+    data: { reason: string; holdDays?: number }
+  ) {
+    return this.request<{ message: string; escrow: any }>({
+      method: 'POST',
+      url: `/admin/escrow/${escrowId}/hold`,
+      data,
+    });
+  }
+
+  async getAdminDisputes(params?: {
+    status?: string;
+    category?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      disputes: any[];
+      metrics: {
+        total_disputes: number;
+        open_count: number;
+        accepted_count: number;
+        rejected_count: number;
+        transit_spoilage_count: number;
+        weight_shortage_count: number;
+        grade_mismatch_count: number;
+        non_delivery_count: number;
+      };
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/disputes',
+      params,
+    });
+  }
+
+  async getAdminDisputeById(disputeId: string | number) {
+    return this.request<{ dispute: any }>({
+      method: 'GET',
+      url: `/admin/disputes/${disputeId}`,
+    });
+  }
+
+  async settleAdminDisputeSplit(
+    disputeId: string | number,
+    data: {
+      buyer_refund: number;
+      farmer_payout: number;
+      platform_fee?: number;
+      admin_notes?: string;
+    }
+  ) {
+    return this.request<{
+      message: string;
+      settlement: any;
+      dispute: any;
+    }>({
+      method: 'POST',
+      url: `/admin/disputes/${disputeId}/settle`,
+      data,
+    });
+  }
+
+  async getAdminReturns(params?: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      returns: any[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/returns',
+      params,
+    });
+  }
+
+  async updateAdminReturnStatus(
+    returnId: string | number,
+    data: { status: string; restock_quantity?: number; notes?: string }
+  ) {
+    return this.request<{ message: string; return_record: any }>({
+      method: 'PATCH',
+      url: `/admin/returns/${returnId}/status`,
+      data,
+    });
+  }
+
   async listUsers(params?: any) {
     return this.request<{ users: any[] }>({
       method: 'GET',

@@ -945,6 +945,348 @@ const evaluateProductPricing = async (req, res) => {
 	}
 };
 
+// ==========================================
+// --- Phase 2: Commerce, Orders, Payments, Escrow, Disputes Controllers ---
+// ==========================================
+
+const getOrders = async (req, res) => {
+	try {
+		const { status, payment_status, delivery_status, search, from, to, page, limit } = req.query;
+		const result = await adminService.getOrdersAdmin({
+			status,
+			payment_status,
+			delivery_status,
+			search,
+			from,
+			to,
+			page: parseInt(page) || 1,
+			limit: parseInt(limit) || 20,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get orders failed", error);
+	}
+};
+
+const getOrderById = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const dossier = await adminService.getOrderDossier(id);
+		if (!dossier) {
+			return res.status(404).json({ status: "error", message: `Order #${id} not found` });
+		}
+		return res.status(200).json({ order: dossier });
+	} catch (error) {
+		return handleControllerError(res, "Get order details failed", error);
+	}
+};
+
+const updateOrderStatus = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { status, reason } = req.body;
+
+		if (!status) {
+			return res.status(400).json({ status: "error", message: "status is required" });
+		}
+		if (!reason || !reason.trim()) {
+			return res.status(400).json({ status: "error", message: "A justification reason is required for administrative status override" });
+		}
+
+		const validStatuses = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "refunded"];
+		if (!validStatuses.includes(status)) {
+			return res.status(400).json({
+				status: "error",
+				message: `Invalid order status. Must be one of: ${validStatuses.join(", ")}`,
+			});
+		}
+
+		const updated = await adminService.updateOrderStatus(
+			id,
+			status,
+			reason,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		if (!updated) {
+			return res.status(404).json({ status: "error", message: `Order #${id} not found` });
+		}
+
+		return res.status(200).json({ message: "Order status overridden successfully", order: updated });
+	} catch (error) {
+		return handleControllerError(res, "Update order status failed", error);
+	}
+};
+
+const refundOrder = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { amount, reason, idempotencyKey, refundFull } = req.body;
+
+		if (!reason || !reason.trim()) {
+			return res.status(400).json({ status: "error", message: "A mandatory refund justification reason is required" });
+		}
+
+		if (!refundFull && (!amount || Number(amount) <= 0)) {
+			return res.status(400).json({ status: "error", message: "Valid positive refund amount is required" });
+		}
+
+		const result = await adminService.refundOrder(
+			id,
+			{ amount, reason, idempotencyKey, refundFull: Boolean(refundFull) },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		if (!result.success) {
+			return res.status(400).json({ status: "error", message: result.error });
+		}
+
+		return res.status(200).json({
+			message: `Refund of ETB ${result.refundAmount.toFixed(2)} processed successfully`,
+			result,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Order refund failed", error);
+	}
+};
+
+const getPayments = async (req, res) => {
+	try {
+		const { status, method, from, to, search, page, limit } = req.query;
+		const result = await adminService.getPaymentsAdmin({
+			status,
+			method,
+			from,
+			to,
+			search,
+			page: parseInt(page) || 1,
+			limit: parseInt(limit) || 20,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get payments failed", error);
+	}
+};
+
+const getPaymentById = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const dossier = await adminService.getPaymentDossier(id);
+		if (!dossier) {
+			return res.status(404).json({ status: "error", message: `Payment transaction #${id} not found` });
+		}
+		return res.status(200).json({ payment: dossier });
+	} catch (error) {
+		return handleControllerError(res, "Get payment details failed", error);
+	}
+};
+
+const reconcilePayment = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { status, notes } = req.body;
+
+		const updated = await adminService.reconcilePayment(
+			id,
+			{ status: status || "reconciled", notes },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		if (!updated) {
+			return res.status(404).json({ status: "error", message: `Payment #${id} not found` });
+		}
+
+		return res.status(200).json({ message: "Payment reconciliation recorded successfully", payment: updated });
+	} catch (error) {
+		return handleControllerError(res, "Reconcile payment failed", error);
+	}
+};
+
+const getActiveEscrow = async (req, res) => {
+	try {
+		const { release_status, search, page, limit } = req.query;
+		const result = await adminService.getActiveEscrowLedger({
+			release_status,
+			search,
+			page: parseInt(page) || 1,
+			limit: parseInt(limit) || 20,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get escrow clearinghouse failed", error);
+	}
+};
+
+const releaseEscrow = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { notes, makerCheckerApproved } = req.body;
+
+		const result = await adminService.releaseEscrow(
+			id,
+			{ notes, makerCheckerApproved: Boolean(makerCheckerApproved) },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		if (!result.success) {
+			return res.status(400).json({ status: "error", message: result.error });
+		}
+
+		return res.status(200).json({ message: "Escrow funds released to farmer successfully", escrow: result.escrow });
+	} catch (error) {
+		return handleControllerError(res, "Release escrow payout failed", error);
+	}
+};
+
+const holdEscrow = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { reason, holdDays } = req.body;
+
+		if (!reason || !reason.trim()) {
+			return res.status(400).json({ status: "error", message: "A freeze reason must be provided" });
+		}
+
+		const result = await adminService.holdEscrow(
+			id,
+			{ reason, holdDays: holdDays ? parseInt(holdDays) : 14 },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		if (!result.success) {
+			return res.status(400).json({ status: "error", message: result.error });
+		}
+
+		return res.status(200).json({ message: "Escrow release frozen successfully", escrow: result.escrow });
+	} catch (error) {
+		return handleControllerError(res, "Freeze escrow hold failed", error);
+	}
+};
+
+const getDisputesAdmin = async (req, res) => {
+	try {
+		const { status, category, search, page, limit } = req.query;
+		const result = await adminService.getDisputesAdmin({
+			status,
+			category,
+			search,
+			page: parseInt(page) || 1,
+			limit: parseInt(limit) || 20,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get disputes queue failed", error);
+	}
+};
+
+const getDisputeById = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const dossier = await adminService.getDisputeDossier(id);
+		if (!dossier) {
+			return res.status(404).json({ status: "error", message: `Dispute claim #${id} not found` });
+		}
+		return res.status(200).json({ dispute: dossier });
+	} catch (error) {
+		return handleControllerError(res, "Get dispute dossier failed", error);
+	}
+};
+
+const settleDisputeSplit = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { buyer_refund, farmer_payout, platform_fee, admin_notes } = req.body;
+
+		if (buyer_refund === undefined || farmer_payout === undefined) {
+			return res.status(400).json({
+				status: "error",
+				message: "buyer_refund and farmer_payout amounts are required for split settlement",
+			});
+		}
+
+		const result = await adminService.settleDisputeSplit(
+			id,
+			{
+				buyer_refund: parseFloat(buyer_refund),
+				farmer_payout: parseFloat(farmer_payout),
+				platform_fee: platform_fee !== undefined ? parseFloat(platform_fee) : undefined,
+				admin_notes,
+			},
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		if (!result.success) {
+			return res.status(400).json({ status: "error", message: result.error });
+		}
+
+		return res.status(200).json({
+			message: "Dispute split settlement executed and escrow balance adjusted successfully",
+			settlement: result.settlement,
+			dispute: result.dispute,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Settle dispute split failed", error);
+	}
+};
+
+const getReturnsAdmin = async (req, res) => {
+	try {
+		const { status, search, page, limit } = req.query;
+		const result = await adminService.getReturnsAdmin({
+			status,
+			search,
+			page: parseInt(page) || 1,
+			limit: parseInt(limit) || 20,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get returns tracking failed", error);
+	}
+};
+
+const updateReturnStatus = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { status, restock_quantity, notes } = req.body;
+
+		if (!status) {
+			return res.status(400).json({ status: "error", message: "status is required" });
+		}
+
+		const updated = await adminService.updateReturnStatus(
+			id,
+			{
+				status,
+				restock_quantity: restock_quantity !== undefined ? parseInt(restock_quantity) : null,
+				notes,
+			},
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		if (!updated) {
+			return res.status(404).json({ status: "error", message: `Return shipment #${id} not found` });
+		}
+
+		return res.status(200).json({ message: "Return shipment status updated successfully", return_record: updated });
+	} catch (error) {
+		return handleControllerError(res, "Update return status failed", error);
+	}
+};
+
 module.exports = {
 	getAdminMe,
 	getAdminDashboard,
@@ -994,4 +1336,20 @@ module.exports = {
 	upsertPriceCorridor,
 	getPriceOutliers,
 	evaluateProductPricing,
+	// Phase 2 Controllers
+	getOrders,
+	getOrderById,
+	updateOrderStatus,
+	refundOrder,
+	getPayments,
+	getPaymentById,
+	reconcilePayment,
+	getActiveEscrow,
+	releaseEscrow,
+	holdEscrow,
+	getDisputesAdmin,
+	getDisputeById,
+	settleDisputeSplit,
+	getReturnsAdmin,
+	updateReturnStatus,
 };

@@ -5,7 +5,7 @@ import React from 'react';
 interface AdminEmptyStateProps {
   title?: string;
   description?: string;
-  icon?: string;
+  icon?: string | React.ReactNode;
   action?: React.ReactNode;
   actionLabel?: string;
   onAction?: () => void;
@@ -22,7 +22,11 @@ export function AdminEmptyState({
   return (
     <div className="py-12 px-6 flex flex-col items-center justify-center text-center">
       <div className="w-12 h-12 bg-gray-100 text-gray-500 flex items-center justify-center text-xl mb-3 border border-gray-300">
-        <i className={`fa-solid ${icon}`} />
+        {typeof icon === 'string' ? (
+          <i className={`fa-solid ${icon}`} />
+        ) : (
+          icon
+        )}
       </div>
       <h3 className="text-sm font-bold text-gray-900 tracking-tight mb-1 [text-wrap:balance]">
         {title}

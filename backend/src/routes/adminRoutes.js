@@ -54,6 +54,22 @@ const {
 	upsertPriceCorridor,
 	getPriceOutliers,
 	evaluateProductPricing,
+	// Phase 2 Controllers
+	getOrders,
+	getOrderById,
+	updateOrderStatus,
+	refundOrder,
+	getPayments,
+	getPaymentById,
+	reconcilePayment,
+	getActiveEscrow,
+	releaseEscrow,
+	holdEscrow,
+	getDisputesAdmin,
+	getDisputeById,
+	settleDisputeSplit,
+	getReturnsAdmin,
+	updateReturnStatus,
 } = require("../controllers/adminController");
 
 const router = express.Router();
@@ -124,9 +140,35 @@ router.post("/pricing/corridors", permissionMiddleware("products.moderate"), ups
 router.get("/pricing/outliers", permissionMiddleware("products.read"), getPriceOutliers);
 router.post("/pricing/evaluate/:id", permissionMiddleware("products.read"), evaluateProductPricing);
 
-// Escrow Disputes & Resolutions
-router.get("/disputes", permissionMiddleware("disputes.read"), getDisputes);
+// ==========================================
+// Phase 2: Orders & Payments Oversight
+// ==========================================
+router.get("/orders", permissionMiddleware("orders.read"), getOrders);
+router.get("/orders/:id", permissionMiddleware("orders.read"), getOrderById);
+router.patch("/orders/:id/status", permissionMiddleware("orders.manage"), updateOrderStatus);
+router.post("/orders/:id/refund", permissionMiddleware("orders.refund"), refundOrder);
+
+router.get("/payments", permissionMiddleware("payments.read"), getPayments);
+router.get("/payments/:id", permissionMiddleware("payments.read"), getPaymentById);
+router.post("/payments/:id/reconcile", permissionMiddleware("payments.manage"), reconcilePayment);
+
+// ==========================================
+// Phase 2: Escrow Management & Release Clearinghouse
+// ==========================================
+router.get("/escrow/active", permissionMiddleware("escrow.read"), getActiveEscrow);
+router.post("/escrow/:id/release", permissionMiddleware("escrow.release"), releaseEscrow);
+router.post("/escrow/:id/hold", permissionMiddleware("escrow.manage"), holdEscrow);
+
+// ==========================================
+// Phase 2: Disputes & Returns Arbitration
+// ==========================================
+router.get("/disputes", permissionMiddleware("disputes.read"), getDisputesAdmin);
+router.get("/disputes/:id", permissionMiddleware("disputes.read"), getDisputeById);
+router.post("/disputes/:id/settle", permissionMiddleware("disputes.resolve"), settleDisputeSplit);
 router.patch("/disputes/:id/resolve", permissionMiddleware("disputes.resolve"), resolveDispute);
+
+router.get("/returns", permissionMiddleware("returns.read"), getReturnsAdmin);
+router.patch("/returns/:id/status", permissionMiddleware("returns.manage"), updateReturnStatus);
 
 // Targeted Platform Broadcasts
 router.post("/broadcast", permissionMiddleware("broadcast.send"), broadcastAnnouncement);

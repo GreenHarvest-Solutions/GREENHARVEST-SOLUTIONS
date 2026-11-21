@@ -220,6 +220,67 @@ const evaluateProductPricing = async (productId) => {
 	return adminModel.evaluateProductPricing(productId);
 };
 
+// --- Phase 2: Commerce, Orders, Payments, Escrow, Disputes Services ---
+const getOrdersAdmin = async (options) => {
+	return adminModel.getOrdersAdmin(options);
+};
+
+const getOrderDossier = async (orderId) => {
+	return adminModel.getOrderDossier(orderId);
+};
+
+const updateOrderStatus = async (orderId, newStatus, reason, actorId, ipAddress, userAgent) => {
+	return adminModel.updateOrderStatus(orderId, newStatus, reason, actorId, ipAddress, userAgent);
+};
+
+const refundOrder = async (orderId, data, actorId, ipAddress, userAgent) => {
+	return adminModel.refundOrder(orderId, data, actorId, ipAddress, userAgent);
+};
+
+const getActiveEscrowLedger = async (options) => {
+	return adminModel.getActiveEscrowLedger(options);
+};
+
+const releaseEscrow = async (escrowId, data, actorId, ipAddress, userAgent) => {
+	return adminModel.releaseEscrow(escrowId, data, actorId, ipAddress, userAgent);
+};
+
+const holdEscrow = async (escrowId, data, actorId, ipAddress, userAgent) => {
+	return adminModel.holdEscrow(escrowId, data, actorId, ipAddress, userAgent);
+};
+
+const getDisputesAdmin = async (options) => {
+	return adminModel.getDisputesAdmin(options);
+};
+
+const getDisputeDossier = async (disputeId) => {
+	return adminModel.getDisputeDossier(disputeId);
+};
+
+const settleDisputeSplit = async (disputeId, data, actorId, ipAddress, userAgent) => {
+	return adminModel.settleDisputeSplit(disputeId, data, actorId, ipAddress, userAgent);
+};
+
+const getReturnsAdmin = async (options) => {
+	return adminModel.getReturnsAdmin(options);
+};
+
+const updateReturnStatus = async (returnId, data, actorId, ipAddress, userAgent) => {
+	return adminModel.updateReturnStatus(returnId, data, actorId, ipAddress, userAgent);
+};
+
+const getPaymentsAdmin = async (options) => {
+	return adminModel.getPaymentsAdmin(options);
+};
+
+const getPaymentDossier = async (paymentId) => {
+	return adminModel.getPaymentDossier(paymentId);
+};
+
+const reconcilePayment = async (paymentId, data, actorId, ipAddress, userAgent) => {
+	return adminModel.reconcilePayment(paymentId, data, actorId, ipAddress, userAgent);
+};
+
 module.exports = {
 	getDashboardAnalytics,
 	getAdminMe,
@@ -269,4 +330,20 @@ module.exports = {
 	upsertPriceCorridor,
 	getPriceOutliers,
 	evaluateProductPricing,
+	// Phase 2 exports
+	getOrdersAdmin,
+	getOrderDossier,
+	updateOrderStatus,
+	refundOrder,
+	getActiveEscrowLedger,
+	releaseEscrow,
+	holdEscrow,
+	getDisputesAdmin,
+	getDisputeDossier,
+	settleDisputeSplit,
+	getReturnsAdmin,
+	updateReturnStatus,
+	getPaymentsAdmin,
+	getPaymentDossier,
+	reconcilePayment,
 };
