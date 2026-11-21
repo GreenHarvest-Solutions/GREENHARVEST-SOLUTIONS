@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { TagSummaryReport } from '@/components/admin/cards';
 
 export interface FleetShipment {
   id: string;
@@ -740,138 +741,30 @@ function AdminDeliveriesContent() {
 
       </div>
 
-      {/* ════════════════ 1. SENSOR TELEMETRY DOSSIER MODAL (UI/UX PRO MAX) ════════════════ */}
+      {/* ════════════════ 1. SENSOR TELEMETRY DOSSIER MODAL (TAG SUMMARY REPORT INSPIRATION) ════════════════ */}
       {selectedTruckForTelemetry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl border border-gray-100 flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150 my-8">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold">
-                  <i className="fa-solid fa-satellite-dish" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-gray-900">
-                    Reefer Telemetry &amp; Cargo Dossier • {selectedTruckForTelemetry.id}
-                  </h3>
-                  <p className="text-xs text-gray-600">
-                    Vehicle: {selectedTruckForTelemetry.vehicle_plate} • Carrier: {selectedTruckForTelemetry.carrier_partner}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedTruckForTelemetry(null)}
-                className="text-gray-400 hover:text-gray-700 text-sm p-1.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#286c00]"
-                aria-label="Close telemetry modal"
-              >
-                <i className="fa-solid fa-xmark text-base" />
-              </button>
-            </div>
-
-            {/* Sensor Live Readout */}
-            <div className="grid grid-cols-4 gap-3 text-xs">
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <span className="text-gray-600 font-semibold block">Internal Reefer Temp</span>
-                <span className={`text-lg font-black mt-1 block tabular-nums ${
-                  Number(selectedTruckForTelemetry.reefer_temp_celsius) > 6.0
-                    ? 'text-red-700'
-                    : 'text-emerald-800'
-                }`}>
-                  {Number(selectedTruckForTelemetry.reefer_temp_celsius).toFixed(1)}°C
-                </span>
-                <span className="text-xs text-gray-600">Safe: 2.0° - 6.0°C</span>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <span className="text-gray-600 font-semibold block">Exterior Ambient</span>
-                <span className="text-lg font-black text-gray-900 mt-1 block tabular-nums">28.4°C</span>
-                <span className="text-xs text-gray-600">Mojo Rift Valley</span>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <span className="text-gray-600 font-semibold block">Compressor Duty</span>
-                <span className="text-lg font-black text-emerald-800 mt-1 block tabular-nums">100% Active</span>
-                <span className="text-xs text-gray-600">Diesel Auxiliary Unit</span>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                <span className="text-gray-600 font-semibold block">Cargo Seal Integrity</span>
-                <span className="text-lg font-black text-[#286c00] mt-1 block">#ES-8821</span>
-                <span className="text-xs text-emerald-800 font-semibold">✓ Intact / Unopened</span>
-              </div>
-            </div>
-
-            {/* Cargo & Transit Profile */}
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 grid grid-cols-2 gap-y-3 gap-x-6 text-xs">
-              <div>
-                <span className="font-semibold text-gray-600 block">Cargo Description</span>
-                <span className="font-bold text-gray-900 text-sm">{selectedTruckForTelemetry.cargo_batch}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600 block">Total Net Weight</span>
-                <span className="font-bold text-gray-900 text-sm tabular-nums">
-                  {Number(selectedTruckForTelemetry.cargo_weight_kg).toLocaleString()} kg
-                </span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600 block">Origin Loading Facility</span>
-                <span className="font-bold text-gray-800">{selectedTruckForTelemetry.origin_hub}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600 block">Destination Receiving Hub</span>
-                <span className="font-bold text-gray-800">{selectedTruckForTelemetry.destination_hub}</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600 block">Assigned Driver</span>
-                <span className="font-bold text-gray-800">{selectedTruckForTelemetry.driver_name} ({selectedTruckForTelemetry.driver_phone})</span>
-              </div>
-              <div>
-                <span className="font-semibold text-gray-600 block">Nearest Cold Consolidation</span>
-                <span className="font-bold text-emerald-800">{selectedTruckForTelemetry.nearest_cold_hub}</span>
-              </div>
-            </div>
-
-            {/* Simulated 6-Hour Temperature History */}
-            <div>
-              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">
-                Last 6-Hour Temperature Logging Trend
-              </h4>
-              <div className="grid grid-cols-6 gap-2 text-center text-xs">
-                {[
-                  { time: '10:00', temp: 3.2, status: 'ok' },
-                  { time: '11:00', temp: 3.5, status: 'ok' },
-                  { time: '12:00', temp: 3.8, status: 'ok' },
-                  { time: '13:00', temp: 4.2, status: 'ok' },
-                  { time: '14:00', temp: selectedTruckForTelemetry.reefer_temp_celsius, status: Number(selectedTruckForTelemetry.reefer_temp_celsius) > 6.0 ? 'breach' : 'ok' },
-                  { time: 'Live', temp: selectedTruckForTelemetry.reefer_temp_celsius, status: Number(selectedTruckForTelemetry.reefer_temp_celsius) > 6.0 ? 'breach' : 'ok' },
-                ].map((log, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-2.5 rounded-xl border ${
-                      log.status === 'breach'
-                        ? 'bg-red-50 border-red-300 text-red-800 font-bold'
-                        : 'bg-white border-gray-100 text-gray-700'
-                    }`}
-                  >
-                    <span className="text-xs text-gray-600 block">{log.time}</span>
-                    <span className="text-xs font-extrabold mt-0.5 block tabular-nums">
-                      {Number(log.temp).toFixed(1)}°C
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Close */}
-            <div className="flex items-center justify-end pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setSelectedTruckForTelemetry(null)}
-                className="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors"
-              >
-                Close Dossier
-              </button>
-            </div>
-          </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <TagSummaryReport
+            data={{
+              tagId: selectedTruckForTelemetry.id,
+              vehiclePlate: selectedTruckForTelemetry.vehicle_plate,
+              carrier: selectedTruckForTelemetry.carrier_partner,
+              cargoBatch: selectedTruckForTelemetry.cargo_batch,
+              cargoWeightKg: Number(selectedTruckForTelemetry.cargo_weight_kg || 1500),
+              origin: selectedTruckForTelemetry.origin_hub,
+              destination: selectedTruckForTelemetry.destination_hub,
+              currentCheckpoint: selectedTruckForTelemetry.current_checkpoint,
+              reeferTemp: Number(selectedTruckForTelemetry.reefer_temp_celsius || 3.8),
+              minTemp: Number(selectedTruckForTelemetry.target_temp_min || 2.0),
+              maxTemp: Number(selectedTruckForTelemetry.target_temp_max || 6.0),
+              totalAlerts: selectedTruckForTelemetry.compliance_status === 'breached' ? 1 : 0,
+              checkpointsCount: 4,
+              totalHours: 6,
+              status: selectedTruckForTelemetry.compliance_status === 'breached' ? 'Alert' : 'Optimal',
+              pointsScore: 61,
+            }}
+            onClose={() => setSelectedTruckForTelemetry(null)}
+          />
         </div>
       )}
 
