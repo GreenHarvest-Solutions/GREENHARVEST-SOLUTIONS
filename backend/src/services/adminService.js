@@ -113,6 +113,113 @@ const updateAdminRole = async (userId, adminRoleId, actorId = null) => {
 	return adminModel.updateAdminRole(userId, adminRoleId, actorId);
 };
 
+// --- Phase 1: KYC Services ---
+const getKycQueue = async (options) => {
+	return adminModel.getKycQueue(options);
+};
+
+const getKycDossier = async (farmerId) => {
+	return adminModel.getKycDossier(farmerId);
+};
+
+const addKycDocument = async (data) => {
+	return adminModel.addKycDocument(data);
+};
+
+const deleteKycDocument = async (data) => {
+	return adminModel.deleteKycDocument(data);
+};
+
+const addFieldVisit = async (data) => {
+	return adminModel.addFieldVisit(data);
+};
+
+const reviewKyc = async (data) => {
+	return adminModel.reviewKyc(data);
+};
+
+const getKycHistory = async (farmerId) => {
+	return adminModel.getKycHistory(farmerId);
+};
+
+// --- Phase 1: User 360 Services ---
+const getUser360 = async (userId) => {
+	return adminModel.getUser360(userId);
+};
+
+const performUserAction = async (data) => {
+	return adminModel.performUserAction(data);
+};
+
+// --- Phase 1: Product Moderation & Governance Services ---
+const getProductsAdmin = async (options) => {
+	return adminModel.getProductsAdmin(options);
+};
+
+const getProductDossier = async (productId) => {
+	return adminModel.getProductDossier(productId);
+};
+
+const moderateProductAdmin = async (data) => {
+	return adminModel.moderateProduct(data);
+};
+
+const bulkModerateProducts = async (data) => {
+	return adminModel.bulkModerateProducts(data);
+};
+
+const getProductModerationHistory = async (productId) => {
+	return adminModel.getProductModerationHistory(productId);
+};
+
+const getCategoriesAdmin = async () => {
+	return adminModel.getCategoriesAdmin();
+};
+
+const createCategoryAdmin = async (data) => {
+	return adminModel.createCategoryAdmin(data);
+};
+
+const updateCategoryAdmin = async (data) => {
+	return adminModel.updateCategoryAdmin(data);
+};
+
+const deleteCategoryAdmin = async (id, actorId) => {
+	return adminModel.deleteCategoryAdmin(id, actorId);
+};
+
+const getReviewsAdmin = async (options) => {
+	return adminModel.getReviewsAdmin(options);
+};
+
+const moderateReviewAdmin = async (data) => {
+	return adminModel.moderateReviewAdmin(data);
+};
+
+const getCampaignsAdmin = async (options) => {
+	return adminModel.getCampaignsAdmin(options);
+};
+
+const moderateCampaignAdmin = async (data) => {
+	return adminModel.moderateCampaignAdmin(data);
+};
+
+const getPriceCorridors = async (options) => {
+	return adminModel.getPriceCorridors(options);
+};
+
+const upsertPriceCorridor = async (data) => {
+	return adminModel.upsertPriceCorridor(data);
+};
+
+const getPriceOutliers = async () => {
+	return adminModel.getPriceOutliers();
+};
+
+const evaluateProductPricing = async (productId) => {
+	return adminModel.evaluateProductPricing(productId);
+};
+
 module.exports = {
 	getDashboardAnalytics,
 	getAdminMe,
@@ -135,4 +242,31 @@ module.exports = {
 	getAdminTeam,
 	getAdminRoles,
 	updateAdminRole,
+	// Phase 1 exports
+	getKycQueue,
+	getKycDossier,
+	addKycDocument,
+	deleteKycDocument,
+	addFieldVisit,
+	reviewKyc,
+	getKycHistory,
+	getUser360,
+	performUserAction,
+	getProductsAdmin,
+	getProductDossier,
+	moderateProductAdmin,
+	bulkModerateProducts,
+	getProductModerationHistory,
+	getCategoriesAdmin,
+	createCategoryAdmin,
+	updateCategoryAdmin,
+	deleteCategoryAdmin,
+	getReviewsAdmin,
+	moderateReviewAdmin,
+	getCampaignsAdmin,
+	moderateCampaignAdmin,
+	getPriceCorridors,
+	upsertPriceCorridor,
+	getPriceOutliers,
+	evaluateProductPricing,
 };

@@ -770,6 +770,336 @@ class APIClient {
     });
   }
 
+  // Phase 1: KYC Methods
+  async getKycQueue(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+    tier?: string;
+    region?: string;
+  }) {
+    return this.request<{
+      farmers: any[];
+      pagination: { total: number; page: number; limit: number; totalPages: number };
+      counts: {
+        pending: string | number;
+        under_review: string | number;
+        field_visit: string | number;
+        approved: string | number;
+        rejected: string | number;
+        changes_requested: string | number;
+        all_count: string | number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/kyc',
+      params,
+    });
+  }
+
+  async getKycDossier(id: string | number) {
+    return this.request<{
+      farmer: any;
+      documents: any[];
+      fieldVisits: any[];
+      reviews: any[];
+    }>({
+      method: 'GET',
+      url: `/admin/kyc/${id}`,
+    });
+  }
+
+  async addKycDocument(id: string | number, data: FormData) {
+    return this.client.post<{ message: string; document: any }>(
+      `/admin/kyc/${id}/documents`,
+      data,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+  }
+
+  async deleteKycDocument(id: string | number, documentId: string | number) {
+    return this.request<{ message: string; document: any }>({
+      method: 'DELETE',
+      url: `/admin/kyc/${id}/documents/${documentId}`,
+    });
+  }
+
+  async addFieldVisit(id: string | number, data: {
+    findings: string;
+    visit_date?: string;
+    gps_coordinates?: string;
+    verified_crops?: string[];
+    recommendation?: string;
+  }) {
+    return this.request<{ message: string; visit: any }>({
+      method: 'POST',
+      url: `/admin/kyc/${id}/field-visits`,
+      data,
+    });
+  }
+
+  async reviewKyc(id: string | number, data: {
+    decision: 'approve' | 'reject' | 'request_info' | 'under_review';
+    tier?: string;
+    reason?: string;
+    notes?: string;
+  }) {
+    return this.request<{ message: string; result: any }>({
+      method: 'POST',
+      url: `/admin/kyc/${id}/review`,
+      data,
+    });
+  }
+
+  async getKycHistory(id: string | number) {
+    return this.request<{ history: any[] }>({
+      method: 'GET',
+      url: `/admin/kyc/${id}/history`,
+    });
+  }
+
+  // Phase 1: User 360 Methods
+  async getUser360(id: string | number) {
+    return this.request<{
+      user: any;
+      roleProfile: any;
+      kyc: { status: string; tier: string; documents: any[] };
+      products: { total: number; active: number; total_value: number; recent: any[] };
+      orders: { total: number; total_spent_or_earned: number; recent: any[] };
+      disputes: any[];
+      auditLogs: any[];
+    }>({
+      method: 'GET',
+      url: `/admin/users/${id}`,
+    });
+  }
+
+  async performUserAction(id: string | number, data: { action: string; payload?: any }) {
+    return this.request<{ message: string; [key: string]: any }>({
+      method: 'POST',
+      url: `/admin/users/${id}/action`,
+      data,
+    });
+  }
+
+  // Phase 1: Product Moderation & Governance Methods
+  async getProductsAdmin(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    moderation_status?: string;
+    category?: string;
+    farmer?: string;
+    min_price?: number;
+    max_price?: number;
+  }) {
+    return this.request<{
+      products: any[];
+      pagination: { total: number; page: number; limit: number; totalPages: number };
+      counts: {
+        pending: string | number;
+        approved: string | number;
+        rejected: string | number;
+        changes_requested: string | number;
+        all_count: string | number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/products',
+      params,
+    });
+  }
+
+  async getProductDossier(id: string | number) {
+    return this.request<{
+      product: any;
+      moderationActions: any[];
+      reviews: any[];
+      benchmarkCorridor: any;
+    }>({
+      method: 'GET',
+      url: `/admin/products/${id}`,
+    });
+  }
+
+  async moderateProductAdmin(id: string | number, data: {
+    action: 'approve' | 'reject' | 'request_changes' | 'deactivate';
+    reason?: string;
+    notes?: string;
+    grade?: string;
+    cold_chain_required?: boolean;
+  }) {
+    return this.request<{ message: string; result: any }>({
+      method: 'PATCH',
+      url: `/admin/products/${id}/moderate`,
+      data,
+    });
+  }
+
+  async bulkModerateProducts(data: {
+    product_ids: (string | number)[];
+    action: 'approve' | 'reject' | 'deactivate';
+    reason?: string;
+    notes?: string;
+  }) {
+    return this.request<{ success: boolean; modifiedCount: number; action: string }>({
+      method: 'POST',
+      url: '/admin/products/bulk-moderate',
+      data,
+    });
+  }
+
+  async getProductModerationHistory(id: string | number) {
+    return this.request<{ history: any[] }>({
+      method: 'GET',
+      url: `/admin/products/${id}/history`,
+    });
+  }
+
+  // Categories Governance
+  async getCategoriesAdmin() {
+    return this.request<{ categories: any[] }>({
+      method: 'GET',
+      url: '/admin/categories',
+    });
+  }
+
+  async createCategoryAdmin(data: {
+    name: string;
+    description?: string;
+    icon?: string;
+    attributes?: any[];
+  }) {
+    return this.request<{ message: string; category: any }>({
+      method: 'POST',
+      url: '/admin/categories',
+      data,
+    });
+  }
+
+  async updateCategoryAdmin(id: string | number, data: {
+    name?: string;
+    description?: string;
+    icon?: string;
+    is_active?: boolean;
+    attributes?: any[];
+  }) {
+    return this.request<{ message: string; category: any }>({
+      method: 'PUT',
+      url: `/admin/categories/${id}`,
+      data,
+    });
+  }
+
+  async deleteCategoryAdmin(id: string | number) {
+    return this.request<{ message: string; result: any }>({
+      method: 'DELETE',
+      url: `/admin/categories/${id}`,
+    });
+  }
+
+  // Reviews Moderation
+  async getReviewsAdmin(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    is_hidden?: boolean | string;
+    rating?: number | string;
+  }) {
+    return this.request<{
+      reviews: any[];
+      pagination: { total: number; page: number; limit: number; totalPages: number };
+    }>({
+      method: 'GET',
+      url: '/admin/reviews',
+      params,
+    });
+  }
+
+  async moderateReviewAdmin(id: string | number, data: { is_hidden: boolean; reason?: string }) {
+    return this.request<{ message: string; review: any }>({
+      method: 'PATCH',
+      url: `/admin/reviews/${id}`,
+      data,
+    });
+  }
+
+  // Campaigns Governance
+  async getCampaignsAdmin(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+  }) {
+    return this.request<{
+      campaigns: any[];
+      pagination: { total: number; page: number; limit: number; totalPages: number };
+    }>({
+      method: 'GET',
+      url: '/admin/campaigns',
+      params,
+    });
+  }
+
+  async moderateCampaignAdmin(id: string | number, data: {
+    action: 'approve' | 'reject' | 'pause';
+    reason?: string;
+    budget_cap?: number;
+  }) {
+    return this.request<{ message: string; campaign: any }>({
+      method: 'PATCH',
+      url: `/admin/campaigns/${id}`,
+      data,
+    });
+  }
+
+  // Price Corridors & Outliers
+  async getPriceCorridors(params?: { region?: string; commodity?: string }) {
+    return this.request<{ corridors: any[] }>({
+      method: 'GET',
+      url: '/admin/pricing/corridors',
+      params,
+    });
+  }
+
+  async upsertPriceCorridor(data: {
+    commodity_name: string;
+    region: string;
+    min_price: number;
+    max_price: number;
+    target_price: number;
+    unit?: string;
+    deviation_threshold_pct?: number;
+  }) {
+    return this.request<{ message: string; corridor: any }>({
+      method: 'POST',
+      url: '/admin/pricing/corridors',
+      data,
+    });
+  }
+
+  async getPriceOutliers() {
+    return this.request<{ outliers: any[] }>({
+      method: 'GET',
+      url: '/admin/pricing/outliers',
+    });
+  }
+
+  async evaluateProductPricing(id: string | number) {
+    return this.request<{
+      status: string;
+      message: string;
+      product: any;
+      corridor: any;
+      deviation_pct?: string;
+    }>({
+      method: 'POST',
+      url: `/admin/pricing/evaluate/${id}`,
+    });
+  }
+
   async listUsers(params?: any) {
     return this.request<{ users: any[] }>({
       method: 'GET',

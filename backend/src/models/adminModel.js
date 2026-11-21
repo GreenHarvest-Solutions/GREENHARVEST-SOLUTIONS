@@ -1,5 +1,8 @@
 const { pool } = require("../config/db");
 const auditService = require("../services/auditService");
+const kycModel = require("./kycModel");
+const user360Model = require("./user360Model");
+const productModerationModel = require("./productModerationModel");
 
 const getAdminMe = async (userId) => {
 	const result = await pool.query(
@@ -1069,4 +1072,10 @@ module.exports = {
 	getAdminRoles,
 	getAdminTeam,
 	updateAdminRole,
+	// KYC
+	...kycModel,
+	// User 360
+	...user360Model,
+	// Product Governance
+	...productModerationModel,
 };

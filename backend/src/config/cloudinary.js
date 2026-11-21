@@ -24,4 +24,26 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 });
 
-module.exports = { cloudinary, upload };
+const kycStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'greenharvest/kyc_documents',
+    resource_type: 'auto',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+  },
+});
+
+const kycUpload = multer({
+  storage: kycStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPG, PNG, WEBP, and PDF files are allowed.'));
+    }
+  },
+});
+
+module.exports = { cloudinary, upload, kycUpload };

@@ -88,3 +88,4 @@ CREATE TABLE IF NOT EXISTS field_visits (
 );
 
 CREATE INDEX IF NOT EXISTS idx_field_visits_farmer ON field_visits(farmer_id);
+

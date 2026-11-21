@@ -31,3 +31,4 @@ INSERT INTO platform_settings (key, value, updated_at) VALUES
   ('cold_chain_temp_min', '{"value": 2.0, "unit": "celsius", "description": "Standard refrigerated reefer lower thermal boundary"}'::jsonb, NOW()),
   ('cold_chain_temp_max', '{"value": 6.0, "unit": "celsius", "description": "Standard refrigerated reefer upper thermal boundary"}'::jsonb, NOW())
 ON CONFLICT (key) DO NOTHING;
+

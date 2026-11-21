@@ -186,3 +186,4 @@ module.exports = {
   record,
   getAuditLogs,
 };
+

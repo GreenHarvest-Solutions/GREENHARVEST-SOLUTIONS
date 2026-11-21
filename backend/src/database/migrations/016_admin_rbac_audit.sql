@@ -168,3 +168,4 @@ UPDATE users
 SET admin_role_id = (SELECT id FROM admin_roles WHERE name = 'super_admin')
 WHERE (role = 'admin' OR role_id IN (SELECT role_id FROM roles WHERE role_name = 'admin'))
   AND (admin_role_id IS NULL);
+

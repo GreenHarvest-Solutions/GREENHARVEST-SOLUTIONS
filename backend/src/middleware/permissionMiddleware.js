@@ -126,3 +126,4 @@ module.exports = permissionMiddleware;
 module.exports.permissionMiddleware = permissionMiddleware;
 module.exports.getUserPermissions = getUserPermissions;
 module.exports.invalidateUserPermissionCache = invalidateUserPermissionCache;
+

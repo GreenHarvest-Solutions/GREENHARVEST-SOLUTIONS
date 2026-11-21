@@ -7,6 +7,7 @@ interface AdminModalProps {
   onClose: () => void;
   title: string;
   subtitle?: string;
+  description?: string;
   icon?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
@@ -18,11 +19,13 @@ export function AdminModal({
   onClose,
   title,
   subtitle,
+  description,
   icon = 'fa-circle-info',
   children,
   footer,
   maxWidth = '2xl',
 }: AdminModalProps) {
+  const displaySubtitle = subtitle || description;
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -78,9 +81,9 @@ export function AdminModal({
               <h2 className="text-base font-bold text-gray-900 tracking-tight [text-wrap:balance]">
                 {title}
               </h2>
-              {subtitle && (
+              {displaySubtitle && (
                 <p className="text-xs text-gray-600 mt-0.5">
-                  {subtitle}
+                  {displaySubtitle}
                 </p>
               )}
             </div>
@@ -110,3 +113,4 @@ export function AdminModal({
     </div>
   );
 }
+

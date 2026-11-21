@@ -3,7 +3,8 @@
 import React from 'react';
 
 export interface AdminTabItem {
-  key: string;
+  key?: string;
+  id?: string;
   label: string;
   count?: number | string;
   icon?: string;
@@ -23,28 +24,29 @@ export function AdminTabs({
   className = '',
 }: AdminTabsProps) {
   return (
-    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.key;
+    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      {tabs.map((tab, idx) => {
+        const tabKey = tab.id || tab.key || String(idx);
+        const isActive = activeTab === tabKey;
         return (
           <button
-            key={tab.key}
+            key={tabKey}
             type="button"
-            onClick={() => onChange(tab.key)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+            onClick={() => onChange(tabKey)}
+            className={`px-3 py-1.5 rounded-none text-xs font-semibold flex items-center gap-2 transition-all border ${
               isActive
-                ? 'bg-[#1f5400] text-white shadow-xs'
-                : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-100'
+                ? 'bg-[#007a6c] text-white border-[#007a6c]'
+                : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300'
             }`}
           >
             {tab.icon && <i className={`fa-solid ${tab.icon} text-xs`} />}
             <span>{tab.label}</span>
             {tab.count !== undefined && (
               <span
-                className={`px-1.5 py-0.2 rounded-full text-[11px] font-bold tabular-nums ${
+                className={`px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
                   isActive
                     ? 'bg-white/20 text-white'
-                    : 'bg-gray-200 text-gray-800'
+                    : 'bg-gray-100 text-gray-700 border border-gray-300'
                 }`}
               >
                 {tab.count}

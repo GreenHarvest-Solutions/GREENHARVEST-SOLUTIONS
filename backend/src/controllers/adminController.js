@@ -423,6 +423,528 @@ const updateAdminRole = async (req, res) => {
 	}
 };
 
+// ============================================================================
+// Phase 1 Controllers: KYC, User 360, Products, Categories, Reviews, Pricing
+// ============================================================================
+
+const getKycQueue = async (req, res) => {
+	try {
+		const { page, limit, status, search, tier, region } = req.query;
+		const result = await adminService.getKycQueue({
+			page: page ? parseInt(page, 10) : 1,
+			limit: limit ? parseInt(limit, 10) : 20,
+			status: status || "all",
+			search: search || "",
+			tier: tier || "all",
+			region: region || "all",
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get KYC queue failed", error);
+	}
+};
+
+const getKycDossier = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const dossier = await adminService.getKycDossier(id);
+		if (!dossier) {
+			return res.status(404).json({ status: "error", message: `Farmer #${id} not found` });
+		}
+		return res.status(200).json(dossier);
+	} catch (error) {
+		return handleControllerError(res, "Get KYC dossier failed", error);
+	}
+};
+
+const addKycDocument = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { document_type, expires_at } = req.body;
+
+		let documentUrl = req.body.document_url;
+		let publicId = req.body.public_id || null;
+
+		if (req.file) {
+			documentUrl = req.file.path;
+			publicId = req.file.filename;
+		}
+
+		if (!documentUrl) {
+			return res.status(400).json({ status: "error", message: "Document file or document_url is required" });
+		}
+
+		if (!document_type) {
+			return res.status(400).json({ status: "error", message: "document_type is required" });
+		}
+
+		const doc = await adminService.addKycDocument({
+			userId: id,
+			documentType: document_type,
+			documentUrl,
+			publicId,
+			expiresAt: expires_at || null,
+			reviewerId: req.user.id,
+			actorId: req.user.id,
+			ipAddress: req.ip || req.headers["x-forwarded-for"],
+			userAgent: req.headers["user-agent"],
+		});
+
+		return res.status(201).json({ message: "Document attached successfully", document: doc });
+	} catch (error) {
+		return handleControllerError(res, "Add KYC document failed", error);
+	}
+};
+
+const deleteKycDocument = async (req, res) => {
+	try {
+		const { documentId } = req.params;
+		const deleted = await adminService.deleteKycDocument({
+			documentId,
+			actorId: req.user.id,
+			ipAddress: req.ip || req.headers["x-forwarded-for"],
+			userAgent: req.headers["user-agent"],
+		});
+
+		if (!deleted) {
+			return res.status(404).json({ status: "error", message: "Document not found" });
+		}
+
+		return res.status(200).json({ message: "Document deleted successfully", document: deleted });
+	} catch (error) {
+		return handleControllerError(res, "Delete KYC document failed", error);
+	}
+};
+
+const addFieldVisit = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { findings, visit_date, gps_coordinates, verified_crops, recommendation } = req.body;
+
+		if (!findings) {
+			return res.status(400).json({ status: "error", message: "findings are required" });
+		}
+
+		const visit = await adminService.addFieldVisit({
+			farmerId: id,
+			agentId: req.user.id,
+			visitDate: visit_date || new Date(),
+			findings,
+			gpsCoordinates: gps_coordinates || null,
+			verifiedCrops: verified_crops || null,
+			recommendation: recommendation || "approve",
+			actorId: req.user.id,
+			ipAddress: req.ip || req.headers["x-forwarded-for"],
+			userAgent: req.headers["user-agent"],
+		});
+
+		return res.status(201).json({ message: "Field visit recorded successfully", visit });
+	} catch (error) {
+		return handleControllerError(res, "Add field visit failed", error);
+	}
+};
+
+const reviewKyc = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { decision, tier, reason, notes } = req.body;
+
+		const validDecisions = ["approve", "reject", "request_info", "under_review"];
+		if (!validDecisions.includes(decision)) {
+			return res.status(400).json({
+				status: "error",
+				message: `Invalid decision. Must be one of: ${validDecisions.join(", ")}`,
+			});
+		}
+
+		if ((decision === "reject" || decision === "request_info") && !reason && !notes) {
+			return res.status(400).json({
+				status: "error",
+				message: "A reason or notes must be provided when rejecting or requesting info",
+			});
+		}
+
+		const result = await adminService.reviewKyc({
+			farmerId: id,
+			decision,
+			tier: tier || "tier_1",
+			reason,
+			notes,
+			actorId: req.user.id,
+			ipAddress: req.ip || req.headers["x-forwarded-for"],
+			userAgent: req.headers["user-agent"],
+		});
+
+		return res.status(200).json({
+			message: `Farmer KYC ${decision} action applied successfully`,
+			result,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Review KYC failed", error);
+	}
+};
+
+const getKycHistory = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const history = await adminService.getKycHistory(id);
+		return res.status(200).json({ history });
+	} catch (error) {
+		return handleControllerError(res, "Get KYC history failed", error);
+	}
+};
+
+const getUser360 = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const user360 = await adminService.getUser360(id);
+		if (!user360) {
+			return res.status(404).json({ status: "error", message: `User #${id} not found` });
+		}
+		return res.status(200).json(user360);
+	} catch (error) {
+		return handleControllerError(res, "Get User 360 failed", error);
+	}
+};
+
+const performUserAction = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { action, payload } = req.body;
+
+		if (!action) {
+			return res.status(400).json({ status: "error", message: "action is required" });
+		}
+
+		const result = await adminService.performUserAction({
+			userId: id,
+			action,
+			payload: payload || {},
+			actorId: req.user.id,
+			ipAddress: req.ip || req.headers["x-forwarded-for"],
+			userAgent: req.headers["user-agent"],
+		});
+
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Perform user action failed", error);
+	}
+};
+
+const getProductsAdmin = async (req, res) => {
+	try {
+		const { page, limit, search, status, moderation_status, category, farmer, min_price, max_price } = req.query;
+		const result = await adminService.getProductsAdmin({
+			page: page ? parseInt(page, 10) : 1,
+			limit: limit ? parseInt(limit, 10) : 20,
+			search: search || "",
+			status: status || "",
+			moderation_status: moderation_status || "all",
+			category: category || "",
+			farmer: farmer || "",
+			min_price: min_price || null,
+			max_price: max_price || null,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get products admin failed", error);
+	}
+};
+
+const getProductDossier = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const dossier = await adminService.getProductDossier(id);
+		if (!dossier) {
+			return res.status(404).json({ status: "error", message: `Product #${id} not found` });
+		}
+		return res.status(200).json(dossier);
+	} catch (error) {
+		return handleControllerError(res, "Get product dossier failed", error);
+	}
+};
+
+const moderateProductAdmin = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { action, reason, notes, grade, cold_chain_required } = req.body;
+
+		const validActions = ["approve", "reject", "request_changes", "deactivate"];
+		if (!validActions.includes(action)) {
+			return res.status(400).json({
+				status: "error",
+				message: `Invalid action. Must be one of: ${validActions.join(", ")}`,
+			});
+		}
+
+		if ((action === "reject" || action === "request_changes") && !reason && !notes) {
+			return res.status(400).json({
+				status: "error",
+				message: "A reason or notes must be provided when rejecting or requesting changes",
+			});
+		}
+
+		const result = await adminService.moderateProductAdmin({
+			productId: id,
+			action,
+			reason,
+			notes,
+			grade,
+			cold_chain_required,
+			actorId: req.user.id,
+			ipAddress: req.ip || req.headers["x-forwarded-for"],
+			userAgent: req.headers["user-agent"],
+		});
+
+		return res.status(200).json({
+			message: `Product ${action} action applied successfully`,
+			result,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Moderate product failed", error);
+	}
+};
+
+const bulkModerateProducts = async (req, res) => {
+	try {
+		const { product_ids, action, reason, notes } = req.body;
+
+		if (!Array.isArray(product_ids) || product_ids.length === 0) {
+			return res.status(400).json({ status: "error", message: "product_ids array is required" });
+		}
+
+		const validActions = ["approve", "reject", "deactivate"];
+		if (!validActions.includes(action)) {
+			return res.status(400).json({
+				status: "error",
+				message: `Invalid action for bulk moderation: ${action}`,
+			});
+		}
+
+		const result = await adminService.bulkModerateProducts({
+			productIds: product_ids,
+			action,
+			reason,
+			notes,
+			actorId: req.user.id,
+			ipAddress: req.ip || req.headers["x-forwarded-for"],
+			userAgent: req.headers["user-agent"],
+		});
+
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Bulk moderate products failed", error);
+	}
+};
+
+const getProductModerationHistory = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const history = await adminService.getProductModerationHistory(id);
+		return res.status(200).json({ history });
+	} catch (error) {
+		return handleControllerError(res, "Get product moderation history failed", error);
+	}
+};
+
+const getCategoriesAdmin = async (req, res) => {
+	try {
+		const categories = await adminService.getCategoriesAdmin();
+		return res.status(200).json({ categories });
+	} catch (error) {
+		return handleControllerError(res, "Get categories failed", error);
+	}
+};
+
+const createCategoryAdmin = async (req, res) => {
+	try {
+		const { name, description, icon, attributes } = req.body;
+		if (!name || name.trim() === "") {
+			return res.status(400).json({ status: "error", message: "Category name is required" });
+		}
+
+		const category = await adminService.createCategoryAdmin({
+			name: name.trim(),
+			description: description || null,
+			icon: icon || null,
+			attributes: Array.isArray(attributes) ? attributes : [],
+			actorId: req.user.id,
+		});
+
+		return res.status(201).json({ message: "Category created successfully", category });
+	} catch (error) {
+		return handleControllerError(res, "Create category failed", error);
+	}
+};
+
+const updateCategoryAdmin = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { name, description, icon, is_active, attributes } = req.body;
+
+		const category = await adminService.updateCategoryAdmin({
+			id,
+			name,
+			description,
+			icon,
+			is_active,
+			attributes,
+			actorId: req.user.id,
+		});
+
+		return res.status(200).json({ message: "Category updated successfully", category });
+	} catch (error) {
+		return handleControllerError(res, "Update category failed", error);
+	}
+};
+
+const deleteCategoryAdmin = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const result = await adminService.deleteCategoryAdmin(id, req.user.id);
+		return res.status(200).json({ message: "Category deleted successfully", result });
+	} catch (error) {
+		return handleControllerError(res, "Delete category failed", error);
+	}
+};
+
+const getReviewsAdmin = async (req, res) => {
+	try {
+		const { page, limit, search, is_hidden, rating } = req.query;
+		const result = await adminService.getReviewsAdmin({
+			page: page ? parseInt(page, 10) : 1,
+			limit: limit ? parseInt(limit, 10) : 20,
+			search: search || "",
+			is_hidden: is_hidden !== undefined ? is_hidden : null,
+			rating: rating || null,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get reviews failed", error);
+	}
+};
+
+const moderateReviewAdmin = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { is_hidden, reason } = req.body;
+
+		if (is_hidden === undefined) {
+			return res.status(400).json({ status: "error", message: "is_hidden boolean is required" });
+		}
+
+		const review = await adminService.moderateReviewAdmin({
+			reviewId: id,
+			is_hidden,
+			reason: reason || null,
+			actorId: req.user.id,
+		});
+
+		return res.status(200).json({ message: "Review updated successfully", review });
+	} catch (error) {
+		return handleControllerError(res, "Moderate review failed", error);
+	}
+};
+
+const getCampaignsAdmin = async (req, res) => {
+	try {
+		const { page, limit, status, search } = req.query;
+		const result = await adminService.getCampaignsAdmin({
+			page: page ? parseInt(page, 10) : 1,
+			limit: limit ? parseInt(limit, 10) : 20,
+			status: status || "all",
+			search: search || "",
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get campaigns failed", error);
+	}
+};
+
+const moderateCampaignAdmin = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { action, reason, budget_cap } = req.body;
+
+		const validActions = ["approve", "reject", "pause"];
+		if (!validActions.includes(action)) {
+			return res.status(400).json({
+				status: "error",
+				message: `Invalid campaign action. Must be one of: ${validActions.join(", ")}`,
+			});
+		}
+
+		const campaign = await adminService.moderateCampaignAdmin({
+			campaignId: id,
+			action,
+			reason,
+			budget_cap: budget_cap ? parseFloat(budget_cap) : null,
+			actorId: req.user.id,
+		});
+
+		return res.status(200).json({ message: `Campaign ${action} action applied successfully`, campaign });
+	} catch (error) {
+		return handleControllerError(res, "Moderate campaign failed", error);
+	}
+};
+
+const getPriceCorridors = async (req, res) => {
+	try {
+		const { region, commodity } = req.query;
+		const corridors = await adminService.getPriceCorridors({ region, commodity });
+		return res.status(200).json({ corridors });
+	} catch (error) {
+		return handleControllerError(res, "Get price corridors failed", error);
+	}
+};
+
+const upsertPriceCorridor = async (req, res) => {
+	try {
+		const { commodity_name, region, min_price, max_price, target_price, unit, deviation_threshold_pct } = req.body;
+
+		if (!commodity_name || !region || min_price === undefined || max_price === undefined || target_price === undefined) {
+			return res.status(400).json({
+				status: "error",
+				message: "commodity_name, region, min_price, max_price, and target_price are required",
+			});
+		}
+
+		const corridor = await adminService.upsertPriceCorridor({
+			commodity_name,
+			region,
+			min_price: parseFloat(min_price),
+			max_price: parseFloat(max_price),
+			target_price: parseFloat(target_price),
+			unit: unit || "kg",
+			deviation_threshold_pct: deviation_threshold_pct ? parseFloat(deviation_threshold_pct) : 15.0,
+			actorId: req.user.id,
+		});
+
+		return res.status(200).json({ message: "Price corridor saved successfully", corridor });
+	} catch (error) {
+		return handleControllerError(res, "Upsert price corridor failed", error);
+	}
+};
+
+const getPriceOutliers = async (req, res) => {
+	try {
+		const outliers = await adminService.getPriceOutliers();
+		return res.status(200).json({ outliers });
+	} catch (error) {
+		return handleControllerError(res, "Get price outliers failed", error);
+	}
+};
+
+const evaluateProductPricing = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const result = await adminService.evaluateProductPricing(id);
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Evaluate product pricing failed", error);
+	}
+};
+
 module.exports = {
 	getAdminMe,
 	getAdminDashboard,
@@ -445,4 +967,31 @@ module.exports = {
 	getAdminTeam,
 	getAdminRoles,
 	updateAdminRole,
+	// Phase 1 Controllers
+	getKycQueue,
+	getKycDossier,
+	addKycDocument,
+	deleteKycDocument,
+	addFieldVisit,
+	reviewKyc,
+	getKycHistory,
+	getUser360,
+	performUserAction,
+	getProductsAdmin,
+	getProductDossier,
+	moderateProductAdmin,
+	bulkModerateProducts,
+	getProductModerationHistory,
+	getCategoriesAdmin,
+	createCategoryAdmin,
+	updateCategoryAdmin,
+	deleteCategoryAdmin,
+	getReviewsAdmin,
+	moderateReviewAdmin,
+	getCampaignsAdmin,
+	moderateCampaignAdmin,
+	getPriceCorridors,
+	upsertPriceCorridor,
+	getPriceOutliers,
+	evaluateProductPricing,
 };
