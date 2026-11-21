@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import { BaseCard, MetricCard, DataListCard } from '@/components/admin/cards';
+import { BaseCard, MetricCard, MetricStrip, DataListCard } from '@/components/admin/cards';
 
 interface TopProduct {
   id: string | number;
@@ -359,38 +359,56 @@ function AdminDashboardContent() {
             </div>
           </section>
 
-          {/* Core Platform Financial & Operational Metric Cards (Tag Summary Inspired) */}
-          <div className="grid grid-cols-4 gap-4 mb-8">
-            <MetricCard
-              index={0}
-              label="Gross Marketplace GMV"
-              value={Number(metrics.total_revenue)}
-              decimals={2}
-              prefix="ETB "
-              subText={`5% Escrow Comm: ETB ${(Number(metrics.total_revenue) * 0.05).toLocaleString('en-US', { minimumFractionDigits: 0 })}`}
-              icon="fa-sack-dollar"
-            />
-            <MetricCard
-              index={1}
-              label="Total Transactions"
-              value={metrics.total_orders}
-              subText={`${metrics.fulfillment_rate}% fulfillment rate`}
-              icon="fa-boxes-packing"
-            />
-            <MetricCard
-              index={2}
-              label="Producer Accounts"
-              value={metrics.total_farmers}
-              subText={`${pendingFarmerCount} KYC pending review`}
-              icon="fa-tractor"
-            />
-            <MetricCard
-              index={3}
-              label="Registered Users"
-              value={metrics.total_users}
-              subText={`${metrics.active_today} active today`}
-              icon="fa-users-gear"
-            />
+          {/* ════════════════ EXACT TAG SUMMARY METRIC STRIP ════════════════ */}
+          <div className="mb-8">
+            <MetricStrip index={0}>
+              <MetricCard
+                isStripItem
+                label="Total Revenue"
+                value={Number(metrics.total_revenue)}
+                prefix="ETB "
+                decimals={0}
+                subText="from live orders"
+              />
+              <MetricCard
+                isStripItem
+                label="Total orders"
+                value={metrics.total_orders}
+                subText={`${metrics.fulfillment_rate}% fulfilled`}
+              />
+              <MetricCard
+                isStripItem
+                label="Total alerts"
+                value={metrics.fleet_breaches_count || 0}
+                subText="at cold hubs"
+              />
+              <MetricCard
+                isStripItem
+                label="Active trucks"
+                value={metrics.active_fleet_trucks}
+                subText="at freight corridors"
+              />
+              <MetricCard
+                isStripItem
+                label="Cold compliance"
+                value={Number(metrics.cold_chain_compliance)}
+                suffix="%"
+                decimals={1}
+                subText="2.0° - 6.0°C"
+              />
+              <MetricCard
+                isStripItem
+                label="Farmer accounts"
+                value={metrics.total_farmers}
+                subText={pendingFarmerCount > 0 ? `${pendingFarmerCount} pending KYC` : 'accredited'}
+              />
+              <MetricCard
+                isStripItem
+                label="Platform users"
+                value={metrics.total_users}
+                subText={`${metrics.active_today} active today`}
+              />
+            </MetricStrip>
           </div>
 
           {/* ════════════════ ADMIN ACTION & MODERATION CENTER ════════════════ */}
