@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 
 interface AdminNavSection {
+  id: string;
   title: string;
   items: {
     label: string;
@@ -19,6 +20,8 @@ interface AdminNavSection {
 export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
+
+  // Admin user state
   const [adminName, setAdminName] = useState('System Administrator');
   const [adminRole, setAdminRole] = useState('Super Admin');
   const [counts, setCounts] = useState({
@@ -28,11 +31,46 @@ export default function AdminSidebar() {
     fleetBreaches: 0,
   });
 
+  // Sidebar Collapse State (entire sidebar width: w-64 vs w-20)
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+
+  // Section Accordion Collapse State (which category groups are collapsed)
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
+  // Active hover item for collapsed tooltip
+  const [hoveredItem, setHoveredItem] = useState<{
+    label: string;
+    section: string;
+    badge?: string;
+    badgeColor?: string;
+    y: number;
+  } | null>(null);
+
+  // Initialize collapsed states from localStorage on mount
   useEffect(() => {
+    try {
+      const savedSidebarCollapsed = localStorage.getItem('gh_admin_sidebar_collapsed');
+      if (savedSidebarCollapsed !== null) {
+        setIsCollapsed(savedSidebarCollapsed === 'true');
+      }
+
+      const savedSections = localStorage.getItem('gh_admin_collapsed_sections');
+      if (savedSections) {
+        setCollapsedSections(JSON.parse(savedSections));
+      }
+    } catch {
+      // Ignore local storage error
+    }
+  }, []);
+
+  // Fetch admin profile and real dashboard telemetry counts
+  useEffect(() => {
+    let isMounted = true;
+
     const fetchAdminInfo = async () => {
       try {
         const meRes = await api.getAdminMe();
-        if (meRes?.admin) {
+        if (isMounted && meRes?.admin) {
           setAdminName(meRes.admin.name || 'System Administrator');
           const roleDisplay = (meRes.admin.admin_role?.name || meRes.admin.role || 'Admin')
             .replace(/_/g, ' ')
@@ -40,11 +78,10 @@ export default function AdminSidebar() {
           setAdminRole(roleDisplay);
         }
       } catch {
-        // Fallback to local storage if API call fails
         if (typeof window !== 'undefined') {
           try {
             const stored = localStorage.getItem('user');
-            if (stored) {
+            if (stored && isMounted) {
               const parsed = JSON.parse(stored);
               if (parsed.name || parsed.full_name) setAdminName(parsed.name || parsed.full_name);
               if (parsed.role) setAdminRole(parsed.role.toUpperCase());
@@ -57,7 +94,7 @@ export default function AdminSidebar() {
     const fetchCounts = async () => {
       try {
         const res = await api.getAdminDashboard();
-        if (res && res.metrics) {
+        if (isMounted && res && res.metrics) {
           setCounts({
             kyc: Number(res.metrics.kyc_pending_count || 0),
             moderation: Number(res.metrics.moderation_pending_count || 0),
@@ -66,12 +103,16 @@ export default function AdminSidebar() {
           });
         }
       } catch {
-        // Keep 0 on error
+        // Keep fallback 0 on error
       }
     };
 
     fetchAdminInfo();
     fetchCounts();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -89,212 +130,373 @@ export default function AdminSidebar() {
     }
   };
 
-  const navSections: AdminNavSection[] = [
-    {
-      title: 'Command & Telemetry',
-      items: [
-        { label: 'Overview Dashboard', href: '/admin/dashboard', icon: 'fa-gauge-high' },
-        { label: 'Alerts & SLA', href: '/admin/alerts', icon: 'fa-bell' },
-        { label: 'Platform Analytics', href: '/admin/analytics', icon: 'fa-chart-line' },
-      ],
-    },
-    {
-      title: 'Marketplace Governance',
-      items: [
-        {
-          label: 'Farmer KYC',
-          href: '/admin/kyc',
-          icon: 'fa-id-card',
-          badge: counts.kyc > 0 ? String(counts.kyc) : undefined,
-          badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300',
-        },
-        {
-          label: 'Products & Moderation',
-          href: '/admin/products',
-          icon: 'fa-shield-halved',
-          badge: counts.moderation > 0 ? String(counts.moderation) : undefined,
-          badgeColor: 'bg-blue-100 text-blue-900 border border-blue-300',
-        },
-        { label: 'Categories & Attributes', href: '/admin/categories', icon: 'fa-tags' },
-        { label: 'Reviews', href: '/admin/reviews', icon: 'fa-star-half-stroke' },
-        { label: 'Campaigns', href: '/admin/campaigns', icon: 'fa-bullhorn' },
-        { label: 'Price Governance', href: '/admin/pricing', icon: 'fa-chart-simple' },
-      ],
-    },
-    {
-      title: 'Commerce & Settlement',
-      items: [
-        { label: 'Orders', href: '/admin/orders', icon: 'fa-cart-shopping' },
-        { label: 'Payments', href: '/admin/payments', icon: 'fa-credit-card' },
-        { label: 'Escrow & Payouts', href: '/admin/escrow', icon: 'fa-money-bill-transfer' },
-        {
-          label: 'Disputes',
-          href: '/admin/disputes',
-          icon: 'fa-scale-balanced',
-          badge: counts.disputes > 0 ? String(counts.disputes) : undefined,
-          badgeColor: 'bg-red-100 text-red-900 border border-red-300',
-        },
-        { label: 'Returns', href: '/admin/returns', icon: 'fa-arrow-rotate-left' },
-      ],
-    },
-    {
-      title: 'Logistics',
-      items: [
-        {
-          label: 'Fleet & Telemetry',
-          href: '/admin/deliveries',
-          icon: 'fa-truck-fast',
-          badge: counts.fleetBreaches > 0 ? `${counts.fleetBreaches} Alert` : undefined,
-          badgeColor: 'bg-red-100 text-red-900 border border-red-300',
-        },
-        { label: 'Carriers', href: '/admin/logistics/carriers', icon: 'fa-building-shield' },
-        { label: 'Hubs & Routes', href: '/admin/logistics/hubs', icon: 'fa-route' },
-        { label: 'Incidents', href: '/admin/logistics/incidents', icon: 'fa-triangle-exclamation' },
-      ],
-    },
-    {
-      title: 'People',
-      items: [
-        { label: 'Users', href: '/admin/users', icon: 'fa-users-gear' },
-        { label: 'Field Agents', href: '/admin/field-agents', icon: 'fa-user-pen' },
-        { label: 'Delivery Partners', href: '/admin/delivery-partners', icon: 'fa-people-carry-box' },
-        { label: 'Admin Team', href: '/admin/team', icon: 'fa-user-shield' },
-      ],
-    },
-    {
-      title: 'Engagement',
-      items: [
-        { label: 'Announcements', href: '/admin/announcements', icon: 'fa-tower-broadcast' },
-        { label: 'Support Inbox', href: '/admin/support', icon: 'fa-headset' },
-      ],
-    },
-    {
-      title: 'Risk & System',
-      items: [
-        { label: 'Risk & Fraud', href: '/admin/risk', icon: 'fa-shield-virus' },
-        { label: 'Reports', href: '/admin/reports', icon: 'fa-file-invoice' },
-        { label: 'System Health', href: '/admin/system/health', icon: 'fa-heart-pulse' },
-        { label: 'Audit Log', href: '/admin/system/audit', icon: 'fa-clock-rotate-left' },
-        { label: 'Platform Settings', href: '/admin/settings', icon: 'fa-sliders' },
-      ],
-    },
-  ];
-
-  const isLinkActive = (href: string) => {
-    const cleanHref = href.split('?')[0];
-    if (cleanHref === '/admin/dashboard') {
-      return pathname === '/admin/dashboard' && (!href.includes('?') || href === pathname);
-    }
-    return pathname.startsWith(cleanHref);
+  const toggleSidebarCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('gh_admin_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
   };
 
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [sectionId]: !prev[sectionId] };
+      try {
+        localStorage.setItem('gh_admin_collapsed_sections', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const navSections: AdminNavSection[] = useMemo(
+    () => [
+      {
+        id: 'telemetry',
+        title: 'Command & Telemetry',
+        items: [
+          { label: 'Overview Dashboard', href: '/admin/dashboard', icon: 'fa-gauge-high' },
+          { label: 'Platform Analytics', href: '/admin/analytics', icon: 'fa-chart-line' },
+        ],
+      },
+      {
+        id: 'governance',
+        title: 'Marketplace Governance',
+        items: [
+          {
+            label: 'Farmer KYC',
+            href: '/admin/kyc',
+            icon: 'fa-id-card',
+            badge: counts.kyc > 0 ? String(counts.kyc) : undefined,
+            badgeColor: 'bg-amber-50 text-amber-900 border border-amber-300',
+          },
+          {
+            label: 'Products & Moderation',
+            href: '/admin/products',
+            icon: 'fa-shield-halved',
+            badge: counts.moderation > 0 ? String(counts.moderation) : undefined,
+            badgeColor: 'bg-blue-50 text-blue-900 border border-blue-300',
+          },
+          { label: 'Categories & Attributes', href: '/admin/categories', icon: 'fa-tags' },
+          { label: 'Reviews & Ratings', href: '/admin/reviews', icon: 'fa-star-half-stroke' },
+          { label: 'Promotional Campaigns', href: '/admin/campaigns', icon: 'fa-bullhorn' },
+          { label: 'Price Corridors', href: '/admin/pricing', icon: 'fa-chart-simple' },
+        ],
+      },
+      {
+        id: 'commerce',
+        title: 'Commerce & Settlement',
+        items: [
+          { label: 'Orders & Fulfillment', href: '/admin/orders', icon: 'fa-cart-shopping' },
+          { label: 'Payments & Ledger', href: '/admin/payments', icon: 'fa-credit-card' },
+          { label: 'Escrow Clearinghouse', href: '/admin/escrow', icon: 'fa-money-bill-transfer' },
+          {
+            label: 'Dispute Arbitration',
+            href: '/admin/disputes',
+            icon: 'fa-scale-balanced',
+            badge: counts.disputes > 0 ? String(counts.disputes) : undefined,
+            badgeColor: 'bg-red-50 text-red-900 border border-red-300',
+          },
+          { label: 'Reverse Returns', href: '/admin/returns', icon: 'fa-arrow-rotate-left' },
+        ],
+      },
+      {
+        id: 'logistics',
+        title: 'Cold-Chain Logistics',
+        items: [
+          {
+            label: 'Fleet & IoT Telemetry',
+            href: '/admin/deliveries',
+            icon: 'fa-truck-fast',
+            badge: counts.fleetBreaches > 0 ? `${counts.fleetBreaches} Alert` : undefined,
+            badgeColor: 'bg-red-50 text-red-900 border border-red-300',
+          },
+          { label: 'Carrier Partners', href: '/admin/logistics/carriers', icon: 'fa-building-shield' },
+          { label: 'Hubs & Depots', href: '/admin/logistics/hubs', icon: 'fa-route' },
+          { label: 'Incident Queue', href: '/admin/logistics/incidents', icon: 'fa-triangle-exclamation' },
+        ],
+      },
+      {
+        id: 'people',
+        title: 'Platform People',
+        items: [
+          { label: 'User Registry', href: '/admin/users', icon: 'fa-users-gear' },
+          { label: 'Admin Team & Roles', href: '/admin/team', icon: 'fa-user-shield' },
+        ],
+      },
+      {
+        id: 'engagement',
+        title: 'Communications',
+        items: [
+          { label: 'Broadcast Center', href: '/admin/announcements', icon: 'fa-tower-broadcast' },
+          { label: 'Support Queue', href: '/admin/support', icon: 'fa-headset' },
+        ],
+      },
+      {
+        id: 'risk',
+        title: 'Risk & System Admin',
+        items: [
+          { label: 'Risk & Fraud Surveillance', href: '/admin/risk', icon: 'fa-shield-virus' },
+          { label: 'Reports & CSV Export', href: '/admin/reports', icon: 'fa-file-invoice' },
+          { label: 'System Health & Ping', href: '/admin/system/health', icon: 'fa-heart-pulse' },
+          { label: 'Immutable Audit Log', href: '/admin/system/audit', icon: 'fa-clock-rotate-left' },
+          { label: 'Platform Settings', href: '/admin/settings', icon: 'fa-sliders' },
+        ],
+      },
+    ],
+    [counts]
+  );
+
+  const isLinkActive = useCallback(
+    (href: string) => {
+      const cleanHref = href.split('?')[0];
+      if (cleanHref === '/admin/dashboard') {
+        return pathname === '/admin/dashboard' && (!href.includes('?') || href === pathname);
+      }
+      return pathname.startsWith(cleanHref);
+    },
+    [pathname]
+  );
+
+  // Auto-expand any section that contains the currently active route
+  useEffect(() => {
+    navSections.forEach((section) => {
+      const hasActive = section.items.some((item) => isLinkActive(item.href));
+      if (hasActive && collapsedSections[section.id]) {
+        setCollapsedSections((prev) => ({ ...prev, [section.id]: false }));
+      }
+    });
+  }, [pathname, navSections, isLinkActive, collapsedSections]);
+
   return (
-    <aside className="w-64 bg-white flex flex-col h-full border-r border-gray-100 z-10 relative shrink-0">
-      {/* Background Graphic */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-50/15 to-emerald-50/30 pointer-events-none" />
-
-      {/* Header with Admin Console Authority */}
-      <div className="px-5 py-5 flex flex-col gap-2 relative z-10 border-b border-gray-100 shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="grid grid-cols-2 gap-1 w-6 h-6">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#286c00]" />
-              <div className="w-2.5 h-2.5 rounded-full border-2 border-gray-800" />
-              <div className="w-2.5 h-2.5 rounded-full border-2 border-[#286c00]" />
-              <div className="w-2.5 h-2.5 rounded-full bg-gray-800" />
+    <aside
+      className={`bg-white border-r border-gray-300 flex flex-col h-full z-20 relative shrink-0 transition-all duration-200 ease-in-out ${
+        isCollapsed ? 'w-20' : 'w-64'
+      }`}
+      style={{
+        boxShadow: 'none',
+      }}
+    >
+      {/* Sidebar Header: Brand & Collapse Toggle */}
+      <div className="px-4 py-4 border-b border-gray-300 bg-white flex items-center justify-between shrink-0">
+        {!isCollapsed ? (
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Geometric Brand Emblem */}
+            <div className="grid grid-cols-2 gap-0.5 w-6 h-6 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-none bg-[#1f5400]" />
+              <div className="w-2.5 h-2.5 rounded-none border border-gray-800" />
+              <div className="w-2.5 h-2.5 rounded-none border border-[#1f5400]" />
+              <div className="w-2.5 h-2.5 rounded-none bg-gray-800" />
             </div>
-            <span className="text-lg font-bold tracking-tight text-gray-900">
-              Green<span className="text-[#286c00]">Harvest</span>
-            </span>
+            <div className="min-w-0">
+              <span className="text-sm font-bold tracking-tight text-gray-900 block truncate">
+                Green<span className="text-[#1f5400]">Harvest</span>
+              </span>
+              <span className="text-[10px] font-bold text-[#007a6c] uppercase tracking-wider block">
+                Operations Console
+              </span>
+            </div>
           </div>
+        ) : (
+          <div className="mx-auto grid grid-cols-2 gap-0.5 w-6 h-6 shrink-0">
+            <div className="w-2.5 h-2.5 rounded-none bg-[#1f5400]" />
+            <div className="w-2.5 h-2.5 rounded-none border border-gray-800" />
+            <div className="w-2.5 h-2.5 rounded-none border border-[#1f5400]" />
+            <div className="w-2.5 h-2.5 rounded-none bg-gray-800" />
+          </div>
+        )}
 
-          <span className="text-xs font-bold text-[#286c00] bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full flex items-center gap-1 uppercase tracking-wider">
-            <i className="fa-solid fa-shield-halved text-[11px]" />
-            Admin
-          </span>
-        </div>
-
-        {/* System Sub-Label */}
-        <div className="flex items-center justify-between text-xs text-gray-600 font-medium px-0.5">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-flex rounded-full h-2 w-2 bg-emerald-600" />
-            Enterprise Control
-          </span>
-          <span className="font-mono text-gray-500">v2.0</span>
-        </div>
+        {/* Master Sidebar Collapse/Expand Toggle Button */}
+        <button
+          onClick={toggleSidebarCollapse}
+          title={isCollapsed ? 'Expand Sidebar (Full Navigation)' : 'Collapse Sidebar (Mini View)'}
+          aria-label={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+          className={`w-7 h-7 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-300 rounded-none transition-colors shrink-0 ${
+            isCollapsed ? 'mx-auto mt-2' : ''
+          }`}
+        >
+          <i
+            className={`fa-solid ${
+              isCollapsed ? 'fa-angles-right text-xs' : 'fa-angles-left text-xs'
+            }`}
+          />
+        </button>
       </div>
 
-      {/* Structured Admin Navigation */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto hide-scrollbar relative z-10 min-h-0 space-y-5">
-        {navSections.map((section) => (
-          <div key={section.title}>
-            <span className="px-3 text-xs font-bold text-gray-600 uppercase tracking-wider block mb-1.5">
-              {section.title}
-            </span>
-            <ul className="space-y-1">
-              {section.items.map((item) => {
-                const active = isLinkActive(item.href);
-                return (
-                  <li key={item.label}>
-                    <Link
-                      href={item.href}
-                      className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all font-medium text-xs ${
-                        active
-                          ? 'bg-[#1f5400] text-white shadow-sm font-semibold'
-                          : 'text-gray-700 hover:text-gray-900 hover:bg-emerald-50/70'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <i
-                          className={`fa-solid ${item.icon} w-4 text-center text-xs shrink-0 ${
-                            active ? 'text-white' : 'text-gray-500'
-                          }`}
-                        />
-                        <span className="truncate">{item.label}</span>
-                      </div>
+      {/* Navigation Sections */}
+      <nav className="flex-1 px-2.5 py-3 overflow-y-auto hide-scrollbar space-y-4 min-h-0">
+        {navSections.map((section) => {
+          const isSectionCollapsed = Boolean(collapsedSections[section.id]);
+          const hasActiveItem = section.items.some((item) => isLinkActive(item.href));
 
-                      {item.badge && (
-                        <span
-                          className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums shrink-0 ${
+          return (
+            <div key={section.id} className="space-y-1">
+              {/* Section Header: Clickable in expanded view to collapse/expand elements */}
+              {!isCollapsed ? (
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.id)}
+                  aria-expanded={!isSectionCollapsed}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 text-left group hover:bg-gray-50 border-b border-transparent hover:border-gray-200 transition-colors"
+                >
+                  <span
+                    className={`text-[11px] font-bold uppercase tracking-wider truncate ${
+                      hasActiveItem ? 'text-[#007a6c]' : 'text-gray-500 group-hover:text-gray-800'
+                    }`}
+                  >
+                    {section.title}
+                  </span>
+                  <i
+                    className={`fa-solid fa-chevron-down text-[10px] text-gray-400 group-hover:text-gray-700 transition-transform duration-200 ${
+                      isSectionCollapsed ? '-rotate-90' : 'rotate-0'
+                    }`}
+                  />
+                </button>
+              ) : (
+                /* Collapsed mode subtle section separator */
+                <div className="my-2 border-t border-gray-200 mx-2" title={section.title} />
+              )}
+
+              {/* Items List (Collapsible in expanded mode) */}
+              {(!isSectionCollapsed || isCollapsed) && (
+                <ul className="space-y-0.5">
+                  {section.items.map((item) => {
+                    const active = isLinkActive(item.href);
+
+                    return (
+                      <li key={item.label} className="relative">
+                        <Link
+                          href={item.href}
+                          onMouseEnter={(e) => {
+                            if (isCollapsed) {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setHoveredItem({
+                                label: item.label,
+                                section: section.title,
+                                badge: item.badge,
+                                badgeColor: item.badgeColor,
+                                y: rect.top,
+                              });
+                            }
+                          }}
+                          onMouseLeave={() => {
+                            if (isCollapsed) setHoveredItem(null);
+                          }}
+                          className={`flex items-center text-xs font-medium transition-colors ${
+                            isCollapsed
+                              ? 'justify-center w-full h-10 px-0'
+                              : 'justify-between px-2.5 py-2'
+                          } ${
                             active
-                              ? 'bg-white text-[#1f5400]'
-                              : item.badgeColor || 'bg-gray-100 text-gray-700'
+                              ? 'bg-[#1f5400] text-white font-bold rounded-none'
+                              : 'text-gray-700 hover:text-gray-950 hover:bg-gray-100/80 rounded-none'
                           }`}
                         >
-                          {item.badge}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+                          <div className={`flex items-center gap-2.5 min-w-0 ${isCollapsed ? 'justify-center' : ''}`}>
+                            <i
+                              className={`fa-solid ${item.icon} text-xs w-4 text-center shrink-0 ${
+                                active ? 'text-white' : 'text-gray-500'
+                              }`}
+                            />
+                            {!isCollapsed && (
+                              <span className="truncate text-xs">{item.label}</span>
+                            )}
+                          </div>
+
+                          {/* Badge indicator in Expanded View */}
+                          {!isCollapsed && item.badge && (
+                            <span
+                              className={`text-[11px] font-bold px-1.5 py-0.2 rounded-none tabular-nums border shrink-0 ${
+                                active
+                                  ? 'bg-white text-[#1f5400] border-white'
+                                  : item.badgeColor || 'bg-gray-100 text-gray-700 border-gray-300'
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          )}
+
+                          {/* Dot indicator in Collapsed View when badge is present */}
+                          {isCollapsed && item.badge && (
+                            <span className="absolute top-2 right-3 w-2 h-2 rounded-none bg-red-600 ring-2 ring-white" />
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
-      {/* Admin Profile & Session Footer */}
-      <div className="p-3.5 relative z-10 shrink-0 border-t border-gray-100 bg-[#FCF9F8]">
-        <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-col gap-2.5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-[#286c00] flex items-center justify-center font-bold text-xs shrink-0">
-              <i className="fa-solid fa-user-shield text-sm" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-gray-900 truncate">{adminName}</p>
-              <p className="text-xs text-gray-600 truncate">{adminRole}</p>
-            </div>
+      {/* Floating Tooltip for Collapsed Sidebar Navigation */}
+      {isCollapsed && hoveredItem && (
+        <div
+          className="fixed left-20 z-50 ml-1.5 bg-white border border-gray-300 shadow-md rounded-none px-3 py-1.5 text-xs pointer-events-none whitespace-nowrap animate-in fade-in duration-100"
+          style={{ top: hoveredItem.y }}
+        >
+          <div className="font-bold text-gray-900 flex items-center gap-2">
+            <span>{hoveredItem.label}</span>
+            {hoveredItem.badge && (
+              <span
+                className={`text-[10px] font-bold px-1 py-0.2 rounded-none border tabular-nums ${
+                  hoveredItem.badgeColor || 'bg-gray-100 text-gray-700 border-gray-300'
+                }`}
+              >
+                {hoveredItem.badge}
+              </span>
+            )}
           </div>
-
-          <button
-            onClick={handleLogout}
-            aria-label="Sign out of administrative session"
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-          >
-            <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
-            <span>Sign Out</span>
-          </button>
+          <div className="text-[10px] uppercase font-bold text-[#007a6c] tracking-wider mt-0.5">
+            {hoveredItem.section}
+          </div>
         </div>
+      )}
+
+      {/* User Session & Logout Footer */}
+      <div className="p-3 border-t border-gray-300 bg-[#FCF9F8] shrink-0">
+        {!isCollapsed ? (
+          <div className="bg-white border border-gray-300 rounded-none p-3 space-y-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-none bg-emerald-100 text-[#1f5400] border border-emerald-300 flex items-center justify-center font-bold text-xs shrink-0">
+                <i className="fa-solid fa-user-shield text-xs" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-gray-900 truncate">{adminName}</p>
+                <p className="text-[11px] text-gray-500 font-medium truncate">{adminRole}</p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              aria-label="Sign out of administrative session"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 rounded-none transition-colors"
+            >
+              <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <div
+              className="w-8 h-8 rounded-none bg-emerald-100 text-[#1f5400] border border-emerald-300 flex items-center justify-center font-bold text-xs"
+              title={`${adminName} (${adminRole})`}
+            >
+              <i className="fa-solid fa-user-shield text-xs" />
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              aria-label="Sign Out"
+              className="w-8 h-8 flex items-center justify-center text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 rounded-none transition-colors"
+            >
+              <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );
