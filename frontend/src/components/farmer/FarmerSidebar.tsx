@@ -30,11 +30,16 @@ export default function FarmerSidebar() {
       <aside className={`${isCollapsed ? 'w-[96px]' : 'w-[260px]'} bg-white rounded-[24px] shadow-sm flex flex-col h-full overflow-hidden transition-all duration-300`}>
        
         {/* Logo */}
-        <div className={`flex items-center pb-6 mt-8 ${isCollapsed ? 'px-0 justify-center' : 'px-6'}`}>
-          <div className={`w-10 h-10 bg-[#bbf7d0] rounded-xl flex items-center justify-center text-[#16a34a] flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`}>
-            <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>agriculture</span>
+        <div className={`flex items-center pb-6 mt-6 ${isCollapsed ? 'px-0 justify-center' : 'px-6'}`}>
+          <div className={`w-10 h-10 bg-gradient-to-tr from-emerald-600 to-green-500 rounded-xl flex items-center justify-center text-white flex-shrink-0 shadow-xs ${isCollapsed ? '' : 'mr-3'}`}>
+            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>agriculture</span>
           </div>
-          {!isCollapsed && <span className="font-bold text-xl tracking-tight text-gray-900 whitespace-nowrap">Seller Center</span>}
+          {!isCollapsed && (
+            <div className="flex flex-col">
+              <span className="font-extrabold text-base tracking-tight text-gray-900 leading-none">GreenHarvest</span>
+              <span className="text-[10px] font-bold text-emerald-700 tracking-wider uppercase mt-1">Producer Hub</span>
+            </div>
+          )}
         </div>
 
         {/* Menu */}
