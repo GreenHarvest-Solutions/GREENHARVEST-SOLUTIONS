@@ -1,11 +1,13 @@
-// Backend: dedicated upload endpoint for Cloudinary
+// Backend: dedicated upload endpoint for Cloudinary & Local Storage Fallback
+const path = require('path');
+const fs = require('fs');
 const logger = require('../utils/logger');
-const { cloudinary, upload } = require('../config/cloudinary');
+const { cloudinary, upload, isCloudinaryConfigured } = require('../config/cloudinary');
 const { pool } = require('../config/db');
 
 /**
  * POST /api/upload/product-image
- * Multer middleware handles the multipart upload to Cloudinary.
+ * Multer middleware handles upload to Cloudinary (or local disk fallback).
  * Returns { url, public_id } on success.
  */
 const uploadProductImage = [
@@ -16,9 +18,13 @@ const uploadProductImage = [
         return res.status(400).json({ message: 'No image file provided' });
       }
 
-      // multer-storage-cloudinary already uploaded the file; the URL is in req.file.path
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const imageUrl = req.file.path && req.file.path.startsWith('http')
+        ? req.file.path
+        : `${baseUrl}/uploads/${req.file.filename}`;
+
       return res.status(200).json({
-        url: req.file.path,
+        url: imageUrl,
         public_id: req.file.filename,
       });
     } catch (error) {
@@ -30,7 +36,7 @@ const uploadProductImage = [
 
 /**
  * POST /api/upload/product-images
- * Multer middleware handles multi-image upload to Cloudinary (up to 5 images).
+ * Multer middleware handles multi-image upload to Cloudinary or disk (up to 5 images).
  * Returns { images: [{ url, public_id }], urls: string[] } on success.
  */
 const uploadProductImages = [
@@ -41,10 +47,16 @@ const uploadProductImages = [
         return res.status(400).json({ message: 'No image files provided' });
       }
 
-      const uploaded = req.files.map((file) => ({
-        url: file.path,
-        public_id: file.filename,
-      }));
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const uploaded = req.files.map((file) => {
+        const url = file.path && file.path.startsWith('http')
+          ? file.path
+          : `${baseUrl}/uploads/${file.filename}`;
+        return {
+          url,
+          public_id: file.filename,
+        };
+      });
 
       return res.status(200).json({
         images: uploaded,
@@ -59,7 +71,7 @@ const uploadProductImages = [
 
 /**
  * DELETE /api/upload/product-image
- * Deletes an image from Cloudinary by public_id.
+ * Deletes an image from Cloudinary or local disk by public_id.
  */
 const ALLOWED_UPLOAD_PREFIX = 'greenharvest/products/';
 
@@ -71,8 +83,23 @@ const deleteProductImage = async (req, res) => {
     }
 
     // Path traversal rejection
-    if (public_id.includes('..') || public_id.includes('\0')) {
-      return res.status(400).json({ message: 'Invalid public_id' });
+    if (public_id.includes('..') || public_id.includes('\0') || public_id.includes('/') || public_id.includes('\\')) {
+      if (!public_id.startsWith(ALLOWED_UPLOAD_PREFIX)) {
+        return res.status(400).json({ message: 'Invalid public_id' });
+      }
+    }
+
+    // Local disk deletion fallback
+    if (!isCloudinaryConfigured || public_id.startsWith('crop_')) {
+      const localFilePath = path.join(__dirname, '../../public/uploads', path.basename(public_id));
+      if (fs.existsSync(localFilePath)) {
+        try {
+          fs.unlinkSync(localFilePath);
+        } catch {
+          // Non-blocking
+        }
+      }
+      return res.status(200).json({ message: 'Image deleted successfully' });
     }
 
     if (!public_id.startsWith(ALLOWED_UPLOAD_PREFIX)) {

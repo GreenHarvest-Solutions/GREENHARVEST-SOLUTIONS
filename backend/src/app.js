@@ -1,6 +1,7 @@
 // App composition moved into src/app.js during the structure refactor.
 require("./config/env");
 
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -113,6 +114,9 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/returns", returnsRoutes);
 app.use("/api/market-insights", marketInsightsRoutes);
+
+// Static uploads serving for uploaded crop pictures
+app.use("/uploads", express.static(path.join(__dirname, "../public/uploads")));
 
 app.get("/", async (req, res) => {
   res.status(200).send("Agricultural Ecommerce API Running");
