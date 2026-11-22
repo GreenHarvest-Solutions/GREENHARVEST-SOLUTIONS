@@ -10,8 +10,8 @@ export default function ContactSupport() {
             <span className="material-symbols-outlined">arrow_back</span>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Contact Support</h1>
-            <p className="text-sm text-gray-500 mt-1">We're here to help you grow your business.</p>
+            <h1 className="text-2xl font-bold text-gray-800">Producer Support Hub</h1>
+            <p className="text-sm text-gray-500 mt-1">GreenHarvest Agro-Tech Support • Dedicated assistance for Ethiopian producers and cooperatives.</p>
           </div>
         </div>
 
