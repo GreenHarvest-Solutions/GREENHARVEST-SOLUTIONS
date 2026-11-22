@@ -386,6 +386,11 @@ export default function ManageProductsPage() {
                           ETB {Number(item.price).toLocaleString()}
                           <span className="text-xs text-gray-400 font-normal ml-1">/ {item.unit || 'kg'}</span>
                         </div>
+                        {(!item.unit || item.unit.toLowerCase() === 'kg') && (
+                          <span className="text-[10px] text-emerald-700/80 block font-medium">
+                            ≈ ETB {(Number(item.price) * 100).toLocaleString()} / quintal
+                          </span>
+                        )}
                         {item.discount_price && (
                           <span className="text-xs text-emerald-600 font-semibold block">
                             Disc: ETB {Number(item.discount_price).toLocaleString()}
