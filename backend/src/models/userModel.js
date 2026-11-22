@@ -496,7 +496,176 @@ const updateMfaPreference = async ({ user_id, enabled }) => {
 	return result.rows[0] || null;
 };
 
+const calculateProfileProgress = (profile = {}) => {
+	const sections = {
+		personal: Boolean(profile.name && profile.email && profile.phone),
+		farm_info: Boolean(profile.farm_name && (profile.farm_size_hectares !== null && profile.farm_size_hectares !== undefined) && (profile.farming_type || profile.farm_type)),
+		location: Boolean(profile.region && (profile.woreda || profile.kebele || profile.pickup_address || profile.address)),
+		crops: Boolean(Array.isArray(profile.primary_crops) && profile.primary_crops.length > 0),
+		payout: Boolean(profile.bank_name && profile.bank_account_number),
+	};
+
+	let completedCount = 0;
+	if (sections.personal) completedCount++;
+	if (sections.farm_info) completedCount++;
+	if (sections.location) completedCount++;
+	if (sections.crops) completedCount++;
+	if (sections.payout) completedCount++;
+
+	const score = Math.round((completedCount / 5) * 100);
+
+	return {
+		score,
+		sections,
+		profile,
+	};
+};
+
+const getFarmerProfileExtended = async (userId) => {
+	const result = await pool.query(
+		`
+			SELECT
+				u.id,
+				u.name,
+				u.email,
+				u.phone,
+				u.address,
+				u.account_status,
+				u.kyc_status,
+				u.kyc_tier,
+				u.is_verified,
+				u.email_verified,
+				u.created_at,
+				fp.profile_id,
+				fp.farm_name,
+				COALESCE(fp.farming_type, fp.farm_type) AS farming_type,
+				fp.farm_type,
+				fp.bio,
+				fp.region,
+				fp.woreda,
+				fp.kebele,
+				fp.gps_coordinates,
+				fp.farm_size_hectares,
+				fp.primary_crops,
+				fp.id_number,
+				fp.id_type,
+				fp.bank_name,
+				fp.bank_account_number,
+				fp.pickup_address,
+				fp.pickup_instructions
+			FROM users u
+			LEFT JOIN farmer_profiles fp ON fp.user_id = u.id
+			WHERE u.id = $1
+		`,
+		[userId]
+	);
+
+	if (!result.rows[0]) {
+		return null;
+	}
+
+	return result.rows[0];
+};
+
+const updateFarmerProfileExtended = async (userId, data = {}) => {
+	const client = await pool.connect();
+	try {
+		await client.query("BEGIN");
+
+		// 1. Update users fields if provided
+		const userFields = [];
+		const userValues = [];
+		let pCount = 1;
+
+		if (data.name !== undefined) {
+			userFields.push(`name = $${pCount++}`);
+			userValues.push(data.name);
+		}
+		if (data.phone !== undefined) {
+			userFields.push(`phone = $${pCount++}`);
+			userValues.push(data.phone);
+		}
+		if (data.address !== undefined) {
+			userFields.push(`address = $${pCount++}`);
+			userValues.push(data.address);
+		}
+
+		if (userFields.length > 0) {
+			userValues.push(userId);
+			await client.query(
+				`UPDATE users SET ${userFields.join(", ")} WHERE id = $${pCount}`,
+				userValues
+			);
+		}
+
+		// 2. Upsert farmer_profiles
+		await client.query(
+			`
+				INSERT INTO farmer_profiles (
+					user_id, farm_name, farm_type, bio, region, woreda, kebele,
+					gps_coordinates, farm_size_hectares, farming_type, primary_crops,
+					id_number, id_type, bank_name, bank_account_number, pickup_address,
+					pickup_instructions, updated_at
+				) VALUES (
+					$1, $2, $3, $4, $5, $6, $7,
+					$8, $9, $10, $11,
+					$12, $13, $14, $15, $16,
+					$17, NOW()
+				)
+				ON CONFLICT (user_id) DO UPDATE SET
+					farm_name = COALESCE(EXCLUDED.farm_name, farmer_profiles.farm_name),
+					farm_type = COALESCE(EXCLUDED.farm_type, farmer_profiles.farm_type),
+					bio = COALESCE(EXCLUDED.bio, farmer_profiles.bio),
+					region = COALESCE(EXCLUDED.region, farmer_profiles.region),
+					woreda = COALESCE(EXCLUDED.woreda, farmer_profiles.woreda),
+					kebele = COALESCE(EXCLUDED.kebele, farmer_profiles.kebele),
+					gps_coordinates = COALESCE(EXCLUDED.gps_coordinates, farmer_profiles.gps_coordinates),
+					farm_size_hectares = COALESCE(EXCLUDED.farm_size_hectares, farmer_profiles.farm_size_hectares),
+					farming_type = COALESCE(EXCLUDED.farming_type, farmer_profiles.farming_type),
+					primary_crops = COALESCE(EXCLUDED.primary_crops, farmer_profiles.primary_crops),
+					id_number = COALESCE(EXCLUDED.id_number, farmer_profiles.id_number),
+					id_type = COALESCE(EXCLUDED.id_type, farmer_profiles.id_type),
+					bank_name = COALESCE(EXCLUDED.bank_name, farmer_profiles.bank_name),
+					bank_account_number = COALESCE(EXCLUDED.bank_account_number, farmer_profiles.bank_account_number),
+					pickup_address = COALESCE(EXCLUDED.pickup_address, farmer_profiles.pickup_address),
+					pickup_instructions = COALESCE(EXCLUDED.pickup_instructions, farmer_profiles.pickup_instructions),
+					updated_at = NOW()
+			`,
+			[
+				userId,
+				data.farm_name ?? null,
+				data.farm_type ?? data.farming_type ?? null,
+				data.bio ?? null,
+				data.region ?? null,
+				data.woreda ?? null,
+				data.kebele ?? null,
+				data.gps_coordinates ?? null,
+				data.farm_size_hectares !== undefined && data.farm_size_hectares !== null && data.farm_size_hectares !== "" ? Number(data.farm_size_hectares) : null,
+				data.farming_type ?? data.farm_type ?? null,
+				data.primary_crops ?? null,
+				data.id_number ?? null,
+				data.id_type ?? null,
+				data.bank_name ?? null,
+				data.bank_account_number ?? null,
+				data.pickup_address ?? null,
+				data.pickup_instructions ?? null,
+			]
+		);
+
+		await client.query("COMMIT");
+
+		const updated = await getFarmerProfileExtended(userId);
+		return updated;
+	} catch (error) {
+		await client.query("ROLLBACK");
+		throw error;
+	} finally {
+		client.release();
+	}
+};
+
 module.exports = {
+	calculateProfileProgress,
 	clearPasswordResetToken,
 	createUser,
 	findAllUsers,
@@ -505,9 +674,11 @@ module.exports = {
 	findUserByIdWithPassword,
 	findUserByPasswordResetToken,
 	findUserByVerificationToken,
+	getFarmerProfileExtended,
 	markEmailVerified,
 	storeEmailVerificationToken,
 	storePasswordResetToken,
+	updateFarmerProfileExtended,
 	updateLastLoginAt,
 	updateMfaPreference,
 	updateUserPassword,

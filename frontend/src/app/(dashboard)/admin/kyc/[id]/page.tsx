@@ -303,10 +303,35 @@ export default function AdminKycDossierPage({ params }: Props) {
               </div>
 
               <div className="space-y-1">
-                <div className="font-semibold text-gray-500 uppercase tracking-wider">Region / Agricultural Zone</div>
+                <div className="font-semibold text-gray-500 uppercase tracking-wider">Region / Woreda / Kebele</div>
                 <div className="flex items-center gap-1 text-gray-800 font-medium">
-                  <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                  {farmer.farm_type || 'Unspecified Location'}
+                  <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  {[farmer.region, farmer.woreda, farmer.kebele].filter(Boolean).join(' • ') || farmer.farm_type || 'Unspecified Location'}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-semibold text-gray-500 uppercase tracking-wider">Farming Model & Size</div>
+                <div className="font-medium text-gray-800 capitalize">
+                  {farmer.farming_type || 'Smallholder'} {farmer.farm_size_hectares ? `(${farmer.farm_size_hectares} ha)` : ''}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-semibold text-gray-500 uppercase tracking-wider">Primary Crops</div>
+                <div className="font-medium text-gray-800">
+                  {Array.isArray(farmer.primary_crops) && farmer.primary_crops.length > 0
+                    ? farmer.primary_crops.join(', ')
+                    : 'Not specified'}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="font-semibold text-gray-500 uppercase tracking-wider">Banking & Payout</div>
+                <div className="font-medium text-gray-800">
+                  {farmer.bank_name
+                    ? `${farmer.bank_name} (${farmer.bank_account_number || 'No Account #'})`
+                    : 'No bank account recorded'}
                 </div>
               </div>
 
@@ -325,6 +350,15 @@ export default function AdminKycDossierPage({ params }: Props) {
                   {farmer.phone || 'No phone recorded'}
                 </div>
               </div>
+
+              {farmer.pickup_address && (
+                <div className="md:col-span-2 space-y-1">
+                  <div className="font-semibold text-gray-500 uppercase tracking-wider">Pickup Address & Instructions</div>
+                  <div className="text-gray-800 font-medium">
+                    {farmer.pickup_address} {farmer.pickup_instructions ? `— ${farmer.pickup_instructions}` : ''}
+                  </div>
+                </div>
+              )}
             </div>
 
             {farmer.bio && (

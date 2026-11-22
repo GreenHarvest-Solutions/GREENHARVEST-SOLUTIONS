@@ -67,9 +67,38 @@ const getFarmerProfile = async (req, res) => {
   }
 };
 
+const getFarmerProfileProgress = async (req, res) => {
+  try {
+    const userId = req.user.user_id || req.user.id;
+    const progress = await userService.getFarmerProfileProgress(userId);
+    return res.status(200).json(progress);
+  } catch (error) {
+    return handleControllerError(res, "Get farmer profile progress failed", error, {
+      userId: req.user && (req.user.user_id || req.user.id),
+    });
+  }
+};
+
+const updateFarmerProfileExtended = async (req, res) => {
+  try {
+    const userId = req.user.user_id || req.user.id;
+    const result = await userService.updateFarmerProfileExtended(userId, req.body || {});
+    return res.status(200).json({
+      message: "Farmer profile updated successfully",
+      ...result,
+    });
+  } catch (error) {
+    return handleControllerError(res, "Update farmer profile extended failed", error, {
+      userId: req.user && (req.user.user_id || req.user.id),
+    });
+  }
+};
+
 module.exports = {
   getMe,
   updateMe,
   listUsers,
   getFarmerProfile,
+  getFarmerProfileProgress,
+  updateFarmerProfileExtended,
 };

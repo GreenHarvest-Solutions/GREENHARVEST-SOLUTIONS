@@ -131,17 +131,32 @@ const getKycDossier = async (farmerId) => {
       u.name,
       u.email,
       u.phone,
+      u.address,
       u.role,
       u.account_status,
       u.is_verified,
+      u.email_verified,
       u.kyc_status,
       u.kyc_tier,
       u.created_at,
       u.updated_at,
       fp.profile_id,
       fp.farm_name,
+      COALESCE(fp.farming_type, fp.farm_type) AS farming_type,
       fp.farm_type,
-      fp.bio
+      fp.bio,
+      fp.region,
+      fp.woreda,
+      fp.kebele,
+      fp.gps_coordinates,
+      fp.farm_size_hectares,
+      fp.primary_crops,
+      fp.id_number,
+      fp.id_type,
+      fp.bank_name,
+      fp.bank_account_number,
+      fp.pickup_address,
+      fp.pickup_instructions
     FROM users u
     LEFT JOIN farmer_profiles fp ON fp.user_id = u.id
     WHERE u.id = $1 AND u.role = 'farmer'`,
@@ -203,6 +218,10 @@ const addKycDocument = async ({
   documentType,
   documentUrl,
   publicId = null,
+  documentCategory = "identity",
+  ocrRawText = null,
+  extractedData = {},
+  idHash = null,
   expiresAt = null,
   reviewerId = null,
   actorId = null,
@@ -211,26 +230,204 @@ const addKycDocument = async ({
 }) => {
   const res = await pool.query(
     `INSERT INTO kyc_documents 
-      (user_id, document_type, document_url, public_id, status, reviewer_id, expires_at)
-     VALUES ($1, $2, $3, $4, 'pending', $5, $6)
+      (user_id, document_type, document_url, public_id, document_category, ocr_raw_text, extracted_data, id_hash, status, reviewer_id, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
      RETURNING *`,
-    [userId, documentType, documentUrl, publicId, reviewerId, expiresAt]
+    [
+      userId,
+      documentType,
+      documentUrl,
+      publicId,
+      documentCategory || "identity",
+      ocrRawText,
+      JSON.stringify(extractedData || {}),
+      idHash,
+      reviewerId,
+      expiresAt,
+    ]
   );
 
   const newDoc = res.rows[0];
 
+  // Advance farmer status from not_submitted to pending
+  await pool.query(
+    `UPDATE users
+     SET kyc_status = 'pending', updated_at = NOW()
+     WHERE id = $1 AND (kyc_status = 'not_submitted' OR kyc_status IS NULL)`,
+    [userId]
+  );
+
   await auditService.record({
-    actorId: actorId || reviewerId,
+    actorId: actorId || reviewerId || userId,
     action: "kyc.document_uploaded",
     entityType: "kyc_document",
     entityId: newDoc.id,
     afterState: newDoc,
-    reason: `Uploaded ${documentType} for farmer KYC`,
+    reason: `Uploaded ${documentType} (${documentCategory || "identity"}) for farmer KYC`,
     ipAddress,
     userAgent,
   });
 
   return newDoc;
+};
+
+/**
+ * Delete a KYC document by farmer
+ */
+const deleteFarmerKycDocument = async ({ documentId, userId, actorId = null, ipAddress = null, userAgent = null }) => {
+  const existing = await pool.query(
+    `SELECT * FROM kyc_documents WHERE id = $1 AND user_id = $2`,
+    [documentId, userId]
+  );
+
+  if (existing.rows.length === 0) {
+    return null;
+  }
+
+  const doc = existing.rows[0];
+
+  if (doc.status === "approved" && actorId !== userId) {
+    const error = new Error("Approved documents cannot be removed directly");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await pool.query(`DELETE FROM kyc_documents WHERE id = $1`, [documentId]);
+
+  await auditService.record({
+    actorId: actorId || userId,
+    action: "kyc.document_deleted",
+    entityType: "kyc_document",
+    entityId: documentId,
+    beforeState: doc,
+    reason: `Farmer #${userId} deleted KYC document ${documentId}`,
+    ipAddress,
+    userAgent,
+  });
+
+  return doc;
+};
+
+/**
+ * Get farmer KYC self-service status & allowed actions
+ */
+const getFarmerKycStatus = async (userId) => {
+  const userRes = await pool.query(
+    `SELECT id, name, email, phone, kyc_status, kyc_tier, is_verified, email_verified, created_at
+     FROM users WHERE id = $1`,
+    [userId]
+  );
+
+  if (!userRes.rows[0]) {
+    return null;
+  }
+
+  const user = userRes.rows[0];
+
+  const [docsRes, latestReviewRes] = await Promise.all([
+    pool.query(
+      `SELECT id, document_type, document_category, document_url, public_id, status, rejection_reason, created_at, reviewed_at
+       FROM kyc_documents
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT kr.id, kr.decision, kr.tier, kr.reason, kr.notes, kr.created_at, rev.name AS reviewer_name
+       FROM kyc_reviews kr
+       LEFT JOIN users rev ON rev.id = kr.reviewer_id
+       WHERE kr.user_id = $1
+       ORDER BY kr.created_at DESC
+       LIMIT 1`,
+      [userId]
+    ),
+  ]);
+
+  let allowedActions = [];
+  const status = user.kyc_status || "not_submitted";
+
+  if (["not_submitted", "pending", "changes_requested"].includes(status)) {
+    allowedActions = ["upload_document", "remove_document", "submit_application"];
+  } else if (status === "under_review" || status === "field_visit") {
+    allowedActions = ["view_status"];
+  } else if (status === "approved") {
+    allowedActions = ["full_selling_privileges"];
+  } else if (status === "rejected") {
+    allowedActions = ["view_feedback", "reapply", "upload_document"];
+  }
+
+  return {
+    farmer_id: user.id,
+    name: user.name,
+    email: user.email,
+    kyc_status: status,
+    kyc_tier: user.kyc_tier || "provisional",
+    is_verified: Boolean(user.is_verified),
+    email_verified: Boolean(user.email_verified),
+    documents: docsRes.rows,
+    latest_review: latestReviewRes.rows[0] || null,
+    allowed_actions: allowedActions,
+  };
+};
+
+/**
+ * Farmer submits KYC verification application for administrative review
+ */
+const submitFarmerKyc = async (userId, { actorId = null, ipAddress = null, userAgent = null } = {}) => {
+  const userRes = await pool.query(`SELECT id, kyc_status, kyc_tier FROM users WHERE id = $1`, [userId]);
+  if (!userRes.rows[0]) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const user = userRes.rows[0];
+
+  const docCheck = await pool.query(`SELECT COUNT(*) AS total FROM kyc_documents WHERE user_id = $1`, [userId]);
+  const docCount = parseInt(docCheck.rows[0].total, 10);
+  if (docCount === 0) {
+    const error = new Error("Please upload at least one identification document before submitting");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `UPDATE users
+       SET kyc_status = 'under_review', updated_at = NOW()
+       WHERE id = $1`,
+      [userId]
+    );
+
+    await auditService.record({
+      actorId: actorId || userId,
+      action: "kyc.application_submitted",
+      entityType: "user",
+      entityId: userId,
+      beforeState: { kyc_status: user.kyc_status },
+      afterState: { kyc_status: "under_review" },
+      reason: `Farmer #${userId} submitted KYC verification application with ${docCount} document(s)`,
+      ipAddress,
+      userAgent,
+      client,
+    });
+
+    await client.query("COMMIT");
+
+    return {
+      success: true,
+      kyc_status: "under_review",
+      message: "KYC application submitted successfully for administrative review",
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 /**
@@ -372,11 +569,12 @@ const reviewKyc = async ({
     const review = reviewRes.rows[0];
 
     // Update users table
+    const isVerified = decision === "approve";
     await client.query(
       `UPDATE users 
-       SET kyc_status = $1, kyc_tier = $2, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3`,
-      [nextKycStatus, nextTier, farmerId]
+       SET kyc_status = $1, kyc_tier = $2, is_verified = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4`,
+      [nextKycStatus, nextTier, isVerified, farmerId]
     );
 
     // Notify farmer
@@ -507,6 +705,9 @@ module.exports = {
   getKycDossier,
   addKycDocument,
   deleteKycDocument,
+  deleteFarmerKycDocument,
+  getFarmerKycStatus,
+  submitFarmerKyc,
   addFieldVisit,
   reviewKyc,
   getKycHistory,

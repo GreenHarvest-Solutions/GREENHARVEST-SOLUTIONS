@@ -104,6 +104,26 @@ export default function FarmerSidebar() {
             <SubNavItem href="/farmer/market" label="Market Insights" isActive={pathname === '/farmer/market'} />
           </NavGroup>
 
+          <div className={`mt-4 mb-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider ${isCollapsed ? 'text-center px-0' : 'px-2'}`}>
+            {isCollapsed ? '•••' : 'Account & Trust'}
+          </div>
+
+          <NavItem 
+            href="/farmer/verification" 
+            icon="verified_user" 
+            label="Verification Center" 
+            isActive={pathname === '/farmer/verification'} 
+            isCollapsed={isCollapsed}
+          />
+
+          <NavItem 
+            href="/farmer/profile" 
+            icon="account_circle" 
+            label="Farm Profile" 
+            isActive={pathname === '/farmer/profile'} 
+            isCollapsed={isCollapsed}
+          />
+
         </div>
 
         {/* Toggle Button */}

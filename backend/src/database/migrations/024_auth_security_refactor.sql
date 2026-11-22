@@ -42,3 +42,4 @@ SET
 FROM users u
 WHERE p.farmer_id = u.id
   AND (u.account_status IN ('suspended', 'banned', 'deactivated') OR p.status = 'deactivated');
+

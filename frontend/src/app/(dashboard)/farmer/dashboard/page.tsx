@@ -171,6 +171,70 @@ export default function FarmerDashboard() {
           <div className="w-full max-w-[1440px] mx-auto p-6 md:p-8 flex flex-col xl:flex-row gap-8">
             
             <div className="flex-1 flex flex-col gap-8 min-w-0">
+              {/* KYC ONBOARDING & VERIFICATION STATUS BANNER */}
+              {user && !user.is_verified && (
+                <div
+                  className={`rounded-2xl p-5 border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm transition-all ${
+                    user.kyc_status === 'changes_requested'
+                      ? 'bg-amber-50 border-amber-300'
+                      : user.kyc_status === 'under_review' || user.kyc_status === 'field_visit'
+                      ? 'bg-blue-50 border-blue-200'
+                      : user.kyc_status === 'rejected'
+                      ? 'bg-rose-50 border-rose-200'
+                      : 'bg-emerald-50/70 border-emerald-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-3.5">
+                    <span
+                      className={`material-symbols-outlined text-2xl mt-0.5 ${
+                        user.kyc_status === 'changes_requested'
+                          ? 'text-amber-600'
+                          : user.kyc_status === 'under_review'
+                          ? 'text-blue-600'
+                          : user.kyc_status === 'rejected'
+                          ? 'text-rose-600'
+                          : 'text-emerald-700'
+                      }`}
+                    >
+                      {user.kyc_status === 'changes_requested'
+                        ? 'warning'
+                        : user.kyc_status === 'under_review'
+                        ? 'hourglass_top'
+                        : user.kyc_status === 'rejected'
+                        ? 'cancel'
+                        : 'verified_user'}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-gray-900 text-sm">
+                          {user.kyc_status === 'changes_requested' && 'Action Required: Update KYC Documents'}
+                          {(user.kyc_status === 'under_review' || user.kyc_status === 'field_visit') && 'KYC Application Under Review'}
+                          {user.kyc_status === 'rejected' && 'Verification Application Rejected'}
+                          {(!user.kyc_status || user.kyc_status === 'not_submitted' || user.kyc_status === 'pending') && 'Complete Farmer Verification (Provisional Selling)'}
+                        </h3>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/80 border text-gray-700">
+                          {user.kyc_tier || 'Provisional'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5 max-w-2xl leading-relaxed">
+                        {user.kyc_status === 'changes_requested' && 'Review officers requested modifications. Click below to view feedback notes and upload corrected documents.'}
+                        {(user.kyc_status === 'under_review' || user.kyc_status === 'field_visit') && 'Your credentials are being examined by operations. In the meantime, you can create drafts and manage orders.'}
+                        {user.kyc_status === 'rejected' && 'Your previous verification application could not be approved. Review notes and submit updated credentials.'}
+                        {(!user.kyc_status || user.kyc_status === 'not_submitted' || user.kyc_status === 'pending') && 'Unverified farmers can draft and submit listings, but new products require human approval before publication. Complete verification to unlock automatic hybrid publication.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link
+                    href="/farmer/verification"
+                    className="self-start sm:self-center shrink-0 bg-[#2d9a33] hover:bg-[#257d2a] text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">verified</span>
+                    {user.kyc_status === 'changes_requested' ? 'Update Documents' : 'Verification Center'}
+                  </Link>
+                </div>
+              )}
+
               {/* SNAPSHOT ROW */}
               <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-wrap md:flex-nowrap items-center shadow-sm">
                 <div className="flex items-center border-b md:border-b-0 md:border-r border-gray-200 pb-4 md:pb-0 pr-0 md:pr-8 mr-0 md:mr-8 mb-4 md:mb-0 w-full md:w-auto">

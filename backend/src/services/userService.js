@@ -43,8 +43,32 @@ const listUsers = async (actor) => {
   }));
 };
 
+const getFarmerProfileProgress = async (userId) => {
+  const profile = await userModel.getFarmerProfileExtended(userId);
+  if (!profile) {
+    throw createServiceError("Farmer profile not found", 404);
+  }
+
+  return userModel.calculateProfileProgress(profile);
+};
+
+const updateFarmerProfileExtended = async (userId, data) => {
+  const updated = await userModel.updateFarmerProfileExtended(userId, data);
+  if (!updated) {
+    throw createServiceError("Failed to update farmer profile", 404);
+  }
+
+  const progress = userModel.calculateProfileProgress(updated);
+  return {
+    profile: updated,
+    ...progress,
+  };
+};
+
 module.exports = {
   getMe,
   updateProfile,
   listUsers,
+  getFarmerProfileProgress,
+  updateFarmerProfileExtended,
 };

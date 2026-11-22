@@ -285,6 +285,88 @@ class APIClient {
     });
   }
 
+  async getFarmerProfileProgress() {
+    return this.request<{
+      score: number;
+      sections: {
+        personal: boolean;
+        farm_info: boolean;
+        location: boolean;
+        crops: boolean;
+        payout: boolean;
+      };
+      profile: any;
+    }>({
+      method: 'GET',
+      url: '/users/farmer/profile-progress',
+    });
+  }
+
+  async updateFarmerProfileExtended(data: any) {
+    return this.request<{
+      message: string;
+      score: number;
+      sections: any;
+      profile: any;
+    }>({
+      method: 'PUT',
+      url: '/users/farmer/profile-extended',
+      data,
+    });
+  }
+
+  async getFarmerKycStatus() {
+    return this.request<{
+      farmer_id: number;
+      name: string;
+      email: string;
+      kyc_status: string;
+      kyc_tier: string;
+      is_verified: boolean;
+      email_verified: boolean;
+      documents: any[];
+      latest_review: any;
+      allowed_actions: string[];
+    }>({
+      method: 'GET',
+      url: '/farmer/kyc',
+    });
+  }
+
+  async uploadFarmerKycDocument(data: any) {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    return this.request<{
+      message: string;
+      document: any;
+    }>({
+      method: 'POST',
+      url: '/farmer/kyc/documents',
+      data,
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+    });
+  }
+
+  async deleteFarmerKycDocument(documentId: number | string) {
+    return this.request<{
+      message: string;
+      document: any;
+    }>({
+      method: 'DELETE',
+      url: `/farmer/kyc/documents/${documentId}`,
+    });
+  }
+
+  async submitFarmerKyc() {
+    return this.request<{
+      success: boolean;
+      kyc_status: string;
+      message: string;
+    }>({
+      method: 'POST',
+      url: '/farmer/kyc/submit',
+    });
+  }
+
   async getStoreLayoutByFarmerId(farmerId: string) {
     return this.request<{ layout: any }>({
       method: 'GET',
