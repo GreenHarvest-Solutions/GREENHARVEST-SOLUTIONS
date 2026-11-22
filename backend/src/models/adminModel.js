@@ -273,6 +273,14 @@ const verifyFarmer = async (farmerId, isVerified, actorId = null, reason = null)
 		});
 
 		await client.query("COMMIT");
+
+		try {
+			const { invalidateAccountStatusCache } = require("../middleware/authMiddleware");
+			invalidateAccountStatusCache(userId);
+		} catch (cacheErr) {
+			// Ignore cache invalidation error
+		}
+
 		return updated;
 	} catch (error) {
 		await client.query("ROLLBACK");
@@ -375,6 +383,14 @@ const moderateProduct = async (productId, status, actorId = null, reason = null)
 		});
 
 		await client.query("COMMIT");
+
+		try {
+			const { invalidateAccountStatusCache } = require("../middleware/authMiddleware");
+			invalidateAccountStatusCache(userId);
+		} catch (cacheErr) {
+			// Ignore cache invalidation error
+		}
+
 		return updated;
 	} catch (error) {
 		await client.query("ROLLBACK");
@@ -841,6 +857,14 @@ const updateUserStatus = async (userId, status, actorId = null, reason = null) =
 		});
 
 		await client.query("COMMIT");
+
+		try {
+			const { invalidateAccountStatusCache } = require("../middleware/authMiddleware");
+			invalidateAccountStatusCache(userId);
+		} catch (cacheErr) {
+			// Ignore cache invalidation error
+		}
+
 		return updated;
 	} catch (error) {
 		await client.query("ROLLBACK");

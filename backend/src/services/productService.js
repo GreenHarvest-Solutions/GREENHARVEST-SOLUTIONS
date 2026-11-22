@@ -175,7 +175,7 @@ const createProduct = async ({ user, payload }) => {
 	});
 
 	try {
-		const createdProduct = await productModel.findProductById(product.id);
+		const createdProduct = await productModel.findProductById(product.id, { includeUnpublished: true });
 
 		if (createdProduct) {
 			return createdProduct;
@@ -269,7 +269,7 @@ const updateProduct = async ({ user, productId, payload }) => {
 		image_url: productValues.image_url !== undefined ? productValues.image_url : null,
 	});
 
-	return productModel.findProductById(updatedProduct.id);
+	return productModel.findProductById(updatedProduct.id, { includeUnpublished: true });
 };
 
 const deleteProduct = async ({ user, productId }) => {

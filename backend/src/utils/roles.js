@@ -9,6 +9,7 @@ const ROLE_ALIASES = {
 };
 
 const ALLOWED_ROLES = ["admin", "farmer", "buyer", "delivery_partner"];
+const ALLOWED_PUBLIC_REGISTRATION_ROLES = ["farmer", "buyer", "delivery_partner"];
 
 const normalizeRole = (role) => {
   if (role === undefined || role === null) {
@@ -29,8 +30,14 @@ const isAllowedRole = (role) => {
   return ALLOWED_ROLES.includes(normalizeRole(role));
 };
 
+const isAllowedPublicRegistrationRole = (role) => {
+  return ALLOWED_PUBLIC_REGISTRATION_ROLES.includes(normalizeRole(role));
+};
+
 module.exports = {
   ALLOWED_ROLES,
+  ALLOWED_PUBLIC_REGISTRATION_ROLES,
   isAllowedRole,
+  isAllowedPublicRegistrationRole,
   normalizeRole,
 };

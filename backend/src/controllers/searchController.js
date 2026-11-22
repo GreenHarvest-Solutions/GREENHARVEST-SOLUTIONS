@@ -36,7 +36,12 @@ const productSearchSelect = `
 const searchProducts = async (req, res) => {
   try {
     const { name, category_id, min_price, max_price, location } = req.query;
-    const conditions = [];
+    const conditions = [
+      "p.deleted_at IS NULL",
+      "p.status = 'active'",
+      "p.moderation_status = 'approved'",
+      "u.account_status = 'active'",
+    ];
     const values = [];
 
     if (name) {
@@ -189,6 +194,10 @@ const getRecommendations = async (req, res) => {
         LEFT JOIN reviews r ON r.product_id = p.product_id
         LEFT JOIN popular_products pop ON pop.id = p.product_id
         WHERE COALESCE(i.quantity, 0) > 0
+          AND p.deleted_at IS NULL
+          AND p.status = 'active'
+          AND p.moderation_status = 'approved'
+          AND u.account_status = 'active'
           AND p.product_id NOT IN (SELECT product_id FROM purchased_products)
           AND (
             p.category_id IN (SELECT category_id FROM preferred_categories)

@@ -20,12 +20,16 @@ const addToCart = async ({ user_id, product_id, quantity }) => {
 
   const product = await productModel.findProductStockById(Number(product_id));
 
-  if (!product) {
-    throw createServiceError("Product not found", 404);
+  if (!product || product.deleted_at || product.status !== "active" || product.moderation_status !== "approved") {
+    throw createServiceError("Product is not available for purchase", 404);
+  }
+
+  if (product.account_status && ["suspended", "banned", "deactivated"].includes(product.account_status)) {
+    throw createServiceError("Seller is not currently active", 403);
   }
 
   const inventory = await inventoryModel.getInventoryByProductId(Number(product_id));
-  const availableStock = inventory ? Number(inventory.quantity) : 0;
+  const availableStock = inventory ? Number(inventory.quantity) : Number(product.stock || 0);
 
   if (availableStock < Number(quantity)) {
     throw createServiceError(`Requested quantity exceeds available stock (A: avail=${availableStock}, qty=${quantity})`, 400);

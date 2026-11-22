@@ -137,10 +137,15 @@ const createOrder = async (buyer_id, payload = {}) => {
 					p.name,
 					p.price,
 					p.stock,
+					p.status,
+					p.moderation_status,
+					p.deleted_at,
+					u.account_status,
 					c.cart_id
 				FROM carts c
 				JOIN cart_items ci ON ci.cart_id = c.cart_id
 				JOIN products p ON p.id = ci.product_id
+				JOIN users u ON u.id = p.farmer_id
 				WHERE c.user_id = $1
 				ORDER BY ci.cart_item_id ASC
 				FOR UPDATE OF ci
@@ -155,6 +160,22 @@ const createOrder = async (buyer_id, payload = {}) => {
 		let total_amount = 0;
 
 		for (const item of cartResult.rows) {
+			// Eligibility Gate: Product must be non-deleted, active, and approved
+			if (item.deleted_at || item.status !== "active" || item.moderation_status !== "approved") {
+				throw createServiceError(
+					`Product "${item.name}" is no longer available for purchase`,
+					409
+				);
+			}
+
+			// Eligibility Gate: Seller must be active (not suspended or banned)
+			if (item.account_status && ["suspended", "banned", "deactivated"].includes(item.account_status)) {
+				throw createServiceError(
+					`The seller for "${item.name}" is currently unable to fulfill orders`,
+					409
+				);
+			}
+
 			if (item.stock < item.quantity) {
 				throw createServiceError(`Insufficient stock for product: ${item.name}`, 400);
 			}

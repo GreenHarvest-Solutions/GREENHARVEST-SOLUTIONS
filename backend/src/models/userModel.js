@@ -105,6 +105,10 @@ const buildUserSelect = async (db = pool) => {
 				${roleNameValue} AS role_name,
 				COALESCE(${roleNameValue}, ${roleValue}, 'buyer') AS role,
 				COALESCE(${nullableColumn(userColumns, "is_verified", "boolean")}, FALSE) AS is_verified,
+				COALESCE(${nullableColumn(userColumns, "email_verified", "boolean")}, FALSE) AS email_verified,
+				COALESCE(${nullableColumn(userColumns, "account_status")}, 'active') AS account_status,
+				COALESCE(${nullableColumn(userColumns, "kyc_status")}, 'not_submitted') AS kyc_status,
+				COALESCE(${nullableColumn(userColumns, "kyc_tier")}, 'provisional') AS kyc_tier,
 				COALESCE(${nullableColumn(userColumns, "mfa_enabled", "boolean")}, FALSE) AS mfa_enabled,
 				${nullableColumn(userColumns, "backup_email")} AS backup_email,
 				${nullableColumn(userColumns, "recovery_phone")} AS recovery_phone,
@@ -164,11 +168,13 @@ const createUser = async ({
 					phone,
 					address,
 					is_verified,
+					email_verified,
+					account_status,
 					mfa_enabled,
 					backup_email,
 					recovery_phone
 				)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, FALSE, $8, $9)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, FALSE, 'active', FALSE, $8, $9)
 				RETURNING
 					id,
 					name,
@@ -178,6 +184,8 @@ const createUser = async ({
 					created_at,
 					role_id,
 					is_verified,
+					email_verified,
+					account_status,
 					mfa_enabled,
 					backup_email,
 					recovery_phone
@@ -332,11 +340,12 @@ const markEmailVerified = async (userId) => {
 		`
 			UPDATE users
 			SET
+				email_verified = TRUE,
 				is_verified = TRUE,
 				verification_token_hash = NULL,
 				verification_token_expiry = NULL
 			WHERE ${userSelect.userIdColumn} = $1
-			RETURNING ${userSelect.userIdColumn} AS id, is_verified
+			RETURNING ${userSelect.userIdColumn} AS id, email_verified, is_verified
 		`,
 		[userId]
 	);

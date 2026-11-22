@@ -13,11 +13,14 @@ const productSelect = `
 		p.created_at,
 		p.category_id,
 		p.farmer_id,
+		p.status,
+		p.moderation_status,
+		p.deleted_at,
 		CASE
 			WHEN COALESCE(p.stock, 0) = 0 THEN 'out_of_stock'
 			WHEN COALESCE(p.stock, 0) <= 50 THEN 'low_stock'
 			ELSE 'in_stock'
-		END AS status,
+		END AS stock_status,
 		u.name AS farmer_name,
 		u.email AS farmer_email,
 		c.name AS category_name
@@ -169,15 +172,26 @@ const findFarmerById = async (farmerId) => {
 };
 
 const findProductOwnershipById = async (productId) => {
-	const result = await pool.query("SELECT id, farmer_id FROM products WHERE id = $1", [productId]);
+	const result = await pool.query(
+		"SELECT id, farmer_id, price, stock, status, moderation_status, deleted_at FROM products WHERE id = $1 AND deleted_at IS NULL",
+		[productId]
+	);
 	return result.rows[0] || null;
 };
 
 const findProductStockById = async (productId) => {
 	const result = await pool.query(
 		`
-			SELECT p.id, p.farmer_id, COALESCE(i.quantity, 0) AS stock
+			SELECT
+				p.id,
+				p.farmer_id,
+				p.status,
+				p.moderation_status,
+				p.deleted_at,
+				u.account_status,
+				COALESCE(i.quantity, p.stock, 0) AS stock
 			FROM products p
+			JOIN users u ON u.id = p.farmer_id
 			LEFT JOIN inventory i ON i.product_id = p.id
 			WHERE p.id = $1
 		`,
@@ -201,11 +215,19 @@ const findProductStockForUpdateById = async (client, productId) => {
 	return result.rows[0] || null;
 };
 
-const findAllProducts = async ({ limit, offset, farmer_id, category_id, search, sort } = {}) => {
+const findAllProducts = async ({ limit, offset, farmer_id, category_id, search, sort, includeInactive = false } = {}) => {
 	let conditions = [];
 	let countParams = [];
 	let dataParams = [];
 	let paramCount = 1;
+
+	// Security & Marketplace Gate: Only active, approved listings from active sellers
+	if (!includeInactive) {
+		conditions.push("p.deleted_at IS NULL");
+		conditions.push("p.status = 'active'");
+		conditions.push("p.moderation_status = 'approved'");
+		conditions.push("u.account_status = 'active'");
+	}
 
 	if (farmer_id) {
 		conditions.push(`p.farmer_id = $${paramCount}`);
@@ -271,11 +293,15 @@ const findAllProducts = async ({ limit, offset, farmer_id, category_id, search, 
 	return result.rows;
 };
 
-const findProductById = async (productId) => {
+const findProductById = async (productId, { includeUnpublished = false } = {}) => {
+	const eligibilityClause = includeUnpublished
+		? "WHERE p.id = $1 AND p.deleted_at IS NULL"
+		: "WHERE p.id = $1 AND p.deleted_at IS NULL AND p.status = 'active' AND p.moderation_status = 'approved' AND u.account_status = 'active'";
+
 	const result = await pool.query(
 		`
 			${productSelect}
-			WHERE p.id = $1
+			${eligibilityClause}
 		`,
 		[productId]
 	);
@@ -324,9 +350,13 @@ const updateProductStockById = async (productId, stock) => {
 const deleteProductById = async (productId) => {
 	const result = await pool.query(
 		`
-			DELETE FROM products
+			UPDATE products
+			SET
+				deleted_at = NOW(),
+				status = 'deactivated',
+				moderation_status = 'rejected'
 			WHERE id = $1
-			RETURNING id
+			RETURNING id, status, deleted_at
 		`,
 		[productId]
 	);

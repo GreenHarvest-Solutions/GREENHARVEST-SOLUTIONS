@@ -368,7 +368,7 @@ const getFarmerProducts = async (req, res) => {
         SELECT COUNT(DISTINCT p.id)::int AS total
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
-        WHERE p.farmer_id = $1${searchFilter}${categoryFilter}${stockFilter}
+        WHERE p.farmer_id = $1 AND p.deleted_at IS NULL${searchFilter}${categoryFilter}${stockFilter}
       `,
       values
     );
@@ -385,11 +385,14 @@ const getFarmerProducts = async (req, res) => {
           p.description,
           p.price,
           COALESCE(p.stock, 0)::int AS stock,
+          p.status,
+          p.moderation_status,
+          p.moderation_reason,
           CASE
             WHEN COALESCE(p.stock, 0) = 0 THEN 'out_of_stock'
             WHEN COALESCE(p.stock, 0) <= 50 THEN 'low_stock'
             ELSE 'in_stock'
-          END AS status,
+          END AS stock_status,
           p.image_url,
           p.farm_location,
           p.created_at,
@@ -400,7 +403,7 @@ const getFarmerProducts = async (req, res) => {
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN order_items oi ON oi.product_id = p.id
-        WHERE p.farmer_id = $1${searchFilter}${categoryFilter}${stockFilter}
+        WHERE p.farmer_id = $1 AND p.deleted_at IS NULL${searchFilter}${categoryFilter}${stockFilter}
         GROUP BY p.id, c.name, c.id
         ORDER BY p.created_at DESC
         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}

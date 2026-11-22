@@ -3,6 +3,19 @@ const { normalizeRole } = require("../utils/roles");
 const { pool } = require("../config/db");
 const { verifyAccessToken } = require("../utils/jwt");
 
+const getUserAccountStatus = async (userId) => {
+  const result = await pool.query(
+    `SELECT account_status FROM users WHERE id = $1`,
+    [userId]
+  );
+
+  return result.rows[0]?.account_status || "active";
+};
+
+const invalidateAccountStatusCache = (_userId) => {
+  // Maintained for backward compatibility
+};
+
 const resolveActorId = async (user_id, role) => {
   if (role === "admin") {
     return user_id;
@@ -108,6 +121,17 @@ const authMiddleware = async (req, res, next) => {
 
     const role = normalizeRole(decoded.role);
     const user_id = decoded.id;
+
+    // Security Gate: Enforce active account standing
+    const accountStatus = await getUserAccountStatus(user_id);
+    if (["suspended", "banned", "deactivated"].includes(accountStatus)) {
+      return res.status(403).json({
+        status: "error",
+        code: "ACCOUNT_SUSPENDED",
+        message: "Your account has been suspended or deactivated. Please contact platform administration.",
+      });
+    }
+
     const actor_id = await resolveActorId(user_id, role);
 
     req.user = {
@@ -115,6 +139,7 @@ const authMiddleware = async (req, res, next) => {
       id: actor_id,
       user_id,
       role,
+      account_status: accountStatus,
     };
     return next();
   } catch (error) {
@@ -146,3 +171,5 @@ const authMiddleware = async (req, res, next) => {
 };
 
 module.exports = authMiddleware;
+module.exports.authMiddleware = authMiddleware;
+module.exports.invalidateAccountStatusCache = invalidateAccountStatusCache;

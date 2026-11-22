@@ -6,7 +6,13 @@ const userModel = require("../models/userModel");
 const emailService = require("./emailService");
 const logger = require("../utils/logger");
 const { getAccessTokenTtlMinutes, signAccessToken } = require("../utils/jwt");
-const { ALLOWED_ROLES, normalizeRole } = require("../utils/roles");
+const {
+  ALLOWED_ROLES,
+  ALLOWED_PUBLIC_REGISTRATION_ROLES,
+  isAllowedRole,
+  isAllowedPublicRegistrationRole,
+  normalizeRole,
+} = require("../utils/roles");
 const {
   addDays,
   addMinutes,
@@ -50,6 +56,10 @@ const buildSessionUser = (user) => {
     address: user.address,
     created_at: user.created_at,
     is_verified: Boolean(user.is_verified),
+    email_verified: Boolean(user.email_verified),
+    account_status: user.account_status || "active",
+    kyc_status: user.kyc_status || "not_submitted",
+    kyc_tier: user.kyc_tier || "provisional",
     mfa_enabled: Boolean(user.mfa_enabled),
     last_login_at: user.last_login_at || null,
   };
@@ -177,6 +187,8 @@ const registerUser = async ({
   email,
   password,
   role,
+  phone = null,
+  address = null,
   backup_email = null,
   recovery_phone = null,
 }) => {
@@ -209,8 +221,14 @@ const registerUser = async ({
     await validateEmailDomainIfEnabled(backup_email);
   }
 
-  if (!allowedRoles.includes(normalizedRole)) {
-    throw createServiceError("Invalid role provided", 400);
+  // Security Gate: Disallow public registration for administrative roles
+  if (normalizedRole === "admin" || !isAllowedPublicRegistrationRole(normalizedRole)) {
+    throw createServiceError(
+      normalizedRole === "admin"
+        ? "Registration with administrative roles is forbidden"
+        : "Invalid role provided for registration",
+      403
+    );
   }
 
   if (!isStrongPassword(password)) {
@@ -233,6 +251,8 @@ const registerUser = async ({
     email: normalizedEmail,
     password: hashedPassword,
     role: normalizedRole,
+    phone: phone ? String(phone).trim() : null,
+    address: address ? String(address).trim() : null,
     backup_email: backup_email ? backup_email.trim().toLowerCase() : null,
     recovery_phone: recovery_phone ? String(recovery_phone).trim() : null,
   });
@@ -275,7 +295,15 @@ const loginUser = async ({ email, password, ip = null, userAgent = null }) => {
     throw createServiceError("Invalid credentials", 401);
   }
 
-  if (isEmailVerificationRequired() && user.is_verified === false) {
+  // Security Gate: Enforce active account standing (reject suspended/banned/deactivated)
+  if (user.account_status && ["suspended", "banned", "deactivated"].includes(user.account_status)) {
+    throw createServiceError("Your account has been suspended. Please contact platform administration.", 403, {
+      code: "ACCOUNT_SUSPENDED",
+    });
+  }
+
+  // Check email verification (using decoupled email_verified column)
+  if (isEmailVerificationRequired() && user.email_verified === false) {
     throw createServiceError("Please verify your email before logging in", 403, {
       code: "EMAIL_NOT_VERIFIED",
     });

@@ -18,7 +18,7 @@ const getProductsAdmin = async ({
   const offset = (Math.max(1, parseInt(page, 10)) - 1) * Math.max(1, parseInt(limit, 10));
   const pageLimit = Math.max(1, parseInt(limit, 10));
 
-  const conditions = [];
+  const conditions = ["p.deleted_at IS NULL"];
   const params = [];
 
   if (search && search.trim() !== "") {
