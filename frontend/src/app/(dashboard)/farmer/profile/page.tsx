@@ -174,7 +174,7 @@ export default function FarmerProfilePage() {
             className="flex items-center gap-2 text-[#16a34a] font-bold text-xl tracking-tight hover:opacity-85 transition-opacity"
           >
             <span className="material-symbols-outlined text-2xl">agriculture</span>
-            GreenHarvest Seller Center
+            GreenHarvest Producer Hub
           </Link>
           <span className="text-gray-300 hidden md:inline">|</span>
           <span className="text-gray-500 font-medium text-sm hidden md:inline">Farmer & Farm Profile</span>
