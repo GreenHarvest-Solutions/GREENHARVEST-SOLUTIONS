@@ -1,6 +1,7 @@
 // App composition moved into src/app.js during the structure refactor.
 require("./config/env");
 
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -52,9 +53,30 @@ const apiRateLimiter = rateLimit({
 });
 
 app.use(helmet());
+
+const configuredOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : [];
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : true,
+    origin: (origin, callback) => {
+      // Allow server-to-server or tools with no origin header
+      if (!origin) return callback(null, true);
+
+      // Check configured origins
+      if (configuredOrigins.includes(origin)) return callback(null, true);
+
+      // Allow local development, 127.0.0.1, and private LAN IP ranges (10.*, 192.168.*, 172.16-31.*)
+      const isLocalOrLAN = /^(http:\/\/localhost(:\d+)?|http:\/\/127\.0\.0\.1(:\d+)?|http:\/\/10\.\d+\.\d+\.\d+(:\d+)?|http:\/\/192\.168\.\d+\.\d+(:\d+)?|http:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+(:\d+)?)$/.test(
+        origin
+      );
+      if (isLocalOrLAN || process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+
+      return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
   })
 );
@@ -100,6 +122,9 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/returns", returnsRoutes);
 app.use("/api/market-insights", marketInsightsRoutes);
 app.use("/api/farmer/kyc", farmerKycRoutes);
+
+// Static uploads serving for uploaded crop pictures
+app.use("/uploads", express.static(path.join(__dirname, "../public/uploads")));
 
 app.get("/", async (req, res) => {
   res.status(200).send("Agricultural Ecommerce API Running");

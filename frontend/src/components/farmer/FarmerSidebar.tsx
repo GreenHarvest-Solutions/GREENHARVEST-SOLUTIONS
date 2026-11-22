@@ -2,29 +2,44 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useFarmerContext } from '@/contexts/FarmerContext';
-
-// Add material symbols font if not already loaded, but it seems to be loaded already since it's used.
+import { api } from '@/lib/api';
 
 export default function FarmerSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { dashboardData } = useFarmerContext();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const pendingShipments = dashboardData?.pending_shipments?.length || 0;
   const totalOrdersReceived = dashboardData?.summary?.total_orders_received || 0;
 
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Continue
+    } finally {
+      router.push('/login');
+    }
+  };
+
   return (
     <div className="py-6 pl-6 h-full flex-shrink-0 z-30">
       <aside className={`${isCollapsed ? 'w-[96px]' : 'w-[260px]'} bg-white rounded-[24px] shadow-sm flex flex-col h-full overflow-hidden transition-all duration-300`}>
        
         {/* Logo */}
-        <div className={`flex items-center pb-6 mt-8 ${isCollapsed ? 'px-0 justify-center' : 'px-6'}`}>
-          <div className={`w-10 h-10 bg-[#bbf7d0] rounded-xl flex items-center justify-center text-[#16a34a] flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`}>
-            <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>agriculture</span>
+        <div className={`flex items-center pb-6 mt-6 ${isCollapsed ? 'px-0 justify-center' : 'px-6'}`}>
+          <div className={`w-10 h-10 bg-gradient-to-tr from-emerald-600 to-green-500 rounded-xl flex items-center justify-center text-white flex-shrink-0 shadow-xs ${isCollapsed ? '' : 'mr-3'}`}>
+            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>agriculture</span>
           </div>
-          {!isCollapsed && <span className="font-bold text-xl tracking-tight text-gray-900 whitespace-nowrap">Seller Center</span>}
+          {!isCollapsed && (
+            <div className="flex flex-col">
+              <span className="font-extrabold text-base tracking-tight text-gray-900 leading-none">GreenHarvest</span>
+              <span className="text-[10px] font-bold text-emerald-700 tracking-wider uppercase mt-1">Producer Hub</span>
+            </div>
+          )}
         </div>
 
         {/* Menu */}
@@ -105,7 +120,7 @@ export default function FarmerSidebar() {
           </NavGroup>
 
           <div className={`mt-4 mb-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider ${isCollapsed ? 'text-center px-0' : 'px-2'}`}>
-            {isCollapsed ? '•••' : 'Account & Trust'}
+            {isCollapsed ? '•••' : 'Farm Center'}
           </div>
 
           <NavItem 
@@ -118,22 +133,34 @@ export default function FarmerSidebar() {
 
           <NavItem 
             href="/farmer/profile" 
-            icon="account_circle" 
-            label="Farm Profile" 
+            icon="badge" 
+            label="Farm Profile & KYC" 
             isActive={pathname === '/farmer/profile'} 
             isCollapsed={isCollapsed}
           />
 
         </div>
 
-        {/* Toggle Button */}
-        <div className="mt-auto border-t border-gray-50 p-4 flex justify-center bg-white z-10">
+        {/* Footer Actions */}
+        <div className="mt-auto border-t border-gray-100 p-3 space-y-1.5 bg-white z-10">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className={`w-full flex items-center py-2.5 rounded-xl text-red-600 hover:bg-red-50 transition-colors text-xs font-bold ${
+              isCollapsed ? 'justify-center px-0' : 'px-3'
+            }`}
+            title="Sign Out of Seller Center"
+          >
+            <span className="material-symbols-outlined text-[20px] shrink-0">logout</span>
+            {!isCollapsed && <span className="ml-2.5">Sign Out</span>}
+          </button>
+
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors flex items-center justify-center w-full"
+            className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors flex items-center justify-center w-full"
             title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <span className="material-symbols-outlined">
+            <span className="material-symbols-outlined text-[18px]">
               {isCollapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'}
             </span>
           </button>

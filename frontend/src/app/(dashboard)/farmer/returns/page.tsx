@@ -120,7 +120,7 @@ export default function ReturnsManagementPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full flex-1 flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 pb-24">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
         <div>

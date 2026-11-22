@@ -57,6 +57,10 @@ __pycache__/
 *.tgz
 *.zip
 
+# Uploaded assets
+backend/public/uploads/*
+!backend/public/uploads/.gitkeep
+
 # OS and editor files
 .DS_Store
 Thumbs.db

@@ -165,7 +165,7 @@ export default function FarmerProfilePage() {
     : 'GH';
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col font-sans text-gray-800">
+    <div className="w-full flex-1 flex flex-col bg-[#f8fafc] font-sans text-gray-800 pb-24">
       {/* Top Header */}
       <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 shadow-xs">
         <div className="flex items-center gap-3">
@@ -174,7 +174,7 @@ export default function FarmerProfilePage() {
             className="flex items-center gap-2 text-[#16a34a] font-bold text-xl tracking-tight hover:opacity-85 transition-opacity"
           >
             <span className="material-symbols-outlined text-2xl">agriculture</span>
-            GreenHarvest Seller Center
+            GreenHarvest Producer Hub
           </Link>
           <span className="text-gray-300 hidden md:inline">|</span>
           <span className="text-gray-500 font-medium text-sm hidden md:inline">Farmer & Farm Profile</span>

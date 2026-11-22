@@ -40,7 +40,7 @@ function AnimatedNumber({
     damping: 15,
   });
 
-  const display = useTransform(spring, (current) => {
+  const display = useTransform(spring, (current: number) => {
     return `${prefix}${current.toLocaleString('en-US', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
@@ -54,7 +54,7 @@ function AnimatedNumber({
   }, [spring, value]);
 
   useEffect(() => {
-    return display.on('change', (latest) => {
+    return display.on('change', (latest: string) => {
       if (ref.current) {
         ref.current.textContent = latest;
       }

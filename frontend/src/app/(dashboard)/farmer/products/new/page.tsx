@@ -115,10 +115,6 @@ export default function NewProductPage() {
       showError('Stock quantity must be a non-negative number');
       return false;
     }
-    if (images.length === 0) {
-      showError('Please upload at least one image of your harvest');
-      return false;
-    }
     return true;
   };
 
@@ -163,6 +159,8 @@ export default function NewProductPage() {
 
     setIsSubmitting(true);
     try {
+      const finalImages = images.length > 0 ? images : ['https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=600&q=80'];
+
       const res: any = await api.createProduct({
         name: formData.name.trim(),
         category_id: Number(formData.category_id),
@@ -176,8 +174,8 @@ export default function NewProductPage() {
         shelf_life_days: formData.shelf_life_days ? Number(formData.shelf_life_days) : undefined,
         is_organic: formData.is_organic,
         farm_location: formData.farm_location.trim() || undefined,
-        images,
-        image_url: images[0] || undefined,
+        images: finalImages,
+        image_url: finalImages[0] || undefined,
       });
 
       const modStatus = res?.product?.moderation_status;
@@ -203,7 +201,7 @@ export default function NewProductPage() {
   const kgEquivalent = formData.unit === 'quintal' ? numPrice / 100 : numPrice;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col font-sans text-gray-800">
+    <div className="w-full flex-1 flex flex-col bg-[#f8fafc] font-sans text-gray-800">
       {/* Top Header */}
       <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 shadow-xs">
         <div className="flex items-center gap-3">
@@ -262,7 +260,7 @@ export default function NewProductPage() {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  placeholder="e.g. Organic Magna White Teff (የመገና ነጭ ጤፍ)"
+                  placeholder="e.g. Organic Magna White Teff (Nech Teff)"
                   className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-medium transition-all"
                 />
               </div>
@@ -478,39 +476,42 @@ export default function NewProductPage() {
             </div>
           </div>
 
-          {/* Form Actions */}
-          <div className="flex items-center justify-end gap-4 pb-12">
+          {/* Form Actions (Sticky Bottom Action Bar) */}
+          <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md -mx-4 sm:-mx-6 px-6 py-4 border-t border-gray-200/90 shadow-xl flex items-center justify-between rounded-t-2xl mt-8">
             <Link
               href="/farmer/products"
-              className="px-6 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
+              className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
             >
-              Discard
+              Cancel / Discard
             </Link>
-            <button
-              type="button"
-              onClick={saveDraft}
-              disabled={isSubmitting || !formData.name}
-              className="px-5 py-3 border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold rounded-xl text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Save as Draft
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-8 py-3 rounded-xl text-sm font-bold bg-[#16a34a] hover:bg-[#15803d] text-white shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Publishing Produce...
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-lg">check_circle</span>
-                  Publish to Marketplace
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline text-xs text-gray-500 font-medium">Ready to sell across Ethiopian markets</span>
+              <button
+                type="button"
+                onClick={saveDraft}
+                disabled={isSubmitting || !formData.name}
+                className="px-4 sm:px-5 py-2.5 sm:py-3 border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold rounded-xl text-xs sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Save as Draft
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold bg-[#16a34a] hover:bg-[#15803d] text-white shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Publishing Produce...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-lg">check_circle</span>
+                    Publish to Marketplace
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

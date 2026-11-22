@@ -5,22 +5,37 @@
 
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+      return envUrl;
+    }
+    return `${window.location.protocol}//${window.location.hostname}:5000/api`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+};
 
 class APIClient {
   private client: AxiosInstance;
 
   constructor() {
     this.client = axios.create({
-      baseURL: API_BASE_URL,
+      baseURL: getApiBaseUrl(),
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
-    // Request interceptor to add auth token
+    // Request interceptor to add auth token and adapt baseURL to client host
     this.client.interceptors.request.use(
       (config) => {
+        if (typeof window !== 'undefined') {
+          const currentHost = window.location.hostname;
+          if (config.baseURL && (config.baseURL.includes('localhost') || config.baseURL.includes('127.0.0.1'))) {
+            config.baseURL = `${window.location.protocol}//${currentHost}:5000/api`;
+          }
+        }
         const token = this.getToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
@@ -37,7 +52,13 @@ class APIClient {
         if (error.response?.status === 401) {
           // Token expired or invalid
           this.clearToken();
-          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/admin')) {
+          if (
+            typeof window !== 'undefined' &&
+            !window.location.pathname.startsWith('/admin') &&
+            window.location.pathname !== '/login' &&
+            window.location.pathname !== '/register' &&
+            window.location.pathname !== '/verify-email'
+          ) {
             window.location.href = '/login';
           }
         }
@@ -48,7 +69,7 @@ class APIClient {
 
   private getToken(): string | null {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('accessToken');
+      return localStorage.getItem('accessToken') || localStorage.getItem('token');
     }
     return null;
   }
@@ -56,6 +77,7 @@ class APIClient {
   private setToken(token: string): void {
     if (typeof window !== 'undefined') {
       localStorage.setItem('accessToken', token);
+      localStorage.setItem('token', token);
     }
   }
 
@@ -63,6 +85,8 @@ class APIClient {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
     }
   }
 
@@ -81,8 +105,13 @@ class APIClient {
     });
     // Backend returns snake_case: access_token
     this.setToken(response.access_token);
-    if (response.refresh_token) {
-      localStorage.setItem('refreshToken', response.refresh_token);
+    if (typeof window !== 'undefined') {
+      if (response.refresh_token) {
+        localStorage.setItem('refreshToken', response.refresh_token);
+      }
+      if (response.user) {
+        localStorage.setItem('user', JSON.stringify(response.user));
+      }
     }
     return response;
   }

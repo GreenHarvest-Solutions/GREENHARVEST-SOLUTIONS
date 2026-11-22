@@ -91,10 +91,10 @@ export default function BusinessAdvisorPage() {
     <main className="flex-1 flex flex-col overflow-y-auto custom-scrollbar bg-[#fcfdfc]">
       <header className="px-8 py-6 flex items-center justify-between sticky top-0 bg-[#fcfdfc] z-10 border-b border-gray-100">
         <div className="flex items-center gap-6">
-          <h1 className="text-3xl font-black text-[#2d9a33] tracking-tighter" style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}>
-            Business Advisor
+          <h1 className="text-2xl font-extrabold text-emerald-800 tracking-tight">
+            Harvest Business Advisor
           </h1>
-          <div className="h-8 w-px bg-gray-300" />
+          <div className="h-8 w-px bg-gray-200" />
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-gray-500">Real-time Insights</span>
             <button

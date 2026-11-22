@@ -212,7 +212,7 @@ export default function EditProductPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col font-sans text-gray-800">
+    <div className="w-full flex-1 flex flex-col bg-[#f8fafc] font-sans text-gray-800">
       {/* Top Header */}
       <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 shadow-xs">
         <div className="flex items-center gap-3">
@@ -456,31 +456,33 @@ export default function EditProductPage() {
             </div>
           </div>
 
-          {/* Form Actions */}
-          <div className="flex items-center justify-end gap-4 pb-12">
+          {/* Form Actions (Sticky Bottom Bar) */}
+          <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md -mx-4 sm:-mx-6 px-6 py-4 border-t border-gray-200/90 shadow-xl flex items-center justify-between rounded-t-2xl mt-8">
             <Link
               href="/farmer/products"
-              className="px-6 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
+              className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
             >
               Cancel
             </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-8 py-3 rounded-xl text-sm font-bold bg-[#16a34a] hover:bg-[#15803d] text-white shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Saving Produce...
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-lg">save</span>
-                  Save Changes
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold bg-[#16a34a] hover:bg-[#15803d] text-white shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving Produce...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-lg">save</span>
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
