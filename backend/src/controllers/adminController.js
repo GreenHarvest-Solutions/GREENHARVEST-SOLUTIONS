@@ -782,6 +782,38 @@ const getProductModerationHistory = async (req, res) => {
 	}
 };
 
+const getProductRevisionsAdmin = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const revisions = await adminService.getProductRevisions(id);
+		return res.status(200).json({ revisions });
+	} catch (error) {
+		return handleControllerError(res, "Get product revisions failed", error);
+	}
+};
+
+const reviewProductRevisionAdmin = async (req, res) => {
+	try {
+		const { revisionId } = req.params;
+		const { decision, feedback } = req.body;
+		if (!["approve", "reject"].includes(decision)) {
+			return res.status(400).json({ status: "error", message: "Decision must be 'approve' or 'reject'" });
+		}
+		const result = await adminService.reviewProductRevision({
+			revisionId,
+			decision,
+			feedback,
+			reviewerId: req.user.id,
+		});
+		return res.status(200).json({
+			message: `Revision ${decision}d successfully`,
+			result,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Review product revision failed", error);
+	}
+};
+
 const getCategoriesAdmin = async (req, res) => {
 	try {
 		const categories = await adminService.getCategoriesAdmin();
@@ -2032,6 +2064,8 @@ module.exports = {
 	moderateProductAdmin,
 	bulkModerateProducts,
 	getProductModerationHistory,
+	getProductRevisionsAdmin,
+	reviewProductRevisionAdmin,
 	getCategoriesAdmin,
 	createCategoryAdmin,
 	updateCategoryAdmin,

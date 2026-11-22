@@ -42,6 +42,8 @@ const {
 	moderateProductAdmin,
 	bulkModerateProducts,
 	getProductModerationHistory,
+	getProductRevisionsAdmin,
+	reviewProductRevisionAdmin,
 	getCategoriesAdmin,
 	createCategoryAdmin,
 	updateCategoryAdmin,
@@ -153,8 +155,10 @@ router.get("/kyc/:id/history", permissionMiddleware("kyc.read"), getKycHistory);
 router.get("/farmers/kyc", permissionMiddleware("kyc.read"), getFarmersKYC);
 router.patch("/farmers/:id/verify", permissionMiddleware("kyc.manage"), verifyFarmer);
 
-// Product Catalog Moderation & Governance (Phase 1)
+// Product Catalog Moderation & Governance (Phase 1 & 3)
 router.get("/products", permissionMiddleware("products.read"), getProductsAdmin);
+router.get("/products/:id/revisions", permissionMiddleware("products.read"), getProductRevisionsAdmin);
+router.post("/products/revisions/:revisionId/review", permissionMiddleware("products.moderate"), reviewProductRevisionAdmin);
 router.get("/products/:id", permissionMiddleware("products.read"), getProductDossier);
 router.patch("/products/:id/moderate", permissionMiddleware("products.moderate"), moderateProductAdmin);
 router.post("/products/bulk-moderate", permissionMiddleware("products.moderate"), bulkModerateProducts);

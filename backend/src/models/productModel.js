@@ -15,7 +15,21 @@ const productSelect = `
 		p.farmer_id,
 		p.status,
 		p.moderation_status,
+		p.moderation_reason,
+		p.moderation_risk_score,
+		p.is_published,
+		p.harvest_date,
+		p.unit,
+		p.min_order_quantity,
+		p.pickup_available,
+		p.farmer_delivery_available,
+		p.delivery_radius_km,
 		p.deleted_at,
+		(
+			SELECT COUNT(*)::int
+			FROM product_revisions pr
+			WHERE pr.product_id = p.id AND pr.status = 'pending'
+		) AS pending_revisions_count,
 		CASE
 			WHEN COALESCE(p.stock, 0) = 0 THEN 'out_of_stock'
 			WHEN COALESCE(p.stock, 0) <= 50 THEN 'low_stock'
@@ -39,6 +53,17 @@ const createProduct = async ({
 	stock,
 	farm_location,
 	image_url,
+	status = 'draft',
+	moderation_status = 'pending',
+	moderation_reason = null,
+	moderation_risk_score = 0.0,
+	is_published = false,
+	harvest_date = null,
+	unit = 'kg',
+	min_order_quantity = 1.0,
+	pickup_available = true,
+	farmer_delivery_available = false,
+	delivery_radius_km = 0,
 }) => {
 	const result = await pool.query(
 		`
@@ -51,19 +76,51 @@ const createProduct = async ({
 				discount_price,
 				stock,
 				farm_location,
-				image_url
+				image_url,
+				status,
+				moderation_status,
+				moderation_reason,
+				moderation_risk_score,
+				is_published,
+				harvest_date,
+				unit,
+				min_order_quantity,
+				pickup_available,
+				farmer_delivery_available,
+				delivery_radius_km
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			RETURNING id, farmer_id, category_id, name, description, price, discount_price, stock, farm_location, image_url, created_at
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+			RETURNING *
 		`,
-		[farmer_id, category_id, name, description, price, discount_price, stock ?? 0, farm_location, image_url]
+		[
+			farmer_id,
+			category_id || null,
+			name,
+			description || null,
+			price || 0,
+			discount_price || null,
+			stock ?? 0,
+			farm_location || null,
+			image_url || null,
+			status,
+			moderation_status,
+			moderation_reason,
+			moderation_risk_score,
+			is_published,
+			harvest_date || null,
+			unit || 'kg',
+			min_order_quantity || 1.0,
+			pickup_available !== undefined ? pickup_available : true,
+			farmer_delivery_available !== undefined ? farmer_delivery_available : false,
+			delivery_radius_km || 0,
+		]
 	);
 
 	if (image_url) {
 		const hasImagesTable = await tableExists('product_images');
 		if (hasImagesTable) {
 			await pool.query(
-				`INSERT INTO product_images (product_id, image_url) VALUES ($1, $2)`,
+				`INSERT INTO product_images (product_id, image_url) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
 				[result.rows[0].id, image_url]
 			);
 		}
@@ -173,7 +230,7 @@ const findFarmerById = async (farmerId) => {
 
 const findProductOwnershipById = async (productId) => {
 	const result = await pool.query(
-		"SELECT id, farmer_id, price, stock, status, moderation_status, deleted_at FROM products WHERE id = $1 AND deleted_at IS NULL",
+		"SELECT id, farmer_id, name, description, price, discount_price, stock, category_id, farm_location, image_url, status, moderation_status, is_published, deleted_at FROM products WHERE id = $1 AND deleted_at IS NULL",
 		[productId]
 	);
 	return result.rows[0] || null;
@@ -226,6 +283,7 @@ const findAllProducts = async ({ limit, offset, farmer_id, category_id, search, 
 		conditions.push("p.deleted_at IS NULL");
 		conditions.push("p.status = 'active'");
 		conditions.push("p.moderation_status = 'approved'");
+		conditions.push("p.is_published = TRUE");
 		conditions.push("u.account_status = 'active'");
 	}
 
@@ -296,7 +354,7 @@ const findAllProducts = async ({ limit, offset, farmer_id, category_id, search, 
 const findProductById = async (productId, { includeUnpublished = false } = {}) => {
 	const eligibilityClause = includeUnpublished
 		? "WHERE p.id = $1 AND p.deleted_at IS NULL"
-		: "WHERE p.id = $1 AND p.deleted_at IS NULL AND p.status = 'active' AND p.moderation_status = 'approved' AND u.account_status = 'active'";
+		: "WHERE p.id = $1 AND p.deleted_at IS NULL AND p.status = 'active' AND p.moderation_status = 'approved' AND p.is_published = TRUE AND u.account_status = 'active'";
 
 	const result = await pool.query(
 		`
@@ -311,7 +369,27 @@ const findProductById = async (productId, { includeUnpublished = false } = {}) =
 
 const updateProductById = async (
 	productId,
-	{ name, description, price, discount_price, stock, category_id, farm_location, image_url }
+	{
+		name,
+		description,
+		price,
+		discount_price,
+		stock,
+		category_id,
+		farm_location,
+		image_url,
+		status,
+		moderation_status,
+		moderation_reason,
+		moderation_risk_score,
+		is_published,
+		harvest_date,
+		unit,
+		min_order_quantity,
+		pickup_available,
+		farmer_delivery_available,
+		delivery_radius_km,
+	}
 ) => {
 	const result = await pool.query(
 		`
@@ -324,14 +402,144 @@ const updateProductById = async (
 				stock = COALESCE($5, stock),
 				category_id = COALESCE($6, category_id),
 				farm_location = COALESCE($7, farm_location),
-				image_url = COALESCE($8, image_url)
-			WHERE id = $9
-			RETURNING id, farmer_id, category_id, name, description, price, discount_price, stock, farm_location, image_url, created_at
+				image_url = COALESCE($8, image_url),
+				status = COALESCE($9, status),
+				moderation_status = COALESCE($10, moderation_status),
+				moderation_reason = COALESCE($11, moderation_reason),
+				moderation_risk_score = COALESCE($12, moderation_risk_score),
+				is_published = COALESCE($13, is_published),
+				harvest_date = COALESCE($14, harvest_date),
+				unit = COALESCE($15, unit),
+				min_order_quantity = COALESCE($16, min_order_quantity),
+				pickup_available = COALESCE($17, pickup_available),
+				farmer_delivery_available = COALESCE($18, farmer_delivery_available),
+				delivery_radius_km = COALESCE($19, delivery_radius_km)
+			WHERE id = $20
+			RETURNING *
 		`,
-		[name, description, price, discount_price, stock, category_id, farm_location, image_url, productId]
+		[
+			name,
+			description,
+			price,
+			discount_price,
+			stock,
+			category_id,
+			farm_location,
+			image_url,
+			status,
+			moderation_status,
+			moderation_reason,
+			moderation_risk_score,
+			is_published,
+			harvest_date,
+			unit,
+			min_order_quantity,
+			pickup_available,
+			farmer_delivery_available,
+			delivery_radius_km,
+			productId,
+		]
 	);
 
 	return result.rows[0] || null;
+};
+
+const createProductRevision = async ({ productId, farmerId, revisionData }) => {
+	const result = await pool.query(
+		`
+			INSERT INTO product_revisions (product_id, farmer_id, revision_data, status)
+			VALUES ($1, $2, $3, 'pending')
+			RETURNING *
+		`,
+		[productId, farmerId, JSON.stringify(revisionData)]
+	);
+
+	return result.rows[0];
+};
+
+const getProductRevisions = async (productId) => {
+	const result = await pool.query(
+		`
+			SELECT
+				pr.*,
+				rev.name AS reviewer_name
+			FROM product_revisions pr
+			LEFT JOIN users rev ON rev.id = pr.reviewer_id
+			WHERE pr.product_id = $1
+			ORDER BY pr.created_at DESC
+		`,
+		[productId]
+	);
+
+	return result.rows;
+};
+
+const reviewProductRevision = async ({ revisionId, decision, feedback = null, reviewerId = null }) => {
+	const client = await pool.connect();
+	try {
+		await client.query("BEGIN");
+
+		const revRes = await client.query(
+			`SELECT * FROM product_revisions WHERE id = $1 FOR UPDATE`,
+			[revisionId]
+		);
+
+		if (!revRes.rows[0]) {
+			throw new Error("Revision not found");
+		}
+
+		const revision = revRes.rows[0];
+		const nextStatus = decision === "approve" ? "approved" : "rejected";
+
+		await client.query(
+			`
+				UPDATE product_revisions
+				SET
+					status = $1,
+					reviewer_id = $2,
+					reviewer_feedback = $3,
+					reviewed_at = NOW()
+				WHERE id = $4
+			`,
+			[nextStatus, reviewerId, feedback, revisionId]
+		);
+
+		if (decision === "approve") {
+			const data = typeof revision.revision_data === "string" ? JSON.parse(revision.revision_data) : revision.revision_data;
+			await client.query(
+				`
+					UPDATE products
+					SET
+						name = COALESCE($1, name),
+						price = COALESCE($2, price),
+						discount_price = CASE WHEN $3 = -1 THEN NULL WHEN $3 IS NULL THEN discount_price ELSE $3 END,
+						description = COALESCE($4, description),
+						category_id = COALESCE($5, category_id),
+						farm_location = COALESCE($6, farm_location),
+						image_url = COALESCE($7, image_url)
+					WHERE id = $8
+				`,
+				[
+					data.name ?? null,
+					data.price ?? null,
+					data.discount_price ?? null,
+					data.description ?? null,
+					data.category_id ?? null,
+					data.farm_location ?? null,
+					data.image_url ?? null,
+					revision.product_id,
+				]
+			);
+		}
+
+		await client.query("COMMIT");
+		return { success: true, status: nextStatus };
+	} catch (error) {
+		await client.query("ROLLBACK");
+		throw error;
+	} finally {
+		client.release();
+	}
 };
 
 const updateProductStockById = async (productId, stock) => {
@@ -366,13 +574,16 @@ const deleteProductById = async (productId) => {
 
 module.exports = {
 	createProduct,
+	createProductRevision,
 	deleteProductById,
 	findAllProducts,
 	findFarmerById,
 	findProductById,
 	findProductOwnershipById,
+	getProductRevisions,
 	findProductStockById,
 	findProductStockForUpdateById,
+	reviewProductRevision,
 	updateProductById,
 	updateProductStockById,
 };

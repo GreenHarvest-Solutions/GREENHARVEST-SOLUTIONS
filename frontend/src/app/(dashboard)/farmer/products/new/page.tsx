@@ -100,6 +100,42 @@ export default function NewProductPage() {
     }));
   };
 
+  const saveDraft = async () => {
+    if (!formData.name || formData.name.trim().length === 0) {
+      showError('Please enter at least a product name to save a draft.');
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError('');
+    try {
+      await axios.post(
+        `${API}/products`,
+        {
+          name: formData.name,
+          description: formData.description || undefined,
+          price: formData.price ? Number(formData.price) : 0,
+          discount_price: formData.discount_price ? Number(formData.discount_price) : undefined,
+          stock: formData.stock ? Number(formData.stock) : 0,
+          category_id: formData.category_id ? Number(formData.category_id) : undefined,
+          image_url: formData.imageUrl || undefined,
+          harvest_date: formData.harvestDate || undefined,
+          unit: formData.unit || 'kg',
+          status: 'draft',
+          is_draft: true,
+        },
+        { headers: getAuthHeaders() }
+      );
+      showSuccess('Draft saved successfully! You can complete and submit it later.');
+      router.push('/farmer/products');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Failed to save draft.';
+      setSubmitError(msg);
+      showError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   /* ------------------------------------------------------------------ */
   /*  Final submission: create the product record                        */
   /* ------------------------------------------------------------------ */
@@ -114,7 +150,7 @@ export default function NewProductPage() {
     }
     setIsSubmitting(true);
     try {
-      await axios.post(
+      const res = await axios.post(
         `${API}/products`,
         {
           name: formData.name,
@@ -124,10 +160,19 @@ export default function NewProductPage() {
           stock: Number(formData.stock),
           category_id: formData.category_id ? Number(formData.category_id) : undefined,
           image_url: formData.imageUrl || undefined,
+          harvest_date: formData.harvestDate || undefined,
+          unit: formData.unit || 'kg',
         },
         { headers: getAuthHeaders() }
       );
-      showSuccess('Product added successfully!');
+      const modStatus = res.data?.product?.moderation_status;
+      if (modStatus === 'approved') {
+        showSuccess('Product listing auto-approved and published live!');
+      } else if (modStatus === 'pending') {
+        showSuccess('Product submitted! Awaiting administrator review.');
+      } else {
+        showSuccess('Product created successfully!');
+      }
       router.push('/farmer/products');
     } catch (err: any) {
       const msg = err?.response?.data?.message || 'Failed to create product. Please try again.';
@@ -567,29 +612,39 @@ export default function NewProductPage() {
             >
               Back
             </button>
-            <button
-              onClick={handleNext}
-              disabled={nextDisabled}
-              className={`px-10 py-3.5 ${
-                nextDisabled
-                  ? 'bg-gray-300 cursor-not-allowed'
-                  : 'bg-[#2a6810] hover:bg-[#1f4d0c]'
-              } text-white font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 min-w-[160px]`}
-            >
-              {isSubmitting ? (
-                <>
-                  <span className="material-symbols-outlined animate-spin text-[18px]">refresh</span>
-                  Publishing…
-                </>
-              ) : step === 4 ? (
-                <>
-                  <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
-                  Publish Listing
-                </>
-              ) : (
-                'Next'
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={saveDraft}
+                disabled={isSubmitting || !formData.name}
+                className="px-5 py-3 border border-gray-300 hover:bg-gray-100 text-gray-700 font-semibold rounded-xl text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save as Draft
+              </button>
+              <button
+                onClick={handleNext}
+                disabled={nextDisabled}
+                className={`px-10 py-3.5 ${
+                  nextDisabled
+                    ? 'bg-gray-300 cursor-not-allowed'
+                    : 'bg-[#2a6810] hover:bg-[#1f4d0c]'
+                } text-white font-bold rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 min-w-[160px]`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin text-[18px]">refresh</span>
+                    Publishing…
+                  </>
+                ) : step === 4 ? (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
+                    Publish Listing
+                  </>
+                ) : (
+                  'Next'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -388,6 +388,17 @@ const getFarmerProducts = async (req, res) => {
           p.status,
           p.moderation_status,
           p.moderation_reason,
+          p.is_published,
+          p.harvest_date,
+          p.unit,
+          p.min_order_quantity,
+          p.pickup_available,
+          p.farmer_delivery_available,
+          (
+            SELECT COUNT(*)::int
+            FROM product_revisions pr
+            WHERE pr.product_id = p.id AND pr.status = 'pending'
+          ) AS pending_revisions_count,
           CASE
             WHEN COALESCE(p.stock, 0) = 0 THEN 'out_of_stock'
             WHEN COALESCE(p.stock, 0) <= 50 THEN 'low_stock'

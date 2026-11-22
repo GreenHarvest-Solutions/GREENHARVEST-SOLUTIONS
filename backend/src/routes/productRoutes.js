@@ -3,6 +3,7 @@
 const express = require("express");
 
 const authMiddleware = require("../middleware/authMiddleware");
+const { optionalAuth } = require("../middleware/authMiddleware");
 const { requireRole } = require("../middleware/roleMiddleware");
 const {
   createProduct,
@@ -10,6 +11,9 @@ const {
   deleteProduct,
   getAllProducts,
   getProductById,
+  getProductRevisions,
+  reviewProductRevision,
+  submitProduct,
   updateProductStock,
   batchUpdateProductStatus,
 } = require("../controllers/productController");
@@ -17,7 +21,10 @@ const {
 const router = express.Router();
 
 router.get("/", getAllProducts);
-router.get("/:id", getProductById);
+router.post("/revisions/:revisionId/review", authMiddleware, reviewProductRevision);
+router.get("/:id/revisions", authMiddleware, getProductRevisions);
+router.post("/:id/submit", authMiddleware, requireRole("farmer"), submitProduct);
+router.get("/:id", optionalAuth, getProductById);
 router.post("/", authMiddleware, requireRole("farmer"), createProduct);
 router.put("/:id", authMiddleware, requireRole("farmer"), updateProduct);
 router.delete("/:id", authMiddleware, requireRole("farmer"), deleteProduct);

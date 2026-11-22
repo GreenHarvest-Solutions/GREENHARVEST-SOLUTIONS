@@ -155,7 +155,7 @@ const getAllProducts = async (req, res) => {
 
 const getProductById = async (req, res) => {
   try {
-    const product = await productService.getProductById(req.params.id);
+    const product = await productService.getProductById(req.params.id, { user: req.user });
 
     return res.status(200).json({
       product,
@@ -261,12 +261,80 @@ const batchUpdateProductStatus = async (req, res) => {
   }
 };
 
+const submitProduct = async (req, res) => {
+  try {
+    const result = await productService.submitProductForModeration({
+      user: req.user,
+      productId: req.params.id,
+    });
+
+    return res.status(200).json({
+      message:
+        result.evaluation.decision === "auto_approved"
+          ? "Listing automatically approved and published"
+          : result.evaluation.decision === "rejected"
+          ? "Listing rejected by moderation engine"
+          : "Listing submitted for administrator moderation review",
+      ...result,
+    });
+  } catch (error) {
+    return handleControllerError(res, "Submit product failed", error, {
+      userId: req.user && req.user.id,
+      productId: req.params.id,
+    });
+  }
+};
+
+const getProductRevisions = async (req, res) => {
+  try {
+    const revisions = await productService.getProductRevisions({
+      user: req.user,
+      productId: req.params.id,
+    });
+
+    return res.status(200).json({
+      revisions,
+    });
+  } catch (error) {
+    return handleControllerError(res, "Fetch product revisions failed", error, {
+      userId: req.user && req.user.id,
+      productId: req.params.id,
+    });
+  }
+};
+
+const reviewProductRevision = async (req, res) => {
+  try {
+    const { decision, feedback } = req.body || {};
+    const result = await productService.reviewProductRevision({
+      user: req.user,
+      revisionId: req.params.revisionId,
+      decision,
+      feedback,
+    });
+
+    return res.status(200).json({
+      message: `Revision ${decision}d successfully`,
+      result,
+    });
+  } catch (error) {
+    return handleControllerError(res, "Review product revision failed", error, {
+      userId: req.user && req.user.id,
+      revisionId: req.params.revisionId,
+      body: req.body,
+    });
+  }
+};
+
 module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
   getAllProducts,
   getProductById,
+  getProductRevisions,
+  reviewProductRevision,
+  submitProduct,
   updateProductStock,
   batchUpdateProductStatus,
 };

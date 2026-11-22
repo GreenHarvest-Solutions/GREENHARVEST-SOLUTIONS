@@ -8,7 +8,7 @@ import { useToast } from '@/contexts/ToastContext';
 
 export default function ManageProductsPage() {
   const router = useRouter();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<any[]>([]);
@@ -132,6 +132,17 @@ export default function ManageProductsPage() {
     } catch (error) {
       console.error('Failed to deactivate product', error);
       showError('Failed to deactivate product');
+    }
+  };
+
+  const handleSubmitForReview = async (id: string) => {
+    try {
+      const res = await api.submitProductForModeration(id);
+      showSuccess(res.message || 'Product submitted for review');
+      loadData();
+    } catch (error: any) {
+      console.error('Failed to submit product', error);
+      showError(error?.response?.data?.message || error?.message || 'Failed to submit product for review');
     }
   };
 
@@ -459,12 +470,35 @@ export default function ManageProductsPage() {
                           <td className="p-4">
                             {product.status === 'deactivated' ? (
                               <span className="inline-flex bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
-                                Inactive
+                                Deactivated
                               </span>
                             ) : product.status === 'draft' ? (
                               <span className="inline-flex bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
                                 Draft
                               </span>
+                            ) : product.moderation_status === 'pending' || product.status === 'pending' ? (
+                              <span className="inline-flex bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+                                Under Review
+                              </span>
+                            ) : product.moderation_status === 'changes_requested' ? (
+                              <span className="inline-flex bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+                                Changes Req.
+                              </span>
+                            ) : product.moderation_status === 'rejected' ? (
+                              <span className="inline-flex bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+                                Rejected
+                              </span>
+                            ) : product.is_published ? (
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className="inline-flex bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+                                  Live
+                                </span>
+                                {product.pending_revisions_count > 0 && (
+                                  <span className="inline-flex bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                                    Revision Pending
+                                  </span>
+                                )}
+                              </div>
                             ) : product.stock === 0 ? (
                               <span className="inline-flex flex-col bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider leading-tight text-center">
                                 <span>Sold</span><span>Out</span>
@@ -481,6 +515,15 @@ export default function ManageProductsPage() {
                           </td>
                           <td className="p-4">
                             <div className="flex items-center justify-end gap-3">
+                              {(product.status === 'draft' || product.moderation_status === 'changes_requested') && (
+                                <button
+                                  onClick={() => handleSubmitForReview(product.id.toString())}
+                                  className="text-sm font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                                  title="Submit for admin moderation"
+                                >
+                                  Submit
+                                </button>
+                              )}
                               <Link href={`/farmer/products/edit/${product.id}`} className="text-sm font-bold text-[#2d9a33] hover:underline">
                                 Edit
                               </Link>

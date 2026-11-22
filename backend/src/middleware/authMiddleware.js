@@ -170,6 +170,34 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+const optionalAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return next();
+  }
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = verifyAccessToken(token);
+    if (decoded && decoded.id) {
+      const role = normalizeRole(decoded.role);
+      const user_id = decoded.id;
+      const accountStatus = await getUserAccountStatus(user_id);
+      const actor_id = await resolveActorId(user_id, role);
+      req.user = {
+        ...decoded,
+        id: actor_id,
+        user_id,
+        role,
+        account_status: accountStatus,
+      };
+    }
+  } catch (err) {
+    // Silent fail for optional auth
+  }
+  return next();
+};
+
 module.exports = authMiddleware;
 module.exports.authMiddleware = authMiddleware;
+module.exports.optionalAuth = optionalAuth;
 module.exports.invalidateAccountStatusCache = invalidateAccountStatusCache;

@@ -273,6 +273,7 @@ const moderateProduct = async ({
       `UPDATE products 
        SET moderation_status = $1,
            status = $2,
+           is_published = ($1 = 'approved' AND $2 = 'active'),
            moderation_reason = $3,
            moderated_by = $4,
            moderated_at = CURRENT_TIMESTAMP,
@@ -398,7 +399,7 @@ const bulkModerateProducts = async ({
 
       const upd = await client.query(
         `UPDATE products
-         SET moderation_status = $1, status = $2, moderation_reason = $3,
+         SET moderation_status = $1, status = $2, is_published = ($1 = 'approved' AND $2 = 'active'), moderation_reason = $3,
              moderated_by = $4, moderated_at = CURRENT_TIMESTAMP
          WHERE id = $5 RETURNING *`,
         [nextModeration, nextListing, reason, actorId, pid]

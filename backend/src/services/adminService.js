@@ -172,6 +172,16 @@ const getProductModerationHistory = async (productId) => {
 	return adminModel.getProductModerationHistory(productId);
 };
 
+const getProductRevisions = async (productId) => {
+	const productModel = require("../models/productModel");
+	return productModel.getProductRevisions(productId);
+};
+
+const reviewProductRevision = async (data) => {
+	const productModel = require("../models/productModel");
+	return productModel.reviewProductRevision(data);
+};
+
 const getCategoriesAdmin = async () => {
 	return adminModel.getCategoriesAdmin();
 };
@@ -729,6 +739,8 @@ module.exports = {
 	moderateProductAdmin,
 	bulkModerateProducts,
 	getProductModerationHistory,
+	getProductRevisions,
+	reviewProductRevision,
 	getCategoriesAdmin,
 	createCategoryAdmin,
 	updateCategoryAdmin,

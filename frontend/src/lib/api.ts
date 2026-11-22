@@ -429,6 +429,28 @@ class APIClient {
     });
   }
 
+  async submitProductForModeration(productId: string | number) {
+    return this.request<{ message: string; product: any; evaluation: any }>({
+      method: 'POST',
+      url: `/products/${productId}/submit`,
+    });
+  }
+
+  async getProductRevisions(productId: string | number) {
+    return this.request<{ revisions: any[] }>({
+      method: 'GET',
+      url: `/products/${productId}/revisions`,
+    });
+  }
+
+  async reviewProductRevision(revisionId: string | number, data: { decision: 'approve' | 'reject'; feedback?: string }) {
+    return this.request<{ message: string; result: any }>({
+      method: 'POST',
+      url: `/admin/products/revisions/${revisionId}/review`,
+      data,
+    });
+  }
+
   async exportFarmerOrdersCSV(params?: { status?: string; search?: string }) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
     const queryParams = new URLSearchParams();

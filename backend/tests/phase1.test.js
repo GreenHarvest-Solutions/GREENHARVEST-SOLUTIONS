@@ -195,10 +195,10 @@ const runTests = async () => {
     const catRes = await pool.query(`SELECT id FROM categories LIMIT 1`);
     const categoryId = catRes.rows[0]?.id || 1;
 
-    // Product 1: Eligible (active, approved, deleted_at is null)
+    // Product 1: Eligible (active, approved, published, deleted_at is null)
     const p1 = await pool.query(
-      `INSERT INTO products (farmer_id, category_id, name, price, stock, status, moderation_status, deleted_at)
-       VALUES ($1, $2, 'Eligible Teff Flour', 120.00, 50, 'active', 'approved', NULL)
+      `INSERT INTO products (farmer_id, category_id, name, price, stock, status, moderation_status, is_published, deleted_at)
+       VALUES ($1, $2, 'Eligible Teff Flour', 120.00, 50, 'active', 'approved', TRUE, NULL)
        RETURNING id`,
       [farmerUserId, categoryId]
     );

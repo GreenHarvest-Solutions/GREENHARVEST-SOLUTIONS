@@ -16,6 +16,7 @@ export default function EditProductPage() {
   const { showError, showSuccess } = useToast();
   
   const [loading, setLoading] = useState(true);
+  const [productData, setProductData] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,15 +50,16 @@ export default function EditProductPage() {
       ]);
 
       const product = productRes.product;
+      setProductData(product);
       setCategories(categoriesRes.categories || []);
 
       setFormData({
         name: product.name || '',
         category_id: product.category_id?.toString() || '',
-        harvestDate: '', // not implemented in backend yet
+        harvestDate: product.harvest_date ? new Date(product.harvest_date).toISOString().split('T')[0] : '',
         description: product.description || '',
         price: product.price?.toString() || '',
-        unit: 'kg', // default
+        unit: product.unit || 'kg',
         stock: product.stock?.toString() || '',
         discount_price: product.discount_price?.toString() || '',
         imageUrl: product.image_url || '',
@@ -138,7 +140,7 @@ export default function EditProductPage() {
     setIsSubmitting(true);
     
     try {
-      await api.updateProduct(productId, {
+      const res = await api.updateProduct(productId, {
         name: formData.name,
         description: formData.description || undefined,
         price: Number(formData.price),
@@ -146,8 +148,14 @@ export default function EditProductPage() {
         stock: Number(formData.stock),
         category_id: formData.category_id ? Number(formData.category_id) : undefined,
         image_url: formData.imageUrl || undefined,
+        harvest_date: formData.harvestDate || undefined,
+        unit: formData.unit || 'kg',
       });
-      showSuccess('Product updated successfully!');
+      if ((res as any)?.is_revision_pending || (res as any)?.product?.is_revision_pending) {
+        showSuccess((res as any)?.message || 'Significant changes submitted for moderation review. Your live listing remains active until reviewed.');
+      } else {
+        showSuccess('Product updated successfully!');
+      }
       router.push('/farmer/products');
     } catch (err: any) {
       const msg = err?.response?.data?.message || 'Failed to update product. Please try again.';
@@ -185,6 +193,18 @@ export default function EditProductPage() {
 
         <div className="max-w-3xl mx-auto py-12 px-8 pb-32">
           
+          {productData?.pending_revisions_count > 0 && (
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+              <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
+              <div className="text-sm">
+                <p className="font-bold text-blue-900">Revision Pending Moderation</p>
+                <p className="text-blue-700">
+                  You have submitted significant changes that are currently being reviewed by administrators. Your existing listing remains live on the marketplace until the revision is approved.
+                </p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={submitProduct} className="space-y-10">
             {submitError && (
               <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex items-start gap-2">
