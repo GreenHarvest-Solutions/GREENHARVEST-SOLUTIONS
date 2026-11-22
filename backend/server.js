@@ -28,6 +28,19 @@ const startServer = async () => {
 
     app.listen(PORT, () => {
       logServerEvent(`Server running on port ${PORT}`);
+
+      // Periodic stock reservation sweeper (runs every 60 seconds)
+      const inventoryService = require("./src/services/inventoryService");
+      setInterval(async () => {
+        try {
+          const released = await inventoryService.releaseExpiredReservations();
+          if (released && released.length > 0) {
+            logServerEvent(`Released ${released.length} expired stock reservation(s)`);
+          }
+        } catch (err) {
+          logServerError("Failed to release expired reservations", err);
+        }
+      }, 60000);
     });
   } catch (error) {
     logServerError("Server startup failed", error);

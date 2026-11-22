@@ -500,6 +500,14 @@ class APIClient {
     });
   }
 
+  async updateFarmerSuborderStatus(suborderId: string | number, status: string) {
+    return this.request<{ message: string; suborder: any }>({
+      method: 'PATCH',
+      url: `/dashboard/farmer/suborders/${suborderId}/status`,
+      data: { status },
+    });
+  }
+
   // Task 5.1 — Returns endpoints
   async getReturns(params?: { page?: number; limit?: number }) {
     return this.request<{ returns: any[]; pagination: any }>({

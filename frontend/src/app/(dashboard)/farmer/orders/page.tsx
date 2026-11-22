@@ -99,9 +99,13 @@ export default function ManageOrdersPage() {
     loadOrders('');
   };
 
-  const handleUpdateStatus = async (orderId: string, nextStatus: string) => {
+  const handleUpdateStatus = async (order: any, nextStatus: string) => {
     try {
-      await api.updateOrderStatus(orderId, nextStatus);
+      if (order.suborder_id) {
+        await api.updateFarmerSuborderStatus(order.suborder_id, nextStatus);
+      } else {
+        await api.updateOrderStatus(order.order_id, nextStatus);
+      }
       loadOrders();
     } catch (error) {
       console.error("Failed to update order status", error);
@@ -339,25 +343,28 @@ export default function ManageOrdersPage() {
                         const dateStr = dateObj.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
                         const timeStr = dateObj.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', hour12: false});
                         
+                        const currentStatus = order.fulfillment_status || order.order_status;
                         let statusBadge = null;
-                        if (order.order_status === 'pending') {
+                        if (currentStatus === 'pending') {
                           statusBadge = <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">Pending</span>;
-                        } else if (order.order_status === 'confirmed') {
+                        } else if (currentStatus === 'confirmed' || currentStatus === 'accepted') {
                           statusBadge = <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">Confirmed</span>;
-                        } else if (order.order_status === 'in_transit') {
+                        } else if (currentStatus === 'packed') {
+                          statusBadge = <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold">Packed</span>;
+                        } else if (currentStatus === 'in_transit' || currentStatus === 'dispatched') {
                           statusBadge = <span className="bg-[#fff200] text-gray-900 px-3 py-1 rounded-full text-xs font-bold">In Transit</span>;
-                        } else if (order.order_status === 'delivered') {
+                        } else if (currentStatus === 'delivered' || currentStatus === 'completed') {
                           statusBadge = <span className="bg-[#4caf50] text-white px-3 py-1 rounded-full text-xs font-bold">Completed</span>;
-                        } else if (order.order_status === 'cancelled') {
+                        } else if (currentStatus === 'cancelled') {
                           statusBadge = <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold">Cancelled</span>;
-                        } else if (order.order_status === 'returned') {
+                        } else if (currentStatus === 'returned') {
                           statusBadge = <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold">Returned</span>;
                         } else {
-                          statusBadge = <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold">{order.order_status}</span>;
+                          statusBadge = <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold">{currentStatus}</span>;
                         }
                         
                         return (
-                          <tr key={order.order_id} className="hover:bg-gray-50/80 transition-colors">
+                          <tr key={order.suborder_id || order.order_id} className="hover:bg-gray-50/80 transition-colors">
                             <td className="p-4">
                               <input type="checkbox" className="rounded border-gray-300 text-[#2d9a33] focus:ring-[#2d9a33] cursor-pointer" />
                             </td>
@@ -373,44 +380,56 @@ export default function ManageOrdersPage() {
                                   </div>
                                   <div>
                                     <p className="font-bold text-gray-900 line-clamp-1">{item.product_name}</p>
-                                    <p className="text-xs text-gray-500 font-medium mt-0.5">Qty: {item.quantity} kg</p>
+                                    <p className="text-xs text-gray-500 font-medium mt-0.5">Qty: {item.quantity} {item.unit || 'kg'}</p>
                                   </div>
                                 </div>
                               )}
                             </td>
                             <td className="p-4">
-                              <p className="font-mono text-gray-800 text-sm">GH-2023-{order.order_id.toString().padStart(5, '0')}</p>
+                              <p className="font-mono font-bold text-gray-800 text-sm">{order.suborder_number || `ORD-${order.order_id.toString().padStart(5, '0')}`}</p>
+                              {order.pickup_code && (
+                                <span className="inline-block mt-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[11px] font-mono font-bold">
+                                  Pickup: {order.pickup_code}
+                                </span>
+                              )}
                               <p className="text-xs text-gray-500 font-medium mt-0.5">{dateStr} {timeStr}</p>
                             </td>
                             <td className="p-4">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-green-50 text-[#2d9a33] border border-[#2d9a33]/20 flex items-center justify-center text-xs font-bold shrink-0">
-                                  {order.buyer_name.substring(0, 2).toUpperCase()}
+                                  {order.buyer_name ? order.buyer_name.substring(0, 2).toUpperCase() : 'BY'}
                                 </div>
                                 <div>
-                                  <p className="font-bold text-gray-900">{order.buyer_name}</p>
+                                  <p className="font-bold text-gray-900">{order.buyer_name || 'Buyer'}</p>
                                   <p className="text-xs text-gray-500 font-medium">{order.buyer_email || 'No email'}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="p-4 font-bold text-gray-900 text-sm">
                               ETB {Number(order.total_amount).toLocaleString('en-US', {minimumFractionDigits: 2})}
+                              {order.fulfillment_type && (
+                                <p className="text-[11px] font-normal text-gray-500 capitalize">{order.fulfillment_type.replace(/_/g, ' ')}</p>
+                              )}
                             </td>
                             <td className="p-4">
                               {statusBadge}
                             </td>
                             <td className="p-4">
                               <div className="flex items-center justify-end gap-3">
-                                {order.order_status === 'pending' ? (
-                                  <button onClick={() => handleUpdateStatus(order.order_id, 'confirmed')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                    Fulfill
+                                {currentStatus === 'pending' ? (
+                                  <button onClick={() => handleUpdateStatus(order, 'packed')} className="text-sm font-bold text-[#2d9a33] hover:underline">
+                                    Pack Order
                                   </button>
-                                ) : order.order_status === 'confirmed' ? (
-                                  <button onClick={() => handleUpdateStatus(order.order_id, 'in_transit')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                    Ship
+                                ) : currentStatus === 'confirmed' || currentStatus === 'accepted' ? (
+                                  <button onClick={() => handleUpdateStatus(order, 'packed')} className="text-sm font-bold text-[#2d9a33] hover:underline">
+                                    Pack
                                   </button>
-                                ) : order.order_status === 'in_transit' ? (
-                                  <button onClick={() => handleUpdateStatus(order.order_id, 'delivered')} className="text-sm font-bold text-[#2d9a33] hover:underline">
+                                ) : currentStatus === 'packed' ? (
+                                  <button onClick={() => handleUpdateStatus(order, 'dispatched')} className="text-sm font-bold text-[#2d9a33] hover:underline">
+                                    Dispatch
+                                  </button>
+                                ) : currentStatus === 'in_transit' || currentStatus === 'dispatched' ? (
+                                  <button onClick={() => handleUpdateStatus(order, 'delivered')} className="text-sm font-bold text-[#2d9a33] hover:underline">
                                     Deliver
                                   </button>
                                 ) : (

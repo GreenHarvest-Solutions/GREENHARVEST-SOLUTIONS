@@ -8,20 +8,80 @@ import { useParams, useRouter } from 'next/navigation';
 import { useToast } from '@/contexts/ToastContext';
 import { useCart } from '@/contexts/CartContext';
 
+const STAR_VALUES = [1, 2, 3, 4, 5];
+
+const IMAGE_VIEWS = [
+    { label: 'Center view', position: '50% 50%' },
+    { label: 'Top view', position: '50% 18%' },
+    { label: 'Bottom view', position: '50% 82%' },
+];
+
+interface ProductReview {
+    id?: number | string;
+    review_id?: number | string;
+    user_name?: string;
+    name?: string;
+    rating: number | string;
+    comment?: string;
+    created_at?: string;
+}
+
+interface ProductReviewsData {
+    average_rating?: number | string;
+    total_reviews?: number | string;
+    reviews?: ProductReview[];
+}
+
+interface RelatedProduct {
+    id: number | string;
+    name: string;
+    price: number | string;
+    discount_price?: number | string | null;
+    image_url?: string;
+    category_name?: string;
+}
+
+const getApiErrorMessage = (err: unknown, fallback: string) => {
+    if (typeof err === 'object' && err !== null) {
+        const candidate = err as { response?: { data?: { message?: string } } };
+        if (candidate.response?.data?.message) {
+            return candidate.response.data.message;
+        }
+    }
+    return fallback;
+};
+
+const formatMoney = (value: number | string) =>
+    Number(value).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+
+const formatDate = (value?: string) =>
+    value
+        ? new Date(value).toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+        })
+        : 'Recently';
+
 export default function ProductDetailPage() {
     const params = useParams();
     const router = useRouter();
     const id = params?.id as string;
 
     const [product, setProduct] = useState<Product | null>(null);
-    const [reviewsData, setReviewsData] = useState<any>(null);
-    const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
+    const [reviewsData, setReviewsData] = useState<ProductReviewsData | null>(null);
+    const [relatedProducts, setRelatedProducts] = useState<RelatedProduct[]>([]);
     const [loading, setLoading] = useState(true);
     const [quantity, setQuantity] = useState(1);
     const [addingToCart, setAddingToCart] = useState(false);
     const [addedSuccess, setAddedSuccess] = useState(false);
     const [buyingNow, setBuyingNow] = useState(false);
-    const { showSuccess, showError } = useToast();
+    const [activeImage, setActiveImage] = useState(0);
+    const [isSaved, setIsSaved] = useState(false);
+    const { showError } = useToast();
     const { addToCart, openCart, cart, clearCart } = useCart();
 
     // Review form state
@@ -47,7 +107,7 @@ export default function ProductDetailPage() {
                 if (productRes.product?.farmer_id) {
                     try {
                         const related = await api.getProducts({ farmer_id: productRes.product.farmer_id, limit: 6 });
-                        setRelatedProducts((related.products || []).filter((p: any) => p.id !== productRes.product.id).slice(0, 5));
+                        setRelatedProducts((related.products || []).filter((p: RelatedProduct) => p.id !== productRes.product.id).slice(0, 5));
                     } catch { /* silent */ }
                 }
             } catch (err) {
@@ -65,9 +125,9 @@ export default function ProductDetailPage() {
             await addToCart(product.id, quantity);
             setAddedSuccess(true);
             setTimeout(() => setAddedSuccess(false), 2000);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to add to cart", err);
-            showError(err?.response?.data?.message || "Failed to add to cart. Please try again.");
+            showError(getApiErrorMessage(err, "Failed to add to cart. Please try again."));
         } finally {
             setAddingToCart(false);
         }
@@ -80,9 +140,9 @@ export default function ProductDetailPage() {
             await clearCart();
             await addToCart(product.id, quantity);
             router.push('/buyer/checkout'); // Redirect to checkout directly
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to add to cart for buy now", err);
-            showError(err?.response?.data?.message || "Failed to process. Please try again.");
+            showError(getApiErrorMessage(err, "Failed to process. Please try again."));
             setBuyingNow(false);
         }
     };
@@ -106,335 +166,723 @@ export default function ProductDetailPage() {
             setRating(5);
             setComment('');
             alert("Review submitted successfully!");
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to submit review", err);
-            setReviewError(err?.response?.data?.message || "Failed to submit review. Have you already reviewed this product?");
+            setReviewError(getApiErrorMessage(err, "Failed to submit review. Have you already reviewed this product?"));
         } finally {
             setIsSubmittingReview(false);
         }
     };
 
-    const hasDiscount = product?.discount_price && Number(product.discount_price) > 0 && Number(product.discount_price) < Number(product.price);
+    const handleShare = async () => {
+        if (!product || typeof window === 'undefined') return;
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: product.name,
+                    text: `Check out ${product.name} on GreenHarvest.`,
+                    url: window.location.href,
+                });
+                return;
+            }
+            await navigator.clipboard.writeText(window.location.href);
+            alert("Product link copied to clipboard.");
+        } catch (err: unknown) {
+            if (!(err instanceof Error) || err.name !== 'AbortError') {
+                console.error("Failed to share product", err);
+            }
+        }
+    };
+
+    const handleSave = () => {
+        setIsSaved((previous) => !previous);
+    };
+
+    const hasDiscount = Boolean(product?.discount_price && Number(product.discount_price) > 0 && Number(product.discount_price) < Number(product.price));
     const discountPercent = hasDiscount ? Math.round((1 - Number(product!.discount_price) / Number(product!.price)) * 100) : 0;
     const displayPrice = hasDiscount ? Number(product!.discount_price) : (product ? Number(product.price) : 0);
+    const averageRating = reviewsData?.average_rating ? Number(reviewsData.average_rating) : 0;
+    const totalReviews = reviewsData?.total_reviews ? Number(reviewsData.total_reviews) : 0;
+    const stockValue = product ? Number(product.stock) : 0;
+    const isInStock = stockValue > 0;
+    const stockLabel = stockValue > 50 ? 'In stock' : stockValue > 0 ? 'Low stock' : 'Out of stock';
+    const stockTone = stockValue > 50 ? 'text-[#286c00]' : stockValue > 0 ? 'text-amber-700' : 'text-red-700';
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center">
+            <div className="flex min-h-screen items-center justify-center bg-white">
                 <div className="flex flex-col items-center gap-3">
-                    <div className="w-10 h-10 border-4 border-[#286c00] border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-sm text-gray-500 font-medium">Loading product...</span>
+                    <div className="h-10 w-10 animate-spin border-4 border-[#286c00] border-t-transparent rounded-full"></div>
+                    <span className="text-sm font-medium text-[#6B7280]">Loading product...</span>
                 </div>
             </div>
         );
     }
 
     if (!product) {
-        return <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center text-[#6b7280]">Product not found.</div>;
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-white px-4">
+                <div className="border border-[#D1D5DB] bg-white p-8 text-center">
+                    <p className="text-sm font-bold text-[#111827]">Product not found.</p>
+                    <button
+                        type="button"
+                        onClick={() => router.push('/buyer/dashboard')}
+                        className="mt-4 border border-[#286c00] bg-white px-4 py-2 text-xs font-bold text-[#286c00] transition-colors hover:bg-[#F0FDF4]"
+                    >
+                        Back to marketplace
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <div className="bg-[#f9fafb] text-[#111827] font-sans antialiased transition-colors duration-300 min-h-screen">
+        <div className="min-h-screen bg-white font-body text-[#111827] antialiased">
             {/* Header */}
-            <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-[#e5e7eb]">
-                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                        <div className="flex items-center gap-4">
-                            <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700">
-                                <span className="material-symbols-outlined">arrow_back</span>
-                            </button>
-                            <Link href="/buyer/dashboard" className="text-xl font-bold text-[#286c00] flex items-center gap-1.5">
-                                <span className="material-symbols-outlined">eco</span> GreenHarvest
-                            </Link>
+            <header className="sticky top-0 z-50 border-b border-[#D1D5DB] bg-white">
+                <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+                    <div className="flex shrink-0 items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => router.back()}
+                            aria-label="Go back"
+                            className="flex h-9 w-9 items-center justify-center border border-[#D1D5DB] bg-white text-[#4B5563] transition-colors hover:border-[#286c00] hover:text-[#286c00]"
+                        >
+                            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+                        </button>
+                        <Link href="/buyer/dashboard" className="flex items-center gap-2 text-[#286c00]">
+                            <span className="material-symbols-outlined text-[24px]">eco</span>
+                            <span className="text-lg font-extrabold tracking-tight">GreenHarvest</span>
+                        </Link>
+                    </div>
+
+                    <div className="hidden flex-1 justify-center px-4 md:flex">
+                        <div className="relative w-full max-w-xl">
+                            <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[19px] text-[#6B7280]">search</span>
+                            <input
+                                type="text"
+                                aria-label="Search products"
+                                placeholder="Search produce, farms, and more"
+                                className="h-10 w-full rounded-none border border-[#D1D5DB] bg-white pl-10 pr-4 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#286c00] focus:outline-none focus:ring-1 focus:ring-[#286c00]"
+                            />
                         </div>
-                        <div className="flex-1 max-w-2xl px-8 hidden md:block">
-                            <div className="relative">
-                                <input className="w-full bg-[#f9fafb] border border-[#e5e7eb] rounded-full py-2 pl-4 pr-10 focus:outline-none focus:ring-1 focus:ring-[#286c00] text-sm" placeholder="Search organic produce..." type="text"/>
-                                <span className="material-symbols-outlined absolute right-3 top-2 text-[#6b7280] text-xl">search</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center space-x-6">
-                            <Link href="/buyer/profile" className="text-gray-700 hover:text-[#286c00] transition-colors flex flex-col items-center">
-                                <span className="material-symbols-outlined">person</span>
-                                <span className="text-[10px] mt-0.5 font-medium">Account</span>
-                            </Link>
-                            <button onClick={openCart} className="text-gray-700 hover:text-[#286c00] transition-colors flex flex-col items-center relative cursor-pointer">
-                                <span className="material-symbols-outlined">shopping_cart</span>
-                                <span className="text-[10px] mt-0.5 font-medium">Cart</span>
-                                {cart.length > 0 && (
-                                    <span className="absolute top-0 right-0 w-4 h-4 bg-[#ff8296] text-white text-[9px] rounded-full flex items-center justify-center font-bold border-2 border-white translate-x-1/2 -translate-y-1/2">{cart.length}</span>
-                                )}
-                            </button>
-                        </div>
+                    </div>
+
+                    <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+                        <Link
+                            href="/buyer/profile"
+                            className="flex h-10 items-center gap-2 border border-transparent px-2 text-xs font-semibold text-[#4B5563] transition-colors hover:text-[#286c00]"
+                        >
+                            <span className="material-symbols-outlined text-[21px]">person</span>
+                            <span className="hidden sm:inline">Account</span>
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={openCart}
+                            aria-label="Open cart"
+                            className="relative flex h-10 items-center gap-2 border border-[#D1D5DB] bg-white px-3 text-xs font-semibold text-[#4B5563] transition-colors hover:border-[#286c00] hover:text-[#286c00]"
+                        >
+                            <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
+                            <span className="hidden sm:inline">Cart</span>
+                            {cart.length > 0 && (
+                                <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center border border-white bg-[#286c00] px-1 text-[10px] font-bold leading-none text-white tabular-nums">
+                                    {cart.length}
+                                </span>
+                            )}
+                        </button>
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+            <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
                 {/* Breadcrumbs */}
-                <div className="text-xs text-gray-500 flex items-center gap-2">
-                    <Link href="/" className="hover:underline">Home</Link>
-                    <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-                    <Link href="/buyer/dashboard" className="hover:underline">{product.category_name || 'Produce'}</Link>
-                    <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-                    <span className="text-gray-900 font-medium">{product.name}</span>
-                </div>
+                <nav aria-label="Breadcrumb" className="flex items-center gap-2 overflow-x-auto whitespace-nowrap text-xs text-[#6B7280]">
+                    <Link href="/" className="transition-colors hover:text-[#286c00]">Home</Link>
+                    <span className="material-symbols-outlined text-[14px] text-[#9CA3AF]">chevron_right</span>
+                    <Link href="/products" className="transition-colors hover:text-[#286c00]">{product.category_name || 'Produce'}</Link>
+                    <span className="material-symbols-outlined text-[14px] text-[#9CA3AF]">chevron_right</span>
+                    <span className="font-semibold text-[#111827]" aria-current="page">{product.name}</span>
+                </nav>
 
-                <div className="flex flex-col lg:flex-row gap-8 items-start">
-                    {/* Left Column (Main Content) */}
-                    <div className="flex-1 w-full space-y-8">
-                        
-                        {/* Top Section: Images + Quick Info */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row gap-8">
-                            {/* Images */}
-                            <div className="flex gap-4 md:w-1/2">
-                                <div className="flex flex-col gap-2 w-16 shrink-0">
-                                    <div className="w-16 h-16 rounded-xl border-2 border-[#286c00] overflow-hidden cursor-pointer">
+                <div className="mt-5 grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,66fr)_minmax(0,34fr)] xl:gap-8">
+                    {/* Hero card */}
+                    <section className="min-w-0 border border-[#D1D5DB] bg-white lg:col-start-1 lg:row-start-1">
+                        <div className="p-5 sm:p-6">
+                            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] pb-3">
+                                <p className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#286c00]">
+                                    <span className="material-symbols-outlined text-[16px]">verified</span>
+                                    Farm-direct listing
+                                </p>
+                                <span className={`border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${isInStock ? 'border-[#286c00] text-[#286c00]' : 'border-red-300 text-red-700'}`}>
+                                    {stockLabel}
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                                {/* Gallery */}
+                                <div className="min-w-0">
+                                    <div className="relative aspect-square overflow-hidden border border-[#D1D5DB] bg-white">
                                         {product.image_url ? (
-                                            <img src={product.image_url} className="w-full h-full object-cover" alt="Thumb 1" />
+                                            <img
+                                                src={product.image_url}
+                                                className="h-full w-full object-cover"
+                                                style={{ objectPosition: IMAGE_VIEWS[activeImage].position }}
+                                                alt={product.name}
+                                            />
                                         ) : (
-                                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                                                <span className="material-symbols-outlined text-gray-400">image</span>
+                                            <div className="flex h-full w-full items-center justify-center bg-white">
+                                                <span className="material-symbols-outlined text-6xl text-[#D1D5DB]">image</span>
                                             </div>
                                         )}
-                                    </div>
-                                </div>
-                                <div className="flex-1 rounded-2xl overflow-hidden bg-gray-100 aspect-square border border-gray-100 relative">
-                                    {product.image_url ? (
-                                        <img src={product.image_url} className="w-full h-full object-cover" alt={product.name} />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                            <span className="material-symbols-outlined text-gray-300 text-6xl">image</span>
-                                        </div>
-                                    )}
-                                    {hasDiscount && (
-                                        <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs font-black px-3 py-1.5 rounded-full shadow-lg animate-pulse">
-                                            🔥 {discountPercent}% OFF
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Quick Info */}
-                            <div className="md:w-1/2 space-y-5">
-                                <div>
-                                    <h1 className="text-2xl font-bold text-gray-900 mb-2 leading-snug">{product.name}</h1>
-                                    <div className="flex items-center gap-3 text-xs">
-                                        <div className="flex text-yellow-400">
-                                            {Array.from({ length: 5 }).map((_, i) => (
-                                                <span key={i} className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: '"FILL" 1' }}>star</span>
-                                            ))}
-                                        </div>
-                                        <span className="font-bold text-gray-900">{reviewsData?.average_rating ? Number(reviewsData.average_rating).toFixed(1) : "0.0"}</span>
-                                        <a href="#reviews" className="text-gray-500 underline hover:text-[#286c00]">{reviewsData?.total_reviews || 0} Reviews</a>
-                                    </div>
-                                </div>
-
-                                {/* Price Display */}
-                                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-xl border border-green-100">
-                                    {hasDiscount ? (
-                                        <div className="flex items-end gap-3">
-                                            <span className="text-3xl font-black text-[#286c00]">ETB {Number(product.discount_price).toFixed(2)}</span>
-                                            <span className="text-lg text-gray-400 line-through font-medium mb-0.5">ETB {Number(product.price).toFixed(2)}</span>
-                                            <span className="bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-full mb-1">
-                                                SAVE {discountPercent}%
+                                        {hasDiscount && (
+                                            <span className="absolute left-3 top-3 bg-[#286c00] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white tabular-nums">
+                                                Save {discountPercent}%
                                             </span>
-                                        </div>
-                                    ) : (
-                                        <span className="text-3xl font-black text-[#286c00]">ETB {Number(product.price).toFixed(2)}</span>
-                                    )}
-                                    <p className="text-[10px] text-gray-500 mt-1">per unit • Tax excluded</p>
+                                        )}
+                                    </div>
+
+                                    {/* 3-thumbnail rail */}
+                                    <div className="mt-2 grid grid-cols-3 gap-2" aria-label="Product image views">
+                                        {IMAGE_VIEWS.map((view, index) => (
+                                            <button
+                                                key={view.label}
+                                                type="button"
+                                                onClick={() => setActiveImage(index)}
+                                                aria-label={`Show ${view.label}`}
+                                                aria-pressed={activeImage === index}
+                                                className={`relative aspect-square overflow-hidden border bg-white transition-colors ${activeImage === index ? 'border-[#286c00]' : 'border-[#D1D5DB] hover:border-[#9CA3AF]'}`}
+                                            >
+                                                {product.image_url ? (
+                                                    <img
+                                                        src={product.image_url}
+                                                        className="h-full w-full object-cover"
+                                                        style={{ objectPosition: view.position }}
+                                                        alt={`${product.name} — ${view.label}`}
+                                                    />
+                                                ) : (
+                                                    <span className="flex h-full w-full items-center justify-center">
+                                                        <span className="material-symbols-outlined text-xl text-[#D1D5DB]">image</span>
+                                                    </span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
-                                {/* Grid of info */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Link href={`/buyer/farmer/${product.farmer_id}`} className="bg-[#f9fafb] p-3 rounded-xl border border-gray-100 hover:border-[#286c00] hover:bg-green-50/50 transition-all cursor-pointer group">
-                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">FARM</p>
-                                        <p className="text-xs font-bold text-gray-900 leading-tight mb-0.5 group-hover:text-[#286c00] transition-colors flex items-center gap-1">
-                                            {product.farmer_name || 'Partner Farm'}
-                                            <span className="material-symbols-outlined text-[12px] text-gray-400 group-hover:text-[#286c00]">open_in_new</span>
-                                        </p>
-                                        <p className="text-[10px] text-gray-500">{product.farm_location || 'Local Region'}</p>
-                                    </Link>
-                                    <div className="bg-[#f9fafb] p-3 rounded-xl border border-gray-100">
-                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">CATEGORY</p>
-                                        <p className="text-xs font-bold text-gray-900 leading-tight mb-0.5">{product.category_name || 'General'}</p>
+                                {/* Quick info */}
+                                <div className="flex min-w-0 flex-col">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#6B7280]">
+                                        {product.category_name || 'Fresh produce'}
+                                    </p>
+                                    <h1 className="mt-1 text-3xl font-extrabold leading-tight tracking-tight text-[#111827]">
+                                        {product.name}
+                                    </h1>
+
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                        <span className="flex items-center text-[#286c00]" aria-hidden="true">
+                                            {STAR_VALUES.map((star) => (
+                                                <span
+                                                    key={star}
+                                                    className={`material-symbols-outlined text-[15px] ${star <= Math.round(averageRating) ? 'text-[#286c00]' : 'text-[#D1D5DB]'}`}
+                                                    style={{ fontVariationSettings: star <= Math.round(averageRating) ? '"FILL" 1' : '"FILL" 0' }}
+                                                >
+                                                    star
+                                                </span>
+                                            ))}
+                                        </span>
+                                        <span className="font-bold text-[#111827] tabular-nums">{averageRating.toFixed(1)}</span>
+                                        <span className="text-[#D1D5DB]">|</span>
+                                        <a href="#reviews" className="text-[#6B7280] underline decoration-[#D1D5DB] underline-offset-2 transition-colors hover:text-[#286c00]">
+                                            <span className="tabular-nums">{totalReviews}</span> {totalReviews === 1 ? 'Review' : 'Reviews'}
+                                        </a>
                                     </div>
-                                    <div className="bg-[#f9fafb] p-3 rounded-xl border border-gray-100">
-                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">STOCK</p>
-                                        <p className={`text-xs font-bold leading-tight mb-0.5 ${product.stock > 50 ? 'text-green-600' : product.stock > 0 ? 'text-orange-500' : 'text-red-500'}`}>
-                                            {product.stock > 0 ? `${product.stock} available` : 'Out of stock'}
-                                        </p>
+
+                                    {/* Price accent box */}
+                                    <div className="mt-4 flex items-stretch border border-[#D1D5DB] bg-white">
+                                        <div className="flex w-14 shrink-0 items-center justify-center bg-[#286c00] px-2 text-[10px] font-bold uppercase tracking-wider text-white">
+                                            ETB
+                                        </div>
+                                        <div className="min-w-0 flex-1 px-4 py-3">
+                                            <div className="flex flex-wrap items-baseline gap-2">
+                                                <span className="text-3xl font-black leading-none tracking-tight text-[#286c00] tabular-nums">
+                                                    {formatMoney(displayPrice)}
+                                                </span>
+                                                {hasDiscount && (
+                                                    <span className="text-sm font-medium text-[#9CA3AF] line-through tabular-nums">
+                                                        ETB {formatMoney(product.price)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-[#6B7280]">
+                                                <span>per unit</span>
+                                                <span>•</span>
+                                                <span>tax excluded</span>
+                                                {hasDiscount && (
+                                                    <span className="border border-[#286c00] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#286c00]">
+                                                        Save {discountPercent}%
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="bg-[#f9fafb] p-3 rounded-xl border border-gray-100">
-                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">LISTED</p>
-                                        <p className="text-xs font-bold text-gray-900 leading-tight mb-0.5">
-                                            {product.created_at ? new Date(product.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recently'}
-                                        </p>
+
+                                    {/* 2x2 metadata grid */}
+                                    <div className="mt-4 grid grid-cols-2 gap-px border border-[#D1D5DB] bg-[#E5E7EB]">
+                                        <Link
+                                            href={`/buyer/farmer/${product.farmer_id}`}
+                                            className="group bg-white p-3 transition-colors hover:bg-[#F9FAFB]"
+                                        >
+                                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Farm</p>
+                                            <p className="mt-1 flex items-center gap-1 text-xs font-bold leading-tight text-[#111827] transition-colors group-hover:text-[#286c00]">
+                                                <span className="truncate">{product.farmer_name || 'Partner Farm'}</span>
+                                                <span className="material-symbols-outlined shrink-0 text-[12px] text-[#9CA3AF] transition-colors group-hover:text-[#286c00]">open_in_new</span>
+                                            </p>
+                                            <p className="mt-0.5 truncate text-[10px] text-[#6B7280]">{product.farm_location || 'Local region'}</p>
+                                        </Link>
+
+                                        <div className="bg-white p-3">
+                                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Category</p>
+                                            <p className="mt-1 text-xs font-bold leading-tight text-[#111827]">{product.category_name || 'General'}</p>
+                                            <p className="mt-0.5 text-[10px] text-[#6B7280]">Marketplace</p>
+                                        </div>
+
+                                        <div className="bg-white p-3">
+                                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Stock</p>
+                                            <p className={`mt-1 text-xs font-bold leading-tight tabular-nums ${stockTone}`}>
+                                                {isInStock ? `${stockValue.toLocaleString('en-US')} available` : 'Out of stock'}
+                                            </p>
+                                            <p className="mt-0.5 text-[10px] text-[#6B7280]">Ready to ship</p>
+                                        </div>
+
+                                        <div className="bg-white p-3">
+                                            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">Listed</p>
+                                            <p className="mt-1 text-xs font-bold leading-tight text-[#111827] tabular-nums">{formatDate(product.created_at)}</p>
+                                            <p className="mt-0.5 text-[10px] text-[#6B7280]">On GreenHarvest</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1" aria-hidden="true"></div>
+
+                                    <div className="mt-4 flex items-start gap-2 border-t border-[#E5E7EB] pt-3 text-[11px] leading-relaxed text-[#6B7280]">
+                                        <span className="material-symbols-outlined mt-0.5 text-[16px] text-[#286c00]">local_shipping</span>
+                                        <p>Ships directly from the farm. Freshness and quality checked before dispatch.</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                    </section>
 
+                    {/* Sticky purchase panel */}
+                    <aside className="min-w-0 self-start border border-[#D1D5DB] bg-white lg:sticky lg:top-[89px] lg:col-start-2 lg:row-span-2 lg:row-start-1">
+                        <div className="border-b border-[#E5E7EB] p-5">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#6B7280]">Purchase</p>
+                                    <p className="mt-1 truncate text-sm font-extrabold text-[#111827]">{product.name}</p>
+                                </div>
+                                <span className={`shrink-0 border px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${isInStock ? 'border-[#286c00] text-[#286c00]' : 'border-red-300 text-red-700'}`}>
+                                    {isInStock ? 'Available' : 'Sold out'}
+                                </span>
+                            </div>
+                            <div className="mt-3 flex items-baseline justify-between gap-2 border-t border-[#E5E7EB] pt-3">
+                                <span className="text-[10px] uppercase tracking-wider text-[#6B7280]">Unit price</span>
+                                <span className="text-lg font-black text-[#286c00] tabular-nums">ETB {formatMoney(displayPrice)}</span>
+                            </div>
+                        </div>
+
+                        <div className="p-5">
+                            {/* Freshness Commitment */}
+                            <div className="border border-[#E5E7EB] p-4">
+                                <p className="flex items-center gap-2 text-xs font-bold text-[#286c00]">
+                                    <span className="material-symbols-outlined text-[18px]">verified_user</span>
+                                    Freshness Commitment
+                                </p>
+                                <div className="mt-3 space-y-3">
+                                    <div className="flex gap-2.5">
+                                        <span className="material-symbols-outlined mt-0.5 text-[16px] text-[#286c00]">local_shipping</span>
+                                        <div className="flex-1">
+                                            <p className="text-xs font-bold text-[#111827]">Fast Delivery</p>
+                                            <p className="mt-0.5 text-[10px] text-[#6B7280]">Direct from farm to your door</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2.5">
+                                        <span className="material-symbols-outlined text-[16px] text-[#286c00]">replay</span>
+                                        <div className="flex-1">
+                                            <p className="text-xs font-bold text-[#111827]">Quality Guarantee</p>
+                                            <p className="mt-0.5 text-[10px] text-[#6B7280]">Checked before dispatch</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2.5">
+                                        <span className="material-symbols-outlined mt-0.5 text-[16px] text-[#286c00]">verified_user</span>
+                                        <div className="flex-1">
+                                            <p className="text-xs font-bold text-[#111827]">Secure Payments</p>
+                                            <p className="mt-0.5 text-[10px] text-[#6B7280]">Encrypted processing.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Quantity */}
+                            <div className="mt-5">
+                                <div className="flex items-center justify-between gap-2">
+                                    <label className="text-xs font-bold text-[#111827]">Quantity</label>
+                                    <span className="text-[10px] text-[#6B7280] tabular-nums">{stockValue.toLocaleString('en-US')} available</span>
+                                </div>
+                                <div className="mt-2 flex items-stretch border border-[#D1D5DB] bg-white">
+                                    <button
+                                        type="button"
+                                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                        disabled={quantity <= 1}
+                                        aria-label="Decrease quantity"
+                                        className="flex h-11 w-11 items-center justify-center border-r border-[#D1D5DB] bg-white text-[#4B5563] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:text-[#D1D5DB]"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">remove</span>
+                                    </button>
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={quantity}
+                                        aria-label="Quantity"
+                                        className="h-11 min-w-0 flex-1 rounded-none border-0 bg-white p-0 text-center text-sm font-bold text-[#111827] focus:ring-0 tabular-nums"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setQuantity(Math.min(stockValue, quantity + 1))}
+                                        disabled={quantity >= stockValue}
+                                        aria-label="Increase quantity"
+                                        className="flex h-11 w-11 items-center justify-center border-l border-[#D1D5DB] bg-white text-[#4B5563] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:text-[#D1D5DB]"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">add</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Subtotal */}
+                            <div className="mt-4 border border-[#D1D5DB] bg-white p-4">
+                                <div className="flex items-baseline justify-between gap-2 text-sm">
+                                    <span className="text-[#4B5563]">
+                                        Subtotal <span className="text-[#6B7280] tabular-nums">({quantity} {quantity === 1 ? 'item' : 'items'})</span>
+                                    </span>
+                                    <span className="text-lg font-black text-[#111827] tabular-nums">ETB {formatMoney(displayPrice * quantity)}</span>
+                                </div>
+                                {hasDiscount && (
+                                    <div className="mt-2 flex items-center justify-between border-t border-[#E5E7EB] pt-2 text-[11px]">
+                                        <span className="font-medium text-[#286c00]">You save</span>
+                                        <span className="font-bold text-[#286c00] tabular-nums">ETB {formatMoney((Number(product.price) - Number(product.discount_price!)) * quantity)}</span>
+                                    </div>
+                                )}
+                                <p className="mt-2 text-[10px] text-[#6B7280]">Tax excluded. Delivery calculated at checkout.</p>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="mt-4 flex flex-col gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleAddToCart}
+                                    disabled={addingToCart || addedSuccess || !isInStock}
+                                    className={`flex h-12 w-full items-center justify-center gap-2 rounded-none text-sm font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${addedSuccess ? 'bg-[#1f5400]' : 'bg-[#286c00] hover:bg-[#1f5400]'}`}
+                                >
+                                    {addingToCart ? (
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                                    ) : addedSuccess ? (
+                                        <>
+                                            <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                                            Added to Cart
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="material-symbols-outlined text-[18px]">add_shopping_cart</span>
+                                            Add to Cart
+                                        </>
+                                    )}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleBuyNow}
+                                    disabled={buyingNow || !isInStock}
+                                    className="flex h-12 w-full items-center justify-center gap-2 rounded-none border border-[#286c00] bg-white text-sm font-bold text-[#286c00] transition-colors hover:bg-[#F0FDF4] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {buyingNow ? (
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#286c00] border-t-transparent"></div>
+                                    ) : (
+                                        'Buy Now'
+                                    )}
+                                </button>
+                            </div>
+
+                            {/* Share / Save */}
+                            <div className="mt-3 grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleShare}
+                                    className="flex h-10 items-center justify-center gap-2 rounded-none border border-[#D1D5DB] bg-white text-xs font-bold text-[#4B5563] transition-colors hover:border-[#286c00] hover:text-[#286c00]"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">share</span>
+                                    Share
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSave}
+                                    aria-pressed={isSaved}
+                                    className={`flex h-10 items-center justify-center gap-2 rounded-none border bg-white text-xs font-bold transition-colors ${isSaved ? 'border-[#286c00] text-[#286c00]' : 'border-[#D1D5DB] text-[#4B5563] hover:border-[#286c00] hover:text-[#286c00]'}`}
+                                >
+                                    <span
+                                        className="material-symbols-outlined text-[16px]"
+                                        style={{ fontVariationSettings: isSaved ? '"FILL" 1' : '"FILL" 0' }}
+                                    >
+                                        favorite
+                                    </span>
+                                    {isSaved ? 'Saved' : 'Save'}
+                                </button>
+                            </div>
+
+                            <div className="mt-4 flex items-center justify-center gap-2 border-t border-[#E5E7EB] pt-3 text-[10px] text-[#6B7280]">
+                                <span className="material-symbols-outlined text-[14px] text-[#286c00]">lock</span>
+                                Secure checkout • Farm-direct delivery
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* Supporting content */}
+                    <div className="min-w-0 space-y-6 lg:col-start-1 lg:row-start-2">
                         {/* Description */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                            <h3 className="text-sm font-bold text-gray-900 mb-3">Product Description</h3>
-                            <p className="text-gray-600 text-[13px] leading-relaxed">
+                        <section className="border border-[#D1D5DB] bg-white p-5 sm:p-6">
+                            <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
+                                <h2 className="text-sm font-bold uppercase tracking-[0.12em] text-[#111827]">Product Description</h2>
+                                <span className="material-symbols-outlined text-[18px] text-[#9CA3AF]">notes</span>
+                            </div>
+                            <p className="mt-4 text-[13px] leading-7 text-[#4B5563] [text-wrap:pretty]">
                                 {product.description || 'No description provided for this product.'}
                             </p>
-                        </div>
+                        </section>
 
-                        {/* Farmer Profile Card */}
-                        <Link href={`/buyer/farmer/${product.farmer_id}`} className="block bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:border-[#286c00] hover:shadow-md transition-all group">
-                            <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#286c00] to-[#4caf50] flex items-center justify-center text-white font-bold text-xl shrink-0">
+                        {/* Farmer profile card */}
+                        <Link
+                            href={`/buyer/farmer/${product.farmer_id}`}
+                            className="group block border border-[#D1D5DB] bg-white p-5 transition-colors hover:border-[#286c00] sm:p-6"
+                        >
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                                <div className="flex h-14 w-14 shrink-0 items-center justify-center border border-[#286c00] bg-[#286c00] text-xl font-bold text-white">
                                     {(product.farmer_name || 'F').charAt(0).toUpperCase()}
                                 </div>
-                                <div className="flex-1">
-                                    <h3 className="text-sm font-bold text-gray-900 group-hover:text-[#286c00] transition-colors flex items-center gap-1.5">
-                                        {product.farmer_name || 'Partner Farm'}
-                                        <span className="material-symbols-outlined text-[14px] text-[#286c00]">verified</span>
-                                    </h3>
-                                    <p className="text-xs text-gray-500">{product.farm_location || 'Local Region'} • GreenHarvest Verified Farmer</p>
+                                <div className="min-w-0 flex-1">
+                                    <h2 className="flex items-center gap-1.5 truncate text-base font-extrabold text-[#111827] transition-colors group-hover:text-[#286c00]">
+                                        <span className="truncate">{product.farmer_name || 'Partner Farm'}</span>
+                                        <span className="material-symbols-outlined shrink-0 text-[16px] text-[#286c00]">verified</span>
+                                    </h2>
+                                    <p className="mt-1 text-xs text-[#6B7280]">
+                                        {product.farm_location || 'Local region'} • GreenHarvest Verified Farmer
+                                    </p>
                                 </div>
-                                <div className="flex items-center gap-2 text-xs text-[#286c00] font-bold">
-                                    Visit Store <span className="material-symbols-outlined text-[16px]">storefront</span>
-                                </div>
+                                <span className="inline-flex shrink-0 items-center justify-center gap-2 border border-[#D1D5DB] bg-white px-4 py-2 text-xs font-bold text-[#286c00] transition-colors group-hover:border-[#286c00]">
+                                    Visit Store
+                                    <span className="material-symbols-outlined text-[16px]">storefront</span>
+                                </span>
                             </div>
                         </Link>
 
-                        {/* Customer Reviews */}
-                        <div id="reviews" className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
-                            <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-gray-800 text-xl">reviews</span>
-                                Customer Reviews ({reviewsData?.total_reviews || 0})
-                            </h3>
-
-                            <div className="flex flex-wrap items-center gap-4 mb-8">
-                                <span className="text-4xl font-bold text-gray-900">{reviewsData?.average_rating ? Number(reviewsData.average_rating).toFixed(1) : "0.0"}</span>
-                                <div className="flex text-yellow-400">
-                                    {Array.from({ length: 5 }).map((_, i) => (
-                                        <span key={i} className="material-symbols-outlined" style={{ fontVariationSettings: '"FILL" 1' }}>star</span>
-                                    ))}
-                                </div>
-                                <span className="text-sm text-gray-500 font-medium">{reviewsData?.total_reviews || 0} ratings</span>
+                        {/* Customer reviews */}
+                        <section id="reviews" className="scroll-mt-24 border border-[#D1D5DB] bg-white p-5 sm:p-6">
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] pb-3">
+                                <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.12em] text-[#111827]">
+                                    <span className="material-symbols-outlined text-[18px] text-[#286c00]">reviews</span>
+                                    Customer Reviews
+                                </h2>
+                                <span className="border border-[#D1D5DB] bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#6B7280] tabular-nums">
+                                    {totalReviews} {totalReviews === 1 ? 'Review' : 'Reviews'}
+                                </span>
                             </div>
 
-                            <div className="space-y-6">
+                            <div className="mt-5 flex flex-wrap items-center gap-4 border border-[#E5E7EB] bg-white p-4">
+                                <span className="text-4xl font-black leading-none text-[#111827] tabular-nums">{averageRating.toFixed(1)}</span>
+                                <div>
+                                    <div className="flex items-center text-[#286c00]" aria-hidden="true">
+                                        {STAR_VALUES.map((star) => (
+                                            <span
+                                                key={star}
+                                                className={`material-symbols-outlined text-[18px] ${star <= Math.round(averageRating) ? 'text-[#286c00]' : 'text-[#D1D5DB]'}`}
+                                                style={{ fontVariationSettings: star <= Math.round(averageRating) ? '"FILL" 1' : '"FILL" 0' }}
+                                            >
+                                                star
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <p className="mt-1 text-[10px] text-[#6B7280] tabular-nums">{totalReviews} customer {totalReviews === 1 ? 'rating' : 'ratings'}</p>
+                                </div>
+                                <a
+                                    href="#write-review"
+                                    className="ml-auto inline-flex items-center gap-1 border border-[#D1D5DB] bg-white px-3 py-2 text-[11px] font-bold text-[#286c00] transition-colors hover:border-[#286c00]"
+                                >
+                                    Write a review
+                                    <span className="material-symbols-outlined text-[14px]">edit</span>
+                                </a>
+                            </div>
+
+                            <div className="mt-5 divide-y divide-[#E5E7EB]">
                                 {!reviewsData?.reviews || reviewsData.reviews.length === 0 ? (
-                                    <p className="text-gray-500 text-sm italic">No reviews yet. Be the first to review this product!</p>
+                                    <div className="border border-[#D1D5DB] bg-white p-6 text-center">
+                                        <p className="text-sm font-bold text-[#111827]">No reviews yet</p>
+                                        <p className="mt-1 text-xs text-[#6B7280]">Be the first to share your experience with this product.</p>
+                                    </div>
                                 ) : (
-                                    reviewsData.reviews.map((review: any) => (
-                                        <div key={review.id || review.review_id} className="pb-6 border-b border-gray-100 last:border-0 last:pb-0">
-                                            <div className="flex items-start gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-gray-800 text-white flex items-center justify-center font-bold text-sm shrink-0 uppercase">
-                                                    {(review.user_name || review.name || 'U').charAt(0)}
-                                                </div>
-                                                <div className="flex-1">
-                                                    <div className="flex text-yellow-400 text-[10px] mb-1">
-                                                        {Array.from({ length: 5 }).map((_, i) => (
-                                                            <span key={i} className={`material-symbols-outlined text-[12px] ${i < review.rating ? '' : 'text-gray-200'}`} style={{ fontVariationSettings: i < review.rating ? '"FILL" 1' : '"FILL" 0' }}>star</span>
-                                                        ))}
+                                    reviewsData.reviews.map((review: ProductReview) => {
+                                        const reviewName = review.user_name || review.name || 'Anonymous';
+                                        const reviewRating = Number(review.rating) || 0;
+                                        return (
+                                            <div key={review.id || review.review_id} className="py-4 first:pt-0 last:pb-0">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-[#D1D5DB] bg-white text-xs font-bold uppercase text-[#111827]">
+                                                        {reviewName.charAt(0)}
                                                     </div>
-                                                    <p className="text-xs text-gray-900 mb-2 leading-relaxed">{review.comment || 'No comment provided.'}</p>
-                                                    <span className="text-[10px] text-gray-500">
-                                                        {(review.user_name || review.name || 'Anonymous').substring(0, 4)}*** | {review.created_at ? new Date(review.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recently'}
-                                                    </span>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                                            <div className="flex items-center" aria-label={`${reviewRating} out of 5 stars`}>
+                                                                {STAR_VALUES.map((star) => (
+                                                                    <span
+                                                                        key={star}
+                                                                        className={`material-symbols-outlined text-[13px] ${star <= reviewRating ? 'text-[#286c00]' : 'text-[#D1D5DB]'}`}
+                                                                        style={{ fontVariationSettings: star <= reviewRating ? '"FILL" 1' : '"FILL" 0' }}
+                                                                    >
+                                                                        star
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                            <span className="text-[10px] text-[#6B7280] tabular-nums">{formatDate(review.created_at)}</span>
+                                                        </div>
+                                                        <p className="mt-1.5 text-xs leading-relaxed text-[#374151]">{review.comment || 'No comment provided.'}</p>
+                                                        <p className="mt-2 text-[10px] text-[#6B7280]">{reviewName.substring(0, 4)}***</p>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
 
-                            {/* Add Review Form */}
-                            <div className="mt-10 pt-8 border-t border-gray-100">
-                                <h4 className="text-sm font-bold text-gray-900 mb-4">Write a Review</h4>
+                            {/* Review form */}
+                            <div id="write-review" className="mt-6 scroll-mt-24 border-t border-[#E5E7EB] pt-5">
+                                <h3 className="text-sm font-bold text-[#111827]">Write a Review</h3>
+                                <p className="mt-1 text-[11px] text-[#6B7280]">Share your experience with this product.</p>
+
                                 {reviewError && (
-                                    <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-xs rounded-lg">
+                                    <div role="alert" className="mt-3 border border-red-300 bg-white p-3 text-xs text-red-700">
                                         {reviewError}
                                     </div>
                                 )}
-                                <form onSubmit={handleSubmitReview} className="space-y-4">
+
+                                <form onSubmit={handleSubmitReview} className="mt-4 space-y-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-2">Rating</label>
-                                        <div className="flex gap-2">
-                                            {[1, 2, 3, 4, 5].map((star) => (
+                                        <label className="block text-[11px] font-bold uppercase tracking-wider text-[#374151]">Your rating</label>
+                                        <div className="mt-2 flex flex-wrap items-center gap-1">
+                                            {STAR_VALUES.map((star) => (
                                                 <button
                                                     key={star}
                                                     type="button"
                                                     onClick={() => setRating(star)}
-                                                    className={`material-symbols-outlined text-3xl transition-colors cursor-pointer ${star <= rating ? 'text-yellow-400' : 'text-gray-300 hover:text-gray-400'}`}
-                                                    style={{ fontVariationSettings: star <= rating ? '"FILL" 1' : '"FILL" 0' }}
+                                                    aria-label={`Rate ${star} out of 5`}
+                                                    aria-pressed={rating === star}
+                                                    className={`flex h-9 w-9 items-center justify-center border bg-white transition-colors ${star <= rating ? 'border-[#286c00] text-[#286c00]' : 'border-[#D1D5DB] text-[#9CA3AF] hover:border-[#286c00] hover:text-[#286c00]'}`}
                                                 >
-                                                    star
+                                                    <span
+                                                        className="material-symbols-outlined text-[20px]"
+                                                        style={{ fontVariationSettings: star <= rating ? '"FILL" 1' : '"FILL" 0' }}
+                                                    >
+                                                        star
+                                                    </span>
                                                 </button>
                                             ))}
+                                            <span className="ml-2 text-xs font-bold text-[#111827] tabular-nums">{rating}/5</span>
                                         </div>
                                     </div>
+
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-2">Your Review (Optional)</label>
+                                        <label htmlFor="review-comment" className="block text-[11px] font-bold uppercase tracking-wider text-[#374151]">
+                                            Your review <span className="font-medium normal-case tracking-normal text-[#6B7280]">(optional)</span>
+                                        </label>
                                         <textarea
+                                            id="review-comment"
                                             value={comment}
                                             onChange={(e) => setComment(e.target.value)}
-                                            rows={3}
+                                            rows={4}
                                             placeholder="What did you think of this product?"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#286c00] focus:border-transparent text-sm resize-none"
+                                            className="mt-2 w-full resize-none rounded-none border border-[#D1D5DB] bg-white px-3 py-2.5 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#286c00] focus:outline-none focus:ring-1 focus:ring-[#286c00]"
                                         ></textarea>
                                     </div>
+
                                     <button
                                         type="submit"
                                         disabled={isSubmittingReview}
-                                        className="bg-[#286c00] hover:bg-[#1e5200] text-white font-bold py-2 px-6 rounded-lg transition-colors text-sm disabled:opacity-50"
+                                        className="inline-flex items-center justify-center gap-2 rounded-none bg-[#286c00] px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#1f5400] disabled:cursor-not-allowed disabled:opacity-60"
                                     >
-                                        {isSubmittingReview ? "Submitting..." : "Submit Review"}
+                                        {isSubmittingReview ? (
+                                            <>
+                                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                                                Submitting...
+                                            </>
+                                        ) : (
+                                            'Submit Review'
+                                        )}
                                     </button>
                                 </form>
                             </div>
-                        </div>
+                        </section>
 
-                        {/* More from this Farmer */}
+                        {/* More from this farmer */}
                         {relatedProducts.length > 0 && (
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-[#286c00]">storefront</span>
-                                        More from {product.farmer_name || 'this Farmer'}
-                                    </h3>
-                                    <Link href={`/buyer/farmer/${product.farmer_id}`} className="text-xs font-bold text-[#286c00] hover:underline flex items-center gap-1">
-                                        View All <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                            <section className="space-y-3">
+                                <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[#D1D5DB] pb-3">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#286c00]">From the same farm</p>
+                                        <h2 className="mt-1 flex items-center gap-2 text-base font-extrabold text-[#111827]">
+                                            <span className="material-symbols-outlined text-[20px] text-[#286c00]">storefront</span>
+                                            More from {product.farmer_name || 'this Farmer'}
+                                        </h2>
+                                    </div>
+                                    <Link
+                                        href={`/buyer/farmer/${product.farmer_id}`}
+                                        className="inline-flex items-center gap-1 border border-[#D1D5DB] bg-white px-3 py-2 text-[11px] font-bold text-[#286c00] transition-colors hover:border-[#286c00]"
+                                    >
+                                        View All
+                                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                                     </Link>
                                 </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                    {relatedProducts.map((rp: any) => {
-                                        const rpHasDiscount = rp.discount_price && Number(rp.discount_price) > 0 && Number(rp.discount_price) < Number(rp.price);
+
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                                    {relatedProducts.map((rp: RelatedProduct) => {
+                                        const rpHasDiscount = Boolean(rp.discount_price && Number(rp.discount_price) > 0 && Number(rp.discount_price) < Number(rp.price));
                                         const rpDiscountPercent = rpHasDiscount ? Math.round((1 - Number(rp.discount_price) / Number(rp.price)) * 100) : 0;
+                                        const rpDisplayPrice = rpHasDiscount ? Number(rp.discount_price) : Number(rp.price);
                                         return (
-                                            <Link key={rp.id} href={`/buyer/product/${rp.id}`} className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg hover:border-[#286c00]/30 transition-all group">
-                                                <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                                            <Link
+                                                key={rp.id}
+                                                href={`/buyer/product/${rp.id}`}
+                                                className="group flex flex-col border border-[#D1D5DB] bg-white transition-colors hover:border-[#286c00]"
+                                            >
+                                                <div className="relative aspect-square overflow-hidden border-b border-[#E5E7EB] bg-white">
                                                     {rp.image_url ? (
-                                                        <img src={rp.image_url} alt={rp.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                        <img
+                                                            src={rp.image_url}
+                                                            alt={rp.name}
+                                                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                                        />
                                                     ) : (
-                                                        <div className="w-full h-full flex items-center justify-center">
-                                                            <span className="material-symbols-outlined text-gray-300 text-4xl">image</span>
+                                                        <div className="flex h-full w-full items-center justify-center bg-white">
+                                                            <span className="material-symbols-outlined text-4xl text-[#D1D5DB]">image</span>
                                                         </div>
                                                     )}
                                                     {rpHasDiscount && (
-                                                        <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                                                        <span className="absolute left-2 top-2 bg-[#286c00] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white tabular-nums">
                                                             -{rpDiscountPercent}%
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div className="p-3">
-                                                    <p className="text-xs font-bold text-gray-900 line-clamp-1 mb-1">{rp.name}</p>
-                                                    <div className="flex items-baseline gap-1.5">
-                                                        {rpHasDiscount ? (
-                                                            <>
-                                                                <span className="text-sm font-black text-[#286c00]">ETB {Number(rp.discount_price).toFixed(0)}</span>
-                                                                <span className="text-[10px] text-gray-400 line-through">ETB {Number(rp.price).toFixed(0)}</span>
-                                                            </>
-                                                        ) : (
-                                                            <span className="text-sm font-black text-[#286c00]">ETB {Number(rp.price).toFixed(0)}</span>
+                                                <div className="flex flex-1 flex-col p-3">
+                                                    <p className="line-clamp-1 text-xs font-bold text-[#111827] transition-colors group-hover:text-[#286c00]">{rp.name}</p>
+                                                    <p className="mt-1 line-clamp-1 text-[10px] text-[#6B7280]">{rp.category_name || 'Farm fresh'}</p>
+                                                    <div className="mt-auto flex flex-wrap items-baseline gap-1.5 pt-2">
+                                                        <span className="text-sm font-black text-[#286c00] tabular-nums">ETB {formatMoney(rpDisplayPrice)}</span>
+                                                        {rpHasDiscount && (
+                                                            <span className="text-[10px] text-[#9CA3AF] line-through tabular-nums">ETB {formatMoney(rp.price)}</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -442,139 +890,8 @@ export default function ProductDetailPage() {
                                         );
                                     })}
                                 </div>
-                            </div>
+                            </section>
                         )}
-                    </div>
-
-                    {/* Right Column (Sticky Sidebar) */}
-                    <div className="w-full lg:w-[340px] xl:w-[380px] shrink-0 lg:sticky lg:top-24">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-5">
-                            {/* Price */}
-                            <div>
-                                {hasDiscount ? (
-                                    <div>
-                                        <div className="flex items-baseline gap-2 mb-0.5">
-                                            <span className="text-3xl font-black text-[#e3342f]">ETB {Number(product.discount_price).toFixed(2)}</span>
-                                            <span className="text-sm text-gray-400 line-through">ETB {Number(product.price).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full">
-                                                🔥 FLASH SALE - {discountPercent}% OFF
-                                            </span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-baseline gap-1 mb-0.5">
-                                        <span className="text-3xl font-black text-[#286c00]">ETB {Number(product.price).toFixed(2)}</span>
-                                    </div>
-                                )}
-                                <p className="text-[10px] text-gray-500 mt-1">Tax excluded, calculated at checkout</p>
-                            </div>
-
-                            {/* Farm Direct */}
-                            <div className="flex items-center justify-between text-xs pb-1 border-t border-gray-100 pt-3">
-                                <span className="text-gray-500">Farm Direct</span>
-                                <Link href={`/buyer/farmer/${product.farmer_id}`} className="font-bold text-gray-700 flex items-center hover:text-[#286c00] transition-colors">
-                                    {product.farmer_name || 'Partner Farm'} <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-                                </Link>
-                            </div>
-
-                            {/* Freshness Commitment */}
-                            <div className="bg-[#f9fafb] p-3.5 rounded-xl space-y-3 border border-gray-50">
-                                <p className="text-xs font-bold text-[#286c00]">Freshness Commitment</p>
-                                <div className="space-y-2.5">
-                                    <div className="flex gap-2.5">
-                                        <span className="material-symbols-outlined text-[#286c00] text-[16px] mt-0.5">local_shipping</span>
-                                        <div className="flex-1">
-                                            <p className="text-xs font-bold text-gray-900">Fast Delivery</p>
-                                            <p className="text-[10px] text-gray-500 mt-0.5">Direct from farm to your door</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2.5">
-                                        <span className="material-symbols-outlined text-[#286c00] text-[16px]">replay</span>
-                                        <div className="flex-1">
-                                            <p className="text-xs font-bold text-gray-900">Quality Guarantee</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2.5">
-                                        <span className="material-symbols-outlined text-[#286c00] text-[16px] mt-0.5">verified_user</span>
-                                        <div className="flex-1">
-                                            <p className="text-xs font-bold text-gray-900">Secure Payments</p>
-                                            <p className="text-[10px] text-gray-500 mt-0.5">Encrypted processing.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Quantity */}
-                            <div>
-                                <p className="text-xs font-bold text-gray-900 mb-2">Quantity</p>
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center border border-gray-200 rounded-lg p-0.5 w-24 bg-white shadow-sm">
-                                        <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-50 text-gray-600"><span className="material-symbols-outlined text-sm">remove</span></button>
-                                        <input type="text" readOnly value={quantity} className="w-full text-center border-none text-xs font-bold focus:ring-0 p-0" />
-                                        <button onClick={() => setQuantity(Math.min(product.stock, quantity + 1))} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-50 text-gray-600"><span className="material-symbols-outlined text-sm">add</span></button>
-                                    </div>
-                                    <span className="text-[10px] font-medium text-gray-500">{product.stock}+ available</span>
-                                </div>
-                            </div>
-
-                            {/* Total */}
-                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-600">Subtotal ({quantity} item{quantity > 1 ? 's' : ''})</span>
-                                    <span className="font-black text-gray-900">ETB {(displayPrice * quantity).toFixed(2)}</span>
-                                </div>
-                                {hasDiscount && (
-                                    <div className="flex justify-between items-center text-xs mt-1">
-                                        <span className="text-green-600 font-medium">You save</span>
-                                        <span className="text-green-600 font-bold">ETB {((Number(product.price) - Number(product.discount_price!)) * quantity).toFixed(2)}</span>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Actions - AliExpress Inspired */}
-                            <div className="flex gap-2 pt-2">
-                                <button 
-                                    onClick={handleAddToCart} 
-                                    disabled={addingToCart || addedSuccess} 
-                                    className={`flex-1 font-bold py-3 px-2 rounded-full transition-all text-sm shadow-md flex items-center justify-center gap-1.5 ${
-                                        addedSuccess 
-                                        ? 'bg-green-500 text-white' 
-                                        : 'bg-gradient-to-r from-[#ff8900] to-[#ff5d00] hover:from-[#ff9900] hover:to-[#ff6d00] text-white'
-                                    }`}
-                                >
-                                    {addingToCart ? (
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    ) : addedSuccess ? (
-                                        <><span className="material-symbols-outlined text-[18px]">check_circle</span> Added</>
-                                    ) : (
-                                        <><span className="material-symbols-outlined text-[18px]">add_shopping_cart</span> Add to cart</>
-                                    )}
-                                </button>
-                                <button 
-                                    onClick={handleBuyNow} 
-                                    disabled={buyingNow} 
-                                    className="flex-1 bg-gradient-to-r from-[#ff0000] to-[#d60000] hover:from-[#ff1a1a] hover:to-[#e60000] text-white font-bold py-3 px-2 rounded-full transition-all text-sm shadow-md flex items-center justify-center"
-                                >
-                                    {buyingNow ? (
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    ) : (
-                                        "Buy now"
-                                    )}
-                                </button>
-                            </div>
-
-                            {/* Share / Like */}
-                            <div className="flex gap-2.5 mt-1">
-                                <button className="flex-1 py-2 border border-gray-200 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-                                    <span className="material-symbols-outlined text-[16px] text-gray-500">share</span> Share
-                                </button>
-                                <button className="flex-1 py-2 border border-gray-200 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-                                    <span className="material-symbols-outlined text-[16px] text-gray-500">favorite_border</span> Save
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </main>

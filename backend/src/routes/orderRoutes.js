@@ -17,6 +17,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.post("/", createOrder);
+router.post("/checkout", createOrder);
 router.get("/", getUserOrders);
 router.get("/:id", getOrderById);
 router.put("/:id/assign-delivery", requireRole("admin"), assignDeliveryPartner);

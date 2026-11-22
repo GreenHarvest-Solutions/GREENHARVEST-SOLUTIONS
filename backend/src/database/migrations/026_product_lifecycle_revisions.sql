@@ -43,3 +43,4 @@ CREATE TABLE IF NOT EXISTS product_revisions (
 CREATE INDEX IF NOT EXISTS idx_prod_rev_product_id ON product_revisions(product_id);
 CREATE INDEX IF NOT EXISTS idx_prod_rev_farmer_id ON product_revisions(farmer_id);
 CREATE INDEX IF NOT EXISTS idx_prod_rev_status ON product_revisions(status);
+

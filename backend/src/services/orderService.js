@@ -3,6 +3,8 @@ const { pool } = require("../config/db");
 const logger = require("../utils/logger");
 const notificationModel = require("../models/notificationModel");
 const orderModel = require("../models/orderModel");
+const inventoryModel = require("../models/inventoryModel");
+const inventoryService = require("./inventoryService");
 const { normalizeRole } = require("../utils/roles");
 const { isPositiveInteger } = require("../utils/validators");
 
@@ -140,6 +142,10 @@ const createOrder = async (buyer_id, payload = {}) => {
 					p.status,
 					p.moderation_status,
 					p.deleted_at,
+					p.farmer_id,
+					p.unit,
+					p.image_url,
+					u.name AS farmer_name,
 					u.account_status,
 					c.cart_id
 				FROM carts c
@@ -159,6 +165,7 @@ const createOrder = async (buyer_id, payload = {}) => {
 
 		let total_amount = 0;
 
+		// 1. Eligibility & Stock Concurrency Verification
 		for (const item of cartResult.rows) {
 			// Eligibility Gate: Product must be non-deleted, active, and approved
 			if (item.deleted_at || item.status !== "active" || item.moderation_status !== "approved") {
@@ -176,38 +183,89 @@ const createOrder = async (buyer_id, payload = {}) => {
 				);
 			}
 
-			if (item.stock < item.quantity) {
-				throw createServiceError(`Insufficient stock for product: ${item.name}`, 400);
+			// Authoritative Row-Level Lock on Inventory
+			const inv = await inventoryModel.findInventoryForUpdate(client, item.product_id);
+			const availableStock = inv ? Number(inv.quantity) : Number(item.stock || 0);
+
+			if (availableStock < item.quantity) {
+				throw createServiceError(
+					`Insufficient stock for product: ${item.name}`,
+					409
+				);
 			}
 
 			total_amount += Number(item.price) * item.quantity;
 		}
 
+		// 2. Create Parent Order
+		const orderNumber = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 		const order = await orderModel.createOrderRecord(client, {
 			buyer_id,
 			total_amount: total_amount.toFixed(2),
 			address_id,
+			order_number: orderNumber,
 		});
 
+		// 3. Multi-Vendor Suborders: Group by farmer_id
+		const itemsByFarmer = new Map();
 		for (const item of cartResult.rows) {
-			await orderModel.createOrderItemRecord(client, {
-				order_id: order.id,
-				product_id: item.product_id,
-				quantity: item.quantity,
-				price: item.price,
+			const fId = Number(item.farmer_id);
+			if (!itemsByFarmer.has(fId)) {
+				itemsByFarmer.set(fId, []);
+			}
+			itemsByFarmer.get(fId).push(item);
+		}
+
+		let suborderIndex = 1;
+		for (const [farmerId, farmerItems] of itemsByFarmer.entries()) {
+			const farmerSubtotal = farmerItems.reduce(
+				(sum, it) => sum + Number(it.price) * it.quantity,
+				0
+			);
+			const suborderNumber = `SUB-${order.id}-${farmerId}-${suborderIndex++}`;
+			const pickupCode = `GH-${Math.floor(100000 + Math.random() * 900000)}`;
+
+			const suborder = await orderModel.createSuborderRecord(client, {
+				parent_order_id: order.id,
+				farmer_id: farmerId,
+				suborder_number: suborderNumber,
+				subtotal: farmerSubtotal.toFixed(2),
+				shipping_fee: 0.00,
+				total_amount: farmerSubtotal.toFixed(2),
+				fulfillment_type: "farmer_pickup",
+				pickup_code: pickupCode,
 			});
 
-			const updatedInventory = await orderModel.decrementProductStock(
-				client,
-				item.product_id,
-				item.quantity
-			);
+			for (const item of farmerItems) {
+				// Record order_item with frozen immutable product snapshot
+				await orderModel.createOrderItemRecord(client, {
+					order_id: order.id,
+					suborder_id: suborder.id,
+					product_id: item.product_id,
+					quantity: item.quantity,
+					price: item.price,
+					product_name: item.name,
+					product_image_url: item.image_url,
+					unit: item.unit || "kg",
+					unit_price: item.price,
+					farmer_id: item.farmer_id,
+					farmer_name: item.farmer_name,
+				});
 
-			if (!updatedInventory || Number(updatedInventory.stock) < 0) {
-				throw createServiceError(`Insufficient stock for product: ${item.name}`, 400);
+				// Decrement authoritative inventory stock
+				await inventoryModel.decrementInventoryStock(client, item.product_id, item.quantity);
+
+				// Create 15-minute stock reservation
+				await inventoryModel.createStockReservation(client, {
+					orderId: order.id,
+					productId: item.product_id,
+					quantity: item.quantity,
+					ttlMinutes: 15,
+				});
 			}
 		}
 
+		// 4. Clear Cart
 		await client.query(
 			`
 				DELETE FROM cart_items ci
@@ -216,9 +274,16 @@ const createOrder = async (buyer_id, payload = {}) => {
 			`,
 			[buyer_id]
 		);
+
 		await client.query("COMMIT");
 
-		logger.info("Order created", { order_id: order.id, buyer_id });
+		logger.info("Multi-vendor order created with suborders and stock reservations", {
+			order_id: order.id,
+			order_number: order.order_number,
+			buyer_id,
+			suborders_count: itemsByFarmer.size,
+		});
+
 		const createdOrders = await getOrdersForBuyer(buyer_id, order.id);
 		const createdOrder = createdOrders[0];
 
@@ -231,6 +296,20 @@ const createOrder = async (buyer_id, payload = {}) => {
 	} finally {
 		client.release();
 	}
+};
+
+const getFarmerSuborders = async ({ user, page = 1, limit = 10, status = null, search = null }) => {
+	const farmerId = Number(user.id);
+	return orderModel.getSubordersForFarmer(farmerId, { page, limit, status, search });
+};
+
+const updateSuborderStatus = async ({ user, suborderId, status }) => {
+	const farmerId = Number(user.id);
+	const updated = await orderModel.updateSuborderStatus(suborderId, status, farmerId);
+	if (!updated) {
+		throw createServiceError("Suborder not found or unauthorized", 404);
+	}
+	return updated;
 };
 
 const getOrderByIdForBuyer = async (buyer_id, order_id) => {
@@ -281,7 +360,9 @@ module.exports = {
 	allowedOrderStatuses,
 	allowedPaymentStatuses,
 	createOrder,
+	getFarmerSuborders,
 	getOrderByIdForBuyer,
 	getOrdersForBuyer,
 	updateOrderStatus,
+	updateSuborderStatus,
 };

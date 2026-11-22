@@ -264,9 +264,9 @@ const getFarmerOrders = async (req, res) => {
         SELECT COUNT(DISTINCT o.id)::int AS total
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
-        JOIN products p ON p.id = oi.product_id
+        LEFT JOIN products p ON p.id = oi.product_id
         JOIN users u ON u.id = o.buyer_id
-        WHERE p.farmer_id = $1${statusFilter}${searchFilter}
+        WHERE (oi.farmer_id = $1 OR p.farmer_id = $1)${statusFilter}${searchFilter}
       `,
       values
     );
@@ -278,25 +278,33 @@ const getFarmerOrders = async (req, res) => {
       `
         SELECT
           o.id AS order_id,
-          o.order_status,
-          o.total_amount,
+          s.id AS suborder_id,
+          COALESCE(s.suborder_number, 'SUB-' || o.id || '-' || $1) AS suborder_number,
+          COALESCE(s.fulfillment_status, o.order_status) AS order_status,
+          COALESCE(s.fulfillment_status, o.order_status) AS fulfillment_status,
+          COALESCE(s.fulfillment_type, 'farmer_pickup') AS fulfillment_type,
+          s.pickup_code,
+          COALESCE(s.total_amount, o.total_amount) AS total_amount,
+          o.payment_status,
           o.created_at,
           u.name AS buyer_name,
           u.email AS buyer_email,
           json_agg(json_build_object(
-            'product_name', p.name,
+            'product_name', COALESCE(oi.product_name, p.name),
             'quantity', oi.quantity,
-            'price', oi.price,
+            'price', COALESCE(oi.unit_price, oi.price),
+            'unit', COALESCE(oi.unit, p.unit, 'kg'),
             'category_name', c.name,
-            'image_url', p.image_url
+            'image_url', COALESCE(oi.product_image_url, p.image_url)
           )) AS items
         FROM orders o
         JOIN users u ON u.id = o.buyer_id
         JOIN order_items oi ON oi.order_id = o.id
-        JOIN products p ON p.id = oi.product_id
+        LEFT JOIN suborders s ON s.parent_order_id = o.id AND s.farmer_id = $1
+        LEFT JOIN products p ON p.id = oi.product_id
         LEFT JOIN categories c ON c.id = p.category_id
-        WHERE p.farmer_id = $1${statusFilter}${searchFilter}
-        GROUP BY o.id, u.id
+        WHERE (oi.farmer_id = $1 OR p.farmer_id = $1)${statusFilter}${searchFilter}
+        GROUP BY o.id, s.id, u.id
         ORDER BY o.created_at DESC
         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
       `,
@@ -317,6 +325,41 @@ const getFarmerOrders = async (req, res) => {
     return res.status(500).json({
       message: "Internal server error",
     });
+  }
+};
+
+const updateFarmerSuborderStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const validStatuses = ['pending', 'accepted', 'packed', 'dispatched', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        message: `Invalid fulfillment status. Allowed: ${validStatuses.join(', ')}`,
+      });
+    }
+
+    const updated = await pool.query(
+      `
+        UPDATE suborders
+        SET fulfillment_status = $1, updated_at = NOW()
+        WHERE id = $2 AND farmer_id = $3
+        RETURNING *
+      `,
+      [status, id, req.user.id]
+    );
+
+    if (updated.rows.length === 0) {
+      return res.status(404).json({ message: "Suborder not found or unauthorized" });
+    }
+
+    return res.status(200).json({
+      message: `Suborder status updated to ${status}`,
+      suborder: updated.rows[0],
+    });
+  } catch (error) {
+    console.error("Update suborder status failed:", error.message);
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -793,5 +836,6 @@ module.exports = {
   exportFarmerOrdersCSV,
   exportFarmerProductsCSV,
   batchUpdateProductStatus,
+  updateFarmerSuborderStatus,
   updateReturnStatus,
 };

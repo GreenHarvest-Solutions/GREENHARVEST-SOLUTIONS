@@ -12,6 +12,7 @@ const {
   exportFarmerOrdersCSV,
   exportFarmerProductsCSV,
   batchUpdateProductStatus,
+  updateFarmerSuborderStatus,
   updateReturnStatus,
 } = require("../controllers/dashboardController");
 
@@ -21,6 +22,7 @@ router.use(authMiddleware);
 
 router.get("/farmer", requireRole("farmer"), getFarmerDashboard);
 router.get("/farmer/orders", requireRole("farmer"), getFarmerOrders);
+router.patch("/farmer/suborders/:id/status", requireRole("farmer"), updateFarmerSuborderStatus);
 router.get("/farmer/orders/export-csv", requireRole("farmer"), exportFarmerOrdersCSV);
 router.get("/farmer/products", requireRole("farmer"), getFarmerProducts);
 router.get("/farmer/products/export-csv", requireRole("farmer"), exportFarmerProductsCSV);

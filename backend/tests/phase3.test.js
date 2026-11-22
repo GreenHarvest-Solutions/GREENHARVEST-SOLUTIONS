@@ -72,6 +72,8 @@ const runTests = async () => {
      ON CONFLICT DO NOTHING`
   );
 
+  const { signAccessToken } = require("../src/utils/jwt");
+
   // 1. Provisional Farmer (email verified, KYC not submitted / provisional)
   const regProv = await fetch(`${API_BASE}/auth/register`, {
     method: "POST",
@@ -92,12 +94,12 @@ const runTests = async () => {
     `UPDATE users SET email_verified = TRUE, is_verified = FALSE, kyc_status = 'not_submitted', kyc_tier = 'provisional' WHERE id = $1`,
     [provFarmerId]
   );
-  const loginProv = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: testProvisionalEmail, password: "Password123!" }),
+  provFarmerToken = signAccessToken({
+    id: provFarmerId,
+    email: testProvisionalEmail,
+    role: "farmer",
+    name: "Provisional Farmer Phase3",
   });
-  provFarmerToken = (await loginProv.json()).access_token;
 
   // 2. Verified Farmer (email verified, is_verified = TRUE, kyc_status = 'approved')
   const regVerif = await fetch(`${API_BASE}/auth/register`, {
@@ -119,12 +121,12 @@ const runTests = async () => {
     `UPDATE users SET email_verified = TRUE, is_verified = TRUE, kyc_status = 'approved', kyc_tier = 'tier2' WHERE id = $1`,
     [verifFarmerId]
   );
-  const loginVerif = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: testVerifiedEmail, password: "Password123!" }),
+  verifFarmerToken = signAccessToken({
+    id: verifFarmerId,
+    email: testVerifiedEmail,
+    role: "farmer",
+    name: "Verified Producer Phase3",
   });
-  verifFarmerToken = (await loginVerif.json()).access_token;
 
   // 3. Admin User (inserted directly as public admin registration is disabled)
   await pool.query(
@@ -140,7 +142,6 @@ const runTests = async () => {
   const { invalidateUserPermissionCache } = require("../src/middleware/permissionMiddleware");
   invalidateUserPermissionCache(adminUserId);
 
-  const { signAccessToken } = require("../src/utils/jwt");
   adminToken = signAccessToken({
     id: adminUserId,
     email: testAdminEmail,

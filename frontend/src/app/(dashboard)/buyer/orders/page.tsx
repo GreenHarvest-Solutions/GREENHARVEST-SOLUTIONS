@@ -15,10 +15,27 @@ interface OrderItem {
   image_url?: string;
   farm_location?: string;
   farmer_id?: number;
+  farmer_name?: string;
+  unit?: string;
+  suborder_id?: number;
+}
+
+interface Suborder {
+  id: number;
+  suborder_number: string;
+  farmer_id: number;
+  farmer_name?: string;
+  subtotal: number;
+  shipping_fee: number;
+  total_amount: number;
+  fulfillment_type: string;
+  fulfillment_status: string;
+  pickup_code?: string;
 }
 
 interface Order {
   id: number;
+  order_number?: string;
   buyer_id: number;
   total_price: number;
   total_amount: number;
@@ -27,6 +44,7 @@ interface Order {
   delivery_status: string;
   created_at: string;
   items: OrderItem[];
+  suborders?: Suborder[];
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: string }> = {
@@ -256,7 +274,7 @@ export default function BuyerOrdersPage() {
                           <span className="material-symbols-outlined text-[18px] text-[#286c00]">receipt_long</span>
                         </div>
                         <div>
-                          <h3 className="text-sm font-bold text-gray-900">Order #{order.id}</h3>
+                          <h3 className="text-sm font-bold text-gray-900">{order.order_number ? `Order ${order.order_number}` : `Order #${order.id}`}</h3>
                           <p className="text-[11px] text-gray-400">
                             {formatDate(order.created_at)} at {formatTime(order.created_at)}
                           </p>
@@ -365,9 +383,50 @@ export default function BuyerOrdersPage() {
                         </div>
                       )}
 
+                      {/* Multi-Vendor Suborder Packages */}
+                      {order.suborders && order.suborders.length > 0 && (
+                        <div className="px-5 sm:px-6 pt-4 pb-2">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                            Seller Packages ({order.suborders.length} {order.suborders.length === 1 ? 'farmer' : 'farmers'})
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {order.suborders.map((sub) => {
+                              const subStatus = sub.fulfillment_status || 'pending';
+                              const subStatusInfo = getStatusInfo(subStatus);
+                              return (
+                                <div key={sub.id || sub.suborder_number} className="bg-white border border-gray-200 rounded-xl p-3.5 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-mono text-xs font-bold text-gray-800">{sub.suborder_number}</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${subStatusInfo.bg} ${subStatusInfo.color}`}>
+                                      {subStatusInfo.label}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-gray-600">
+                                    <p className="font-semibold text-gray-900">Farmer: {sub.farmer_name || `Farmer #${sub.farmer_id}`}</p>
+                                    <p className="text-[11px] text-gray-500 capitalize">Method: {sub.fulfillment_type?.replace(/_/g, ' ') || 'Farmer Pickup'}</p>
+                                  </div>
+                                  {sub.pickup_code && (
+                                    <div className="pt-1 flex items-center justify-between border-t border-gray-100">
+                                      <span className="text-[11px] text-gray-500 font-medium">Pickup Code:</span>
+                                      <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                        {sub.pickup_code}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between items-center text-xs font-bold text-gray-700 pt-1 border-t border-gray-100">
+                                    <span>Subtotal:</span>
+                                    <span>ETB {Number(sub.total_amount).toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Order Items */}
                       <div className="p-5 sm:p-6 space-y-3">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Order Items</h4>
+                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Order Items (Immutable Snapshots)</h4>
                         {order.items?.map((item, idx) => (
                           <div key={item.id || idx} className="flex items-center gap-4 bg-white rounded-xl p-3 border border-gray-100">
                             <div className="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-50">
@@ -380,9 +439,10 @@ export default function BuyerOrdersPage() {
                             <div className="flex-1 min-w-0">
                               <h5 className="text-sm font-bold text-gray-900 truncate">{item.product_name}</h5>
                               <p className="text-[11px] text-gray-400">
-                                Qty: <span className="font-bold text-gray-600">{item.quantity}</span>
+                                Qty: <span className="font-bold text-gray-600">{item.quantity} {item.unit || 'kg'}</span>
                                 <span className="mx-1.5">·</span>
                                 ETB {Number(item.price).toFixed(2)} each
+                                {item.farmer_name && <span className="ml-2 text-gray-500 font-medium">(Sold by {item.farmer_name})</span>}
                               </p>
                             </div>
                             <p className="text-sm font-bold text-gray-900 shrink-0">
