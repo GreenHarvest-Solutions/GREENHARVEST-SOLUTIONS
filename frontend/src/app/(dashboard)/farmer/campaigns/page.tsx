@@ -235,7 +235,7 @@ export default function CampaignManagementPage() {
             {/* Header Section */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight" style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}>Marketing Center</h1>
+                <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Marketing Center</h1>
                 <p className="text-sm text-gray-600 mt-1 max-w-2xl">
                   Boost your harvest sales by launching high-impact promotions, flash sales, and customer loyalty bundles across the GreenHarvest network.
                 </p>
