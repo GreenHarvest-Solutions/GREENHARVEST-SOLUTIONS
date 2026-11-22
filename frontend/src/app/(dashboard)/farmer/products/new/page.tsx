@@ -220,7 +220,7 @@ export default function NewProductPage() {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  placeholder="e.g. Organic Magna White Teff (የመገና ነጭ ጤፍ)"
+                  placeholder="e.g. Organic Magna White Teff (Nech Teff)"
                   className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-medium transition-all"
                 />
               </div>
