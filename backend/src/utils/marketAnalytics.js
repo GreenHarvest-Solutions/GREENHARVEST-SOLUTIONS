@@ -71,17 +71,25 @@ function computeSupplyForecast(priceTrends) {
   return forecast.slice(0, 5);
 }
 
-async function fetchCommodityRows(months = 6) {
+async function fetchCommodityRows(months = 12) {
   const sinceDate = new Date();
   sinceDate.setMonth(sinceDate.getMonth() - months);
 
-  const result = await pool.query(
+  let result = await pool.query(
     `SELECT commodity_name, price, region, recorded_at
      FROM commodity_price_history
      WHERE recorded_at >= $1
      ORDER BY recorded_at ASC`,
     [sinceDate.toISOString()]
   );
+
+  if (result.rows.length === 0) {
+    result = await pool.query(
+      `SELECT commodity_name, price, region, recorded_at
+       FROM commodity_price_history
+       ORDER BY recorded_at ASC`
+    );
+  }
 
   return result.rows;
 }
