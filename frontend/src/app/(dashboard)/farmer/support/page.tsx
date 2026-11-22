@@ -3,8 +3,8 @@ import Link from 'next/link';
 
 export default function ContactSupport() {
   return (
-    <div className="min-h-screen bg-[#f3f4f6] p-8">
-      <div className="max-w-3xl mx-auto">
+    <div className="w-full flex-1 flex flex-col bg-[#f8fafc] p-6 sm:p-8 pb-24">
+      <div className="max-w-3xl mx-auto w-full">
         <div className="flex items-center mb-8">
           <Link href="/farmer/dashboard" className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-gray-500 hover:text-[#2d9a33] shadow-sm mr-4 transition-colors">
             <span className="material-symbols-outlined">arrow_back</span>

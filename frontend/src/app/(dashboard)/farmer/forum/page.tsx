@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export default function SellerForum() {
   return (
-    <div className="min-h-screen bg-[#f3f4f6] p-8 flex items-center justify-center">
+    <div className="w-full flex-1 flex flex-col bg-[#f8fafc] p-8 items-center justify-center min-h-full">
       <div className="bg-white p-10 rounded-2xl shadow-sm text-center max-w-md w-full border border-gray-100">
         <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
           <span className="material-symbols-outlined text-[40px]">forum</span>

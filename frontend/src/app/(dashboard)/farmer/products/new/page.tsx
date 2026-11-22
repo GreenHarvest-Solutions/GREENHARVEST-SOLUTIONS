@@ -20,47 +20,9 @@ const UNITS = [
   { value: 'piece', label: 'Per Piece / Unit' },
 ];
 
-const ETHIOPIAN_CROP_PRESETS = [
-  {
-    name: 'White Teff (Nech Teff)',
-    categoryHint: 'Grains',
-    url: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Arabica Coffee (Jimma/Yirgacheffe)',
-    categoryHint: 'Beverages',
-    url: 'https://images.unsplash.com/photo-1552346154-21d32810aba3?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Red Onion (Shashemene)',
-    categoryHint: 'Vegetables',
-    url: 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Bread Wheat (Bale / Arsi)',
-    categoryHint: 'Grains',
-    url: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Yellow Maize (Bako Corn)',
-    categoryHint: 'Grains',
-    url: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Fresh Tomatoes (Meki)',
-    categoryHint: 'Vegetables',
-    url: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Highland Potatoes (Chencha)',
-    categoryHint: 'Vegetables',
-    url: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=800&q=80',
-  },
-];
-
 export default function NewProductPage() {
   const router = useRouter();
-  const { showError, showSuccess, showInfo } = useToast();
+  const { showError, showSuccess } = useToast();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
@@ -97,7 +59,7 @@ export default function NewProductPage() {
           setFormData((prev) => ({ ...prev, category_id: String(fetchedCats[0].id) }));
         }
 
-        if (userRes?.user?.farm_location || userRes?.user?.address) {
+        if (userRes.user?.farm_location || userRes.user?.address) {
           setFormData((prev) => ({
             ...prev,
             farm_location: userRes.user.farm_location || userRes.user.address || '',
@@ -120,15 +82,6 @@ export default function NewProductPage() {
       setFormData((prev) => ({ ...prev, [name]: checked }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const handleSelectPreset = (preset: typeof ETHIOPIAN_CROP_PRESETS[0]) => {
-    if (!images.includes(preset.url)) {
-      setImages([...images, preset.url]);
-      showSuccess(`Added photo preset: ${preset.name}`);
-    } else {
-      showInfo(`Photo preset already added`);
     }
   };
 
@@ -169,35 +122,28 @@ export default function NewProductPage() {
     e.preventDefault();
     if (!validate()) return;
 
-    let finalImages = [...images];
-    if (finalImages.length === 0) {
-      const matched = ETHIOPIAN_CROP_PRESETS.find(p => 
-        formData.name.toLowerCase().includes(p.name.toLowerCase().split(' ')[0])
-      ) || ETHIOPIAN_CROP_PRESETS[0];
-      finalImages = [matched.url];
-      showInfo(`Assigned ${matched.name} photo preset for this harvest.`);
-    }
-
     setIsSubmitting(true);
     try {
+      const finalImages = images.length > 0 ? images : ['https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=600&q=80'];
+
       await api.createProduct({
         name: formData.name.trim(),
         category_id: Number(formData.category_id),
         description: formData.description.trim() || undefined,
         price: Number(formData.price),
-        discount_price: formData.discount_price && Number(formData.discount_price) > 0 ? Number(formData.discount_price) : undefined,
+        discount_price: formData.discount_price ? Number(formData.discount_price) : undefined,
         stock: Number(formData.stock),
         unit: formData.unit,
         min_order_quantity: Number(formData.min_order_quantity || 1),
-        harvest_date: formData.harvest_date && formData.harvest_date.trim() !== '' ? formData.harvest_date : undefined,
-        shelf_life_days: formData.shelf_life_days && formData.shelf_life_days.trim() !== '' ? Number(formData.shelf_life_days) : undefined,
+        harvest_date: formData.harvest_date || undefined,
+        shelf_life_days: formData.shelf_life_days ? Number(formData.shelf_life_days) : undefined,
         is_organic: formData.is_organic,
         farm_location: formData.farm_location.trim() || undefined,
         images: finalImages,
         image_url: finalImages[0] || undefined,
       });
 
-      showSuccess('Harvest crop published successfully!');
+      showSuccess('Product published successfully!');
       router.push('/farmer/products');
     } catch (err: any) {
       console.error('Failed to create product:', err);
@@ -213,7 +159,7 @@ export default function NewProductPage() {
   const kgEquivalent = formData.unit === 'quintal' ? numPrice / 100 : numPrice;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col font-sans text-gray-800">
+    <div className="w-full flex-1 flex flex-col bg-[#f8fafc] font-sans text-gray-800">
       {/* Top Header */}
       <header className="h-20 bg-white border-b border-gray-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-20 shadow-xs">
         <div className="flex items-center gap-3">
@@ -224,8 +170,8 @@ export default function NewProductPage() {
             <span className="material-symbols-outlined text-xl">arrow_back</span>
           </Link>
           <div>
-            <h1 className="text-lg font-bold text-gray-900 leading-tight">Add New Harvest Crop</h1>
-            <p className="text-xs text-gray-500">List your agricultural produce on the GreenHarvest marketplace</p>
+            <h1 className="text-lg font-bold text-gray-900 leading-tight">Add New Produce</h1>
+            <p className="text-xs text-gray-500">List your harvest on the GreenHarvest marketplace</p>
           </div>
         </div>
 
@@ -247,42 +193,10 @@ export default function NewProductPage() {
               Harvest Photos
             </h2>
             <p className="text-xs text-gray-500 mb-6">
-              Upload clear photos of your crops, or tap any verified Ethiopian crop photo preset below.
+              Upload clear photos of your crops. The first image serves as the main marketplace card cover.
             </p>
 
             <MultiImageUploader images={images} onChange={setImages} maxImages={5} />
-
-            {/* Quick Presets Selection */}
-            <div className="mt-6 pt-6 border-t border-gray-100">
-              <span className="text-xs font-bold text-gray-700 block mb-2">
-                1-Tap Ethiopian Harvest Photo Presets:
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {ETHIOPIAN_CROP_PRESETS.map((preset) => {
-                  const isSelected = images.includes(preset.url);
-                  return (
-                    <button
-                      key={preset.name}
-                      type="button"
-                      onClick={() => handleSelectPreset(preset)}
-                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                        isSelected
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs font-bold'
-                          : 'bg-white text-gray-700 border-gray-200 hover:bg-emerald-50/30 hover:border-emerald-200'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <span>{preset.name}</span>
-                      {isSelected ? (
-                        <span className="material-symbols-outlined text-xs text-emerald-600 font-bold">check</span>
-                      ) : (
-                        <span className="material-symbols-outlined text-xs text-gray-400">add</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
 
           {/* Card 2: Basic Information */}
@@ -294,9 +208,9 @@ export default function NewProductPage() {
             <p className="text-xs text-gray-500 mb-6">Specify the crop name, category, and cultivation story.</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                  Produce Name <span className="text-red-500">*</span>
+                  Produce / Crop Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -336,7 +250,7 @@ export default function NewProductPage() {
                   name="farm_location"
                   value={formData.farm_location}
                   onChange={handleChange}
-                  placeholder="e.g. Debre Zeit / Bishoftu, Oromia"
+                  placeholder="e.g. Debre Zeit, Oromia"
                   className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-medium transition-all"
                 />
               </div>
@@ -362,14 +276,13 @@ export default function NewProductPage() {
               Pricing & Agricultural Specifications
             </h2>
             <p className="text-xs text-gray-500 mb-6">
-              Set your pricing in Ethiopian Birr (ETB), inventory stock, shelf life, and harvest dates.
+              Prices are strictly in Ethiopian Birr (ETB). Dual unit calculation helps wholesale & retail buyers.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {/* Unit */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                  Unit Type <span className="text-red-500">*</span>
-                </label>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">Selling Unit</label>
                 <select
                   name="unit"
                   value={formData.unit}
@@ -384,46 +297,33 @@ export default function NewProductPage() {
                 </select>
               </div>
 
+              {/* Price */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                  Regular Price (ETB) <span className="text-red-500">*</span>
+                  Price per {formData.unit} (ETB) <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-2.5 text-xs text-gray-400 font-bold">ETB</span>
                   <input
                     type="number"
                     step="0.01"
-                    min="0.01"
+                    min="0"
                     required
                     name="price"
                     value={formData.price}
                     onChange={handleChange}
-                    placeholder="0.00"
-                    className="w-full pl-14 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-bold text-gray-900 transition-all"
+                    placeholder="e.g. 120"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-semibold text-gray-900 transition-all pr-12"
                   />
+                  <span className="absolute right-3.5 top-2.5 text-xs font-bold text-gray-400">ETB</span>
                 </div>
-
-                {/* Dual price conversion helper */}
-                {numPrice > 0 && (
-                  <p className="text-[11px] text-[#16a34a] font-semibold mt-1.5 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-xs">calculate</span>
-                    {formData.unit === 'kg' ? (
-                      <span>≈ ETB {quintalEquivalent.toLocaleString()} / quintal (100kg)</span>
-                    ) : formData.unit === 'quintal' ? (
-                      <span>≈ ETB {kgEquivalent.toFixed(2)} / kg</span>
-                    ) : (
-                      <span>Per {formData.unit} rate</span>
-                    )}
-                  </p>
-                )}
               </div>
 
+              {/* Discount Price */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                  Discounted / Promotional Price (ETB)
+                  Discount Price (Optional)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-2.5 text-xs text-gray-400 font-bold">ETB</span>
                   <input
                     type="number"
                     step="0.01"
@@ -431,12 +331,36 @@ export default function NewProductPage() {
                     name="discount_price"
                     value={formData.discount_price}
                     onChange={handleChange}
-                    placeholder="Optional sale price"
-                    className="w-full pl-14 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-bold text-gray-900 transition-all"
+                    placeholder="e.g. 105"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-semibold text-emerald-700 transition-all pr-12"
                   />
+                  <span className="absolute right-3.5 top-2.5 text-xs font-bold text-gray-400">ETB</span>
                 </div>
               </div>
 
+              {/* Unit Conversion Banner */}
+              {numPrice > 0 && (formData.unit === 'kg' || formData.unit === 'quintal') && (
+                <div className="sm:col-span-3 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 flex items-center justify-between text-xs text-emerald-800">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-lg">calculate</span>
+                    <span>
+                      {formData.unit === 'kg' ? (
+                        <>
+                          At <strong>{numPrice.toLocaleString()} ETB / kg</strong>, wholesale rate equals{' '}
+                          <strong>{quintalEquivalent.toLocaleString()} ETB per Quintal (100 kg)</strong>.
+                        </>
+                      ) : (
+                        <>
+                          At <strong>{numPrice.toLocaleString()} ETB / quintal</strong>, retail rate equals{' '}
+                          <strong>{kgEquivalent.toFixed(2)} ETB per Kilogram</strong>.
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Stock */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">
                   Available Stock ({formData.unit}) <span className="text-red-500">*</span>
@@ -449,25 +373,39 @@ export default function NewProductPage() {
                   value={formData.stock}
                   onChange={handleChange}
                   placeholder="e.g. 500"
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-bold text-gray-900 transition-all"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-medium transition-all"
                 />
               </div>
 
+              {/* MOQ */}
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                  Minimum Order Quantity ({formData.unit})
-                </label>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">Minimum Order Qty</label>
                 <input
                   type="number"
                   min="1"
                   name="min_order_quantity"
                   value={formData.min_order_quantity}
                   onChange={handleChange}
-                  placeholder="1"
+                  placeholder="e.g. 5"
                   className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-medium transition-all"
                 />
               </div>
 
+              {/* Shelf Life */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">Shelf Life (Days)</label>
+                <input
+                  type="number"
+                  min="1"
+                  name="shelf_life_days"
+                  value={formData.shelf_life_days}
+                  onChange={handleChange}
+                  placeholder="e.g. 90"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-medium transition-all"
+                />
+              </div>
+
+              {/* Harvest Date */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">Harvest Date</label>
                 <input
@@ -479,64 +417,51 @@ export default function NewProductPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">Shelf-Life (Days)</label>
-                <input
-                  type="number"
-                  min="1"
-                  name="shelf_life_days"
-                  value={formData.shelf_life_days}
-                  onChange={handleChange}
-                  placeholder="e.g. 180"
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] font-medium transition-all"
-                />
-              </div>
-
-              <div className="sm:col-span-2 flex items-center gap-3 pt-3">
+              {/* Organic Farming Toggle */}
+              <div className="sm:col-span-2 flex items-center gap-3 pt-4">
                 <input
                   type="checkbox"
                   id="is_organic"
                   name="is_organic"
                   checked={formData.is_organic}
                   onChange={handleChange}
-                  className="w-5 h-5 text-[#16a34a] rounded-lg border-gray-300 focus:ring-emerald-500"
+                  className="w-5 h-5 text-[#16a34a] rounded-lg focus:ring-[#16a34a] border-gray-300"
                 />
-                <label htmlFor="is_organic" className="text-sm font-bold text-gray-800 cursor-pointer">
-                  Certified Organic Produce
-                  <span className="block text-xs text-gray-400 font-normal">
-                    Cultivated without synthetic fertilizers or chemical pesticides.
-                  </span>
+                <label htmlFor="is_organic" className="text-xs font-bold text-gray-800 cursor-pointer">
+                  Certified Organic / Naturally Grown (No synthetic chemical pesticides or chemical fertilizers)
                 </label>
               </div>
             </div>
           </div>
 
-          {/* Form Actions */}
-          <div className="flex items-center justify-end gap-4 pt-4">
+          {/* Form Actions (Sticky Bottom Action Bar) */}
+          <div className="sticky bottom-0 z-30 bg-white/95 backdrop-blur-md -mx-4 sm:-mx-6 px-6 py-4 border-t border-gray-200/90 shadow-xl flex items-center justify-between rounded-t-2xl mt-8">
             <Link
               href="/farmer/products"
-              className="px-6 py-3 rounded-2xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors"
+              className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
             >
-              Cancel
+              Cancel / Discard
             </Link>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-8 py-3.5 rounded-2xl bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold uppercase tracking-wider transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Publishing Crop...</span>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-base">publish</span>
-                  <span>Save & Publish Produce</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <span className="hidden sm:inline text-xs text-gray-500 font-medium">Ready to sell across Ethiopian markets</span>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-bold bg-[#16a34a] hover:bg-[#15803d] text-white shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 active:scale-95 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Publishing Produce...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-lg">check_circle</span>
+                    Publish to Marketplace
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

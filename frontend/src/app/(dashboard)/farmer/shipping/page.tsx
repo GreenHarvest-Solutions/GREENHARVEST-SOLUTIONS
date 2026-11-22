@@ -153,7 +153,7 @@ function ShippingManagementContent() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full flex-1 flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 pb-24">
       {/* Print CSS Rules */}
       <style jsx global>{`
         @media print {
