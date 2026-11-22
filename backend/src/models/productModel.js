@@ -8,19 +8,22 @@ const productSelect = `
 		p.price,
 		p.discount_price,
 		p.stock,
+		COALESCE(p.unit, 'kg') AS unit,
+		COALESCE(p.min_order_quantity, 1) AS min_order_quantity,
+		p.harvest_date,
+		p.shelf_life_days,
+		COALESCE(p.is_organic, FALSE) AS is_organic,
+		p.images,
 		p.farm_location,
 		p.image_url,
 		p.created_at,
 		p.category_id,
 		p.farmer_id,
-		p.status,
+		COALESCE(p.status, 'draft') AS status,
 		p.moderation_status,
 		p.moderation_reason,
 		p.moderation_risk_score,
 		p.is_published,
-		p.harvest_date,
-		p.unit,
-		p.min_order_quantity,
 		p.pickup_available,
 		p.farmer_delivery_available,
 		p.delivery_radius_km,
@@ -51,6 +54,12 @@ const createProduct = async ({
 	price,
 	discount_price,
 	stock,
+	unit = 'kg',
+	min_order_quantity = 1,
+	harvest_date = null,
+	shelf_life_days = null,
+	is_organic = false,
+	images = [],
 	farm_location,
 	image_url,
 	image_hash = null,
@@ -59,13 +68,13 @@ const createProduct = async ({
 	moderation_reason = null,
 	moderation_risk_score = 0.0,
 	is_published = false,
-	harvest_date = null,
-	unit = 'kg',
-	min_order_quantity = 1.0,
 	pickup_available = true,
 	farmer_delivery_available = false,
 	delivery_radius_km = 0,
 }) => {
+	const resolvedImageUrl = image_url || (Array.isArray(images) && images.length > 0 ? images[0] : null);
+	const resolvedImages = Array.isArray(images) && images.length > 0 ? images : (resolvedImageUrl ? [resolvedImageUrl] : []);
+
 	const result = await pool.query(
 		`
 			INSERT INTO products (
@@ -76,6 +85,12 @@ const createProduct = async ({
 				price,
 				discount_price,
 				stock,
+				unit,
+				min_order_quantity,
+				harvest_date,
+				shelf_life_days,
+				is_organic,
+				images,
 				farm_location,
 				image_url,
 				image_hash,
@@ -84,14 +99,11 @@ const createProduct = async ({
 				moderation_reason,
 				moderation_risk_score,
 				is_published,
-				harvest_date,
-				unit,
-				min_order_quantity,
 				pickup_available,
 				farmer_delivery_available,
 				delivery_radius_km
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 			RETURNING *
 		`,
 		[
@@ -102,17 +114,20 @@ const createProduct = async ({
 			price || 0,
 			discount_price || null,
 			stock ?? 0,
+			unit || 'kg',
+			min_order_quantity || 1.0,
+			harvest_date || null,
+			shelf_life_days || null,
+			is_organic !== undefined ? is_organic : false,
+			resolvedImages,
 			farm_location || null,
-			image_url || null,
+			resolvedImageUrl,
 			image_hash || null,
 			status,
 			moderation_status,
 			moderation_reason,
 			moderation_risk_score,
 			is_published,
-			harvest_date || null,
-			unit || 'kg',
-			min_order_quantity || 1.0,
 			pickup_available !== undefined ? pickup_available : true,
 			farmer_delivery_available !== undefined ? farmer_delivery_available : false,
 			delivery_radius_km || 0,
@@ -127,6 +142,18 @@ const createProduct = async ({
 				[result.rows[0].id, image_url, image_hash || null]
 			);
 		}
+	}
+
+	const hasInventoryTable = await tableExists('inventory');
+	if (hasInventoryTable) {
+		await pool.query(
+			`
+				INSERT INTO inventory (product_id, farmer_id, quantity, last_updated)
+				VALUES ($1, $2, $3, NOW())
+				ON CONFLICT (product_id) DO UPDATE SET quantity = EXCLUDED.quantity, last_updated = NOW()
+			`,
+			[result.rows[0].id, farmer_id, stock ?? 0]
+		);
 	}
 
 	return result.rows[0];
@@ -378,6 +405,12 @@ const updateProductById = async (
 		price,
 		discount_price,
 		stock,
+		unit,
+		min_order_quantity,
+		harvest_date,
+		shelf_life_days,
+		is_organic,
+		images,
 		category_id,
 		farm_location,
 		image_url,
@@ -386,14 +419,14 @@ const updateProductById = async (
 		moderation_reason,
 		moderation_risk_score,
 		is_published,
-		harvest_date,
-		unit,
-		min_order_quantity,
 		pickup_available,
 		farmer_delivery_available,
 		delivery_radius_km,
 	}
 ) => {
+	const resolvedImageUrl = image_url || (Array.isArray(images) && images.length > 0 ? images[0] : null);
+	const resolvedImages = images !== undefined ? (Array.isArray(images) ? images : (resolvedImageUrl ? [resolvedImageUrl] : [])) : null;
+
 	const result = await pool.query(
 		`
 			UPDATE products
@@ -416,8 +449,11 @@ const updateProductById = async (
 				min_order_quantity = COALESCE($16, min_order_quantity),
 				pickup_available = COALESCE($17, pickup_available),
 				farmer_delivery_available = COALESCE($18, farmer_delivery_available),
-				delivery_radius_km = COALESCE($19, delivery_radius_km)
-			WHERE id = $20
+				delivery_radius_km = COALESCE($19, delivery_radius_km),
+				shelf_life_days = COALESCE($20, shelf_life_days),
+				is_organic = COALESCE($21, is_organic),
+				images = COALESCE($22, images)
+			WHERE id = $23
 			RETURNING *
 		`,
 		[
@@ -428,7 +464,7 @@ const updateProductById = async (
 			stock,
 			category_id,
 			farm_location,
-			image_url,
+			resolvedImageUrl,
 			status,
 			moderation_status,
 			moderation_reason,
@@ -440,9 +476,26 @@ const updateProductById = async (
 			pickup_available,
 			farmer_delivery_available,
 			delivery_radius_km,
+			shelf_life_days,
+			is_organic,
+			resolvedImages,
 			productId,
 		]
 	);
+
+	if (result.rows.length > 0 && stock !== null && stock !== undefined) {
+		const hasInventoryTable = await tableExists('inventory');
+		if (hasInventoryTable) {
+			await pool.query(
+				`
+					INSERT INTO inventory (product_id, farmer_id, quantity, last_updated)
+					VALUES ($1, $2, $3, NOW())
+					ON CONFLICT (product_id) DO UPDATE SET quantity = EXCLUDED.quantity, last_updated = NOW()
+				`,
+				[productId, result.rows[0].farmer_id, stock]
+			);
+		}
+	}
 
 	return result.rows[0] || null;
 };

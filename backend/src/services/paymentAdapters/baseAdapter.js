@@ -27,3 +27,4 @@ class BasePaymentAdapter {
 }
 
 module.exports = BasePaymentAdapter;
+

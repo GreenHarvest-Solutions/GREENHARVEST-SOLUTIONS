@@ -278,6 +278,7 @@ const getFarmerOrders = async (req, res) => {
       `
         SELECT
           o.id AS order_id,
+          o.id,
           s.id AS suborder_id,
           COALESCE(s.suborder_number, 'SUB-' || o.id || '-' || $1) AS suborder_number,
           COALESCE(s.fulfillment_status, o.order_status) AS order_status,
@@ -285,11 +286,16 @@ const getFarmerOrders = async (req, res) => {
           COALESCE(s.fulfillment_type, 'farmer_pickup') AS fulfillment_type,
           s.pickup_code,
           COALESCE(s.total_amount, o.total_amount) AS total_amount,
-          o.payment_status,
+          COALESCE(SUM(oi.quantity * oi.price), 0)::numeric(10,2) AS farmer_total,
+          COALESCE(p_pay.payment_status, o.payment_status, 'pending') AS payment_status,
+          COALESCE(d.delivery_address, d.delivery_location, u.address, 'Standard Delivery Address') AS delivery_address,
+          COALESCE(d.status, d.delivery_status, o.delivery_status, 'pending') AS delivery_status,
           o.created_at,
           u.name AS buyer_name,
+          u.phone AS buyer_phone,
           u.email AS buyer_email,
           json_agg(json_build_object(
+            'product_id', COALESCE(oi.product_id, p.id),
             'product_name', COALESCE(oi.product_name, p.name),
             'quantity', oi.quantity,
             'price', COALESCE(oi.unit_price, oi.price),
@@ -303,8 +309,10 @@ const getFarmerOrders = async (req, res) => {
         LEFT JOIN suborders s ON s.parent_order_id = o.id AND s.farmer_id = $1
         LEFT JOIN products p ON p.id = oi.product_id
         LEFT JOIN categories c ON c.id = p.category_id
+        LEFT JOIN payments p_pay ON p_pay.order_id = o.id
+        LEFT JOIN deliveries d ON d.order_id = o.id
         WHERE (oi.farmer_id = $1 OR p.farmer_id = $1)${statusFilter}${searchFilter}
-        GROUP BY o.id, s.id, u.id
+        GROUP BY o.id, s.id, u.id, p_pay.payment_status, d.delivery_address, d.delivery_location, d.status, d.delivery_status
         ORDER BY o.created_at DESC
         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
       `,
@@ -427,16 +435,20 @@ const getFarmerProducts = async (req, res) => {
           p.name,
           p.description,
           p.price,
+          p.discount_price,
           COALESCE(p.stock, 0)::int AS stock,
+          COALESCE(p.unit, 'kg') AS unit,
+          COALESCE(p.min_order_quantity, 1) AS min_order_quantity,
+          p.harvest_date,
+          p.shelf_life_days,
+          COALESCE(p.is_organic, FALSE) AS is_organic,
+          p.images,
+          p.pickup_available,
+          p.farmer_delivery_available,
           p.status,
           p.moderation_status,
           p.moderation_reason,
           p.is_published,
-          p.harvest_date,
-          p.unit,
-          p.min_order_quantity,
-          p.pickup_available,
-          p.farmer_delivery_available,
           (
             SELECT COUNT(*)::int
             FROM product_revisions pr

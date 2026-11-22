@@ -1,6 +1,10 @@
 // Payment controller coordinating multi-provider checkouts and server-side webhook reconciliation
+const crypto = require("crypto");
 const logger = require("../utils/logger");
 const paymentService = require("../services/paymentService");
+const orderModel = require("../models/orderModel");
+const paymentModel = require("../models/paymentModel");
+const { pool } = require("../config/db");
 
 const handleControllerError = (res, context, error, meta = {}) => {
   logger.error(context, {
@@ -122,8 +126,14 @@ const verifyChapaPayment = async (req, res) => {
   return verifyPayment(req, res);
 };
 
+const handleChapaWebhook = async (req, res) => {
+  req.params.provider = "chapa";
+  return handleWebhook(req, res);
+};
+
 module.exports = {
   getPaymentHistory,
+  handleChapaWebhook,
   handleWebhook,
   initializeChapaPayment,
   initiatePayment,

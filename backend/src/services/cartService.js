@@ -29,10 +29,12 @@ const addToCart = async ({ user_id, product_id, quantity }) => {
   }
 
   const inventory = await inventoryModel.getInventoryByProductId(Number(product_id));
-  const availableStock = inventory ? Number(inventory.quantity) : Number(product.stock || 0);
+  const availableStock = inventory !== null && inventory !== undefined
+    ? Number(inventory.quantity)
+    : Number(product.stock || 0);
 
   if (availableStock < Number(quantity)) {
-    throw createServiceError(`Requested quantity exceeds available stock (A: avail=${availableStock}, qty=${quantity})`, 400);
+    throw createServiceError("Requested quantity exceeds available stock", 400);
   }
 
   const existingItem = await cartModel.findCartItemByUserAndProduct(user_id, Number(product_id));
@@ -40,14 +42,14 @@ const addToCart = async ({ user_id, product_id, quantity }) => {
   if (existingItem) {
     const updatedQuantity = Number(existingItem.quantity) + Number(quantity);
 
-    if (updatedQuantity > Number(product.stock)) {
-      throw createServiceError(`Requested quantity exceeds available stock (B: updated=${updatedQuantity}, stock=${product.stock})`, 400);
+    if (updatedQuantity > availableStock) {
+      throw createServiceError("Requested quantity exceeds available stock", 400);
     }
 
     await cartModel.updateCartItemQuantityById(existingItem.id, updatedQuantity);
   } else {
-    if (Number(quantity) > Number(product.stock)) {
-      throw createServiceError(`Requested quantity exceeds available stock (C: qty=${quantity}, stock=${product.stock})`, 400);
+    if (Number(quantity) > availableStock) {
+      throw createServiceError("Requested quantity exceeds available stock", 400);
     }
 
     await cartModel.createCartItem({

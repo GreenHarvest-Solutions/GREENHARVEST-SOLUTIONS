@@ -39,3 +39,4 @@ ALTER TABLE risk_flags ADD COLUMN IF NOT EXISTS confidence_score NUMERIC(5,2);
 CREATE INDEX IF NOT EXISTS idx_risk_flags_entity ON risk_flags(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_risk_flags_severity_status ON risk_flags(severity, status);
 CREATE INDEX IF NOT EXISTS idx_risk_flags_flag_type ON risk_flags(flag_type);
+

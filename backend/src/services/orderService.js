@@ -54,18 +54,20 @@ const getOrdersForBuyer = async (buyer_id, order_id = null) => {
 };
 
 const orderStatusTransitions = {
-	pending: ["confirmed"],
-	confirmed: ["collected"],
+	pending: ["confirmed", "cancelled"],
+	confirmed: ["collected", "in_transit", "cancelled"],
 	collected: ["in_transit"],
 	in_transit: ["delivered"],
 	delivered: ["returned"],
 	returned: [],
+	cancelled: [],
 };
 
 const roleAllowedStatuses = {
+	admin: ["pending", "confirmed", "collected", "in_transit", "delivered", "returned", "cancelled"],
 	field_agent: ["confirmed", "collected"],
 	delivery_partner: ["in_transit", "delivered"],
-	farmer: ["confirmed", "collected", "in_transit", "delivered", "returned"],
+	farmer: ["confirmed", "collected", "in_transit", "delivered", "returned", "cancelled"],
 };
 
 const validateOrderStatusUpdate = ({ actor, order, nextStatus }) => {
@@ -73,7 +75,7 @@ const validateOrderStatusUpdate = ({ actor, order, nextStatus }) => {
 	const allowedStatuses = roleAllowedStatuses[actorRole];
 
 	if (!allowedStatuses) {
-		throw createServiceError("Only field agents and delivery partners can update order status", 403);
+		throw createServiceError("You are not authorized to update order status", 403);
 	}
 
 	if (!allowedOrderStatuses.includes(nextStatus)) {
@@ -98,8 +100,14 @@ const validateOrderStatusUpdate = ({ actor, order, nextStatus }) => {
 		throw createServiceError("You are not assigned to this order as delivery partner", 403);
 	}
 
-	if (actorRole === 'farmer' && Number(actor.id) !== Number(order.farmer_id)) {
-		throw createServiceError('You are not authorized to update this order', 403);
+	if (actorRole === 'farmer') {
+		const isFarmerOfOrder = 
+			(Array.isArray(order.farmer_ids) && order.farmer_ids.map(Number).includes(Number(actor.id))) ||
+			Number(actor.id) === Number(order.farmer_id);
+
+		if (!isFarmerOfOrder) {
+			throw createServiceError('You are not authorized to update this order', 403);
+		}
 	}
 
 	const currentStatus = order.order_status;

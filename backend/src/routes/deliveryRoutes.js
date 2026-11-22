@@ -8,6 +8,7 @@ const {
   confirmFarmerDelivery,
   confirmPickup,
   dispatchFarmerDelivery,
+  getAssignedDeliveries,
   getDeliveryPool,
   markReadyForPickup,
   trackDelivery,
@@ -35,11 +36,14 @@ router.patch("/suborders/:id/partner-status", requireRole("delivery_partner", "d
 
 // Tracking & Details
 router.get("/suborders/:id", trackSuborderDelivery);
+
+// Partner and Order Routes
+router.get("/assigned", requireRole("delivery_partner", "admin"), getAssignedDeliveries);
 router.get("/track/:orderId", trackDelivery);
 router.get("/:order_id", trackDelivery);
 
 // Legacy routes
-router.post("/assign", requireRole("admin"), assignDeliveryPartner);
+router.post("/assign", requireRole("admin", "field_agent"), assignDeliveryPartner);
 router.put("/update-status", requireRole("delivery_partner", "admin"), updateDeliveryStatus);
 router.patch("/:id/status", requireRole("delivery_partner", "admin"), updateDeliveryStatus);
 

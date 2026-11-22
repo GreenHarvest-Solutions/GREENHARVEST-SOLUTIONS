@@ -3,6 +3,7 @@ const { pool } = require("../config/db");
 const logger = require("../utils/logger");
 const deliveryModel = require("../models/deliveryModel");
 const notificationModel = require("../models/notificationModel");
+const orderModel = require("../models/orderModel");
 const { normalizeRole } = require("../utils/roles");
 const { isPositiveInteger } = require("../utils/validators");
 
@@ -444,16 +445,6 @@ const updatePartnerTransitStatus = async ({ actor, suborder_id, status, proof_im
 // Tracking & Legacy Admin Methods
 // ==========================================
 
-const trackDelivery = async ({ actor, order_id }) => {
-  const parsedId = Number(order_id);
-  if (!isPositiveInteger(parsedId)) {
-    throw createServiceError("Invalid order id", 400);
-  }
-
-  const deliveries = await deliveryModel.getDeliveryByOrderId(parsedId);
-  return deliveries;
-};
-
 const trackSuborderDelivery = async (suborder_id) => {
   const parsedSuborderId = Number(suborder_id);
   if (!isPositiveInteger(parsedSuborderId)) {
@@ -464,28 +455,246 @@ const trackSuborderDelivery = async (suborder_id) => {
 };
 
 const assignDelivery = async ({ actor, payload }) => {
-  return claimPoolDelivery({
-    actor: { id: payload.delivery_partner_id || payload.delivery_person_id, role: "delivery_partner" },
-    suborder_id: payload.suborder_id || payload.order_id,
-    estimated_time: payload.estimated_time,
-  });
-};
+  if (payload.suborder_id) {
+    return claimPoolDelivery({
+      actor: { id: payload.delivery_partner_id || payload.delivery_person_id, role: "delivery_partner" },
+      suborder_id: payload.suborder_id,
+      estimated_time: payload.estimated_time,
+    });
+  }
 
-const updateDeliveryStatus = async ({ actor, payload }) => {
-  return updatePartnerTransitStatus({
-    actor,
-    suborder_id: payload.suborder_id || payload.order_id || payload.delivery_id,
-    status: payload.status || payload.delivery_status,
-    proof_image: payload.proof_of_delivery_image_url,
-    notes: payload.notes,
-  });
+  const actorRole = normalizeRole(actor.role);
+  if (actorRole !== "admin" && actorRole !== "field_agent") {
+    throw createServiceError("Only admins or field agents can assign delivery partners", 403);
+  }
+
+  const order_id = Number(payload.order_id);
+  const delivery_partner_id = Number(payload.delivery_partner_id || payload.delivery_person_id);
+
+  if (!isPositiveInteger(order_id) || !isPositiveInteger(delivery_partner_id)) {
+    throw createServiceError("order_id and delivery_partner_id are required", 400);
+  }
+
+  const delivery_location =
+    payload.delivery_location || payload.delivery_address || payload.address;
+
+  if (!delivery_location || !String(delivery_location).trim()) {
+    throw createServiceError("delivery_location is required", 400);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const order = await deliveryModel.findOrderById(client, order_id);
+    if (!order) {
+      throw createServiceError("Order not found", 404);
+    }
+
+    const partner = await deliveryModel.findDeliveryPartnerById(client, delivery_partner_id);
+    if (!partner) {
+      throw createServiceError("delivery_partner_id must belong to a delivery partner", 400);
+    }
+
+    const existingDelivery = await deliveryModel.findDeliveryByOrderIdForUpdate(client, order_id);
+    if (existingDelivery) {
+      throw createServiceError("Delivery partner already assigned for this order", 409);
+    }
+
+    const delivery = await deliveryModel.createDelivery(client, {
+      order_id,
+      delivery_partner_id: partner.id,
+      pickup_location: payload.pickup_location ? String(payload.pickup_location).trim() : null,
+      delivery_location: String(delivery_location).trim(),
+      status: "assigned",
+      estimated_time: payload.estimated_time || null,
+    });
+
+    await deliveryModel.updateOrderDeliveryStatus(client, {
+      order_id,
+      status: "assigned",
+    });
+
+    await client.query("COMMIT");
+    return delivery;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 const assignDeliveryPartnerToOrder = async ({ actor, order_id, delivery_partner_id }) => {
-  return claimPoolDelivery({
-    actor: { id: delivery_partner_id, role: "delivery_partner" },
-    suborder_id: order_id,
-  });
+  const actorRole = normalizeRole(actor.role);
+  if (!actor || (actorRole !== "admin" && actorRole !== "field_agent")) {
+    throw createServiceError("Only admins or field agents can assign delivery partners", 403);
+  }
+
+  const parsed_order_id = Number(order_id);
+  const parsed_partner_id = Number(delivery_partner_id);
+
+  if (!isPositiveInteger(parsed_order_id) || !isPositiveInteger(parsed_partner_id)) {
+    throw createServiceError("order_id and delivery_partner_id are required", 400);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const order = await deliveryModel.findOrderById(client, parsed_order_id);
+    if (!order) {
+      throw createServiceError("Order not found", 404);
+    }
+    const partner = await deliveryModel.findDeliveryPartnerById(client, parsed_partner_id);
+    if (!partner) {
+      throw createServiceError("delivery_partner_id must belong to a delivery partner", 400);
+    }
+    const updatedOrder = await orderModel.assignDeliveryPartnerById(
+      parsed_order_id,
+      Number(partner.id),
+      client
+    );
+    await client.query("COMMIT");
+    return updatedOrder;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+const updateDeliveryStatus = async ({ actor, payload }) => {
+  if (payload.suborder_id) {
+    return updatePartnerTransitStatus({
+      actor,
+      suborder_id: payload.suborder_id,
+      status: payload.status || payload.delivery_status,
+      proof_image: payload.proof_of_delivery_image_url || payload.proof_image,
+      notes: payload.notes,
+    });
+  }
+
+  let order_id = payload.order_id;
+  const delivery_id = payload.delivery_id;
+  const status = payload.status || payload.delivery_status;
+
+  if (!status) {
+    throw createServiceError("status is required", 400);
+  }
+
+  if (order_id !== undefined && order_id !== null && !isPositiveInteger(order_id)) {
+    throw createServiceError("order_id must be a valid integer", 400);
+  }
+
+  if (delivery_id !== undefined && delivery_id !== null && !isPositiveInteger(delivery_id)) {
+    throw createServiceError("delivery_id must be a valid integer", 400);
+  }
+
+  if ((order_id === undefined || order_id === null) && (delivery_id === undefined || delivery_id === null)) {
+    throw createServiceError("order_id or delivery_id is required", 400);
+  }
+
+  const normalizedStatus = String(status).trim().toLowerCase();
+  if (!allowedDeliveryStatuses.includes(normalizedStatus)) {
+    throw createServiceError("Invalid delivery status value", 400);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    let existingDelivery = null;
+    if (order_id !== undefined && order_id !== null) {
+      existingDelivery = await deliveryModel.findDeliveryByOrderIdForUpdate(client, Number(order_id));
+    } else {
+      existingDelivery = await deliveryModel.findDeliveryByIdForUpdate(client, Number(delivery_id));
+      if (existingDelivery) {
+        order_id = existingDelivery.order_id;
+      }
+    }
+    if (!existingDelivery) {
+      throw createServiceError("Delivery not found for this order", 404);
+    }
+    const order = await deliveryModel.findOrderById(client, Number(order_id));
+    if (!order) {
+      throw createServiceError("Order not found", 404);
+    }
+    const actorRole = normalizeRole(actor.role);
+    if (actorRole !== "delivery_partner" && actorRole !== "admin") {
+      throw createServiceError("Only delivery partners or admins can update delivery status", 403);
+    }
+    if (
+      actorRole !== "admin" &&
+      Number(actor.id) !== Number(existingDelivery.delivery_partner_id) &&
+      Number(actor.id) !== Number(existingDelivery.delivery_person_id)
+    ) {
+      throw createServiceError("You are not allowed to update this delivery", 403);
+    }
+    const delivery = await deliveryModel.updateDeliveryByOrderId(client, {
+      order_id: Number(order_id),
+      status: normalizedStatus,
+      estimated_time: payload.estimated_time || null,
+      pickup_location:
+        payload.pickup_location !== undefined ? String(payload.pickup_location).trim() : undefined,
+      delivery_location:
+        payload.delivery_location !== undefined ? String(payload.delivery_location).trim() : undefined,
+    });
+    await deliveryModel.updateOrderDeliveryStatus(client, {
+      order_id: Number(order_id),
+      status: normalizedStatus,
+    });
+    await client.query("COMMIT");
+    return delivery;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+const trackDelivery = async ({ actor, order_id }) => {
+  if (!isPositiveInteger(order_id)) {
+    throw createServiceError("Invalid order id", 400);
+  }
+
+  const delivery = await deliveryModel.getDeliveryByOrderId(Number(order_id));
+
+  if (!delivery || (Array.isArray(delivery) && delivery.length === 0)) {
+    throw createServiceError("Delivery not found for this order", 404);
+  }
+
+  const deliveryRecord = Array.isArray(delivery) ? delivery[0] : delivery;
+  const actorRole = normalizeRole(actor.role);
+
+  let isFarmerForOrder = false;
+  if (actorRole === "farmer") {
+    const orderItems = await pool.query(
+      `SELECT 1 FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = $1 AND p.farmer_id = $2 LIMIT 1`,
+      [Number(order_id), Number(actor.id)]
+    );
+    isFarmerForOrder = orderItems.rows.length > 0;
+  }
+
+  if (
+    actorRole !== "admin" &&
+    actorRole !== "field_agent" &&
+    Number(actor.id) !== Number(deliveryRecord.buyer_id) &&
+    Number(actor.id) !== Number(deliveryRecord.delivery_partner_id) &&
+    !isFarmerForOrder
+  ) {
+    throw createServiceError("You are not allowed to view this delivery", 403);
+  }
+
+  return delivery;
+};
+
+const getAssignedDeliveries = async ({ actor }) => {
+  const actorRole = normalizeRole(actor.role);
+  if (actorRole !== "delivery_partner" && actorRole !== "admin") {
+    throw createServiceError("Only delivery partners or admins can view assigned deliveries", 403);
+  }
+  return await deliveryModel.findDeliveriesByPartnerId(Number(actor.id));
 };
 
 module.exports = {
@@ -496,6 +705,7 @@ module.exports = {
   confirmFarmerDelivery,
   confirmSuborderPickup,
   dispatchFarmerDelivery,
+  getAssignedDeliveries,
   getDeliveryPool,
   markSuborderReadyForPickup,
   trackDelivery,

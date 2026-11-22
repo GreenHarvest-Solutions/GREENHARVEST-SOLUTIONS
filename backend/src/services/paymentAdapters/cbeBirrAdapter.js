@@ -51,3 +51,4 @@ class CbeBirrAdapter extends BasePaymentAdapter {
 }
 
 module.exports = CbeBirrAdapter;
+

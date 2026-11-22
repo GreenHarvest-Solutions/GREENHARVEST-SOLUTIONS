@@ -193,7 +193,7 @@ export default function CheckoutPage() {
 
                         {/* Order Items (Grouped by Store) */}
                         <div className="space-y-4">
-                            {Object.entries(storeGroups).map(([storeId, storeGroup]: [string, any]) => (
+                            {(Object.entries(storeGroups) as [string, { storeName: string; items: any[] }][]).map(([storeId, storeGroup]) => (
                                 <div key={storeId} className="bg-white rounded-xl shadow-sm overflow-hidden">
                                     <div className="bg-gray-50 px-5 py-3 border-b border-gray-100 flex items-center gap-2">
                                         <span className="material-symbols-outlined text-gray-500 text-sm">storefront</span>

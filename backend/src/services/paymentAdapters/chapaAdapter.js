@@ -98,3 +98,4 @@ class ChapaAdapter extends BasePaymentAdapter {
 }
 
 module.exports = ChapaAdapter;
+

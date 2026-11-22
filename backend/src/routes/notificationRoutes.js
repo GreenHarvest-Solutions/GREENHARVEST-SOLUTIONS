@@ -17,5 +17,6 @@ router.post("/", createNotification);
 router.get("/", getUserNotifications);
 router.put("/read/:id", markNotificationAsRead);
 router.patch("/:id/read", markNotificationAsRead);
+router.patch("/:id", markNotificationAsRead);
 
 module.exports = router;

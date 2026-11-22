@@ -57,8 +57,12 @@ export interface CartItem {
   product_name?: string;
   name?: string;
   product_price?: number;
-  farmer_name?: string;
+  price?: number;
   image_url?: string;
+  farmer_name?: string;
+  farmer_id?: number;
+  product_stock?: number;
+  stock?: number;
 }
 
 export interface OrderItem {

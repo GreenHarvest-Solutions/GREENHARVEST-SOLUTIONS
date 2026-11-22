@@ -294,11 +294,24 @@ export default function StoreDecorationPage() {
             </nav>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <button onClick={() => setIsPreviewOpen(true)} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-50 transition-colors">
+          <div className="flex items-center space-x-3">
+            {user?.id && (
+              <Link
+                href={`/buyer/farmer/${user.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-[#16a34a] border border-emerald-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5"
+                title="View your public storefront as seen by buyers"
+              >
+                <span className="material-symbols-outlined text-sm">open_in_new</span>
+                View Live Store
+              </Link>
+            )}
+            <button onClick={() => setIsPreviewOpen(true)} className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors">
               Preview
             </button>
-            <button onClick={() => handleSave(true)} disabled={saving} className="px-4 py-2 bg-[#2d9a33] hover:bg-[#25822a] text-white rounded-lg text-sm font-bold transition-colors shadow-sm disabled:opacity-50">
+            <button onClick={() => handleSave(true)} disabled={saving} className="px-4 py-2 bg-[#2d9a33] hover:bg-[#25822a] text-white rounded-lg text-xs font-bold transition-colors shadow-xs disabled:opacity-50 flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">publish</span>
               {saving ? 'Publishing...' : 'Publish'}
             </button>
             
@@ -494,7 +507,7 @@ export default function StoreDecorationPage() {
                                   )}
                                 </div>
                                 <h4 className="font-bold text-gray-900 text-sm mb-1 line-clamp-1">{item.name}</h4>
-                                <p className="text-[#2d9a33] font-bold">${item.price}</p>
+                                <p className="text-[#2d9a33] font-bold">ETB {Number(item.price).toLocaleString()}</p>
                               </div>
                             ))}
                             {products.length === 0 && (
@@ -593,8 +606,8 @@ export default function StoreDecorationPage() {
                                 </div>
                                 <h4 className="font-bold text-gray-900 text-xs mb-1 line-clamp-1">{item.name}</h4>
                                 <div className="flex items-center gap-2">
-                                  <p className="text-red-600 font-black text-sm">${(item.price * 0.8).toFixed(2)}</p>
-                                  <p className="text-gray-400 line-through text-[10px]">${item.price}</p>
+                                  <p className="text-red-600 font-black text-sm">ETB {Number(item.price * 0.8).toFixed(0)}</p>
+                                  <p className="text-gray-400 line-through text-[10px]">ETB {Number(item.price).toFixed(0)}</p>
                                 </div>
                               </div>
                             ))}
@@ -1136,8 +1149,8 @@ export default function StoreDecorationPage() {
                               </div>
                               <h4 className="font-bold text-gray-900 text-xs mb-1 line-clamp-1">{item.name}</h4>
                               <div className="flex items-center gap-2">
-                                <p className="text-red-600 font-black text-sm">${(item.price * 0.8).toFixed(2)}</p>
-                                <p className="text-gray-400 line-through text-[10px]">${item.price}</p>
+                                <p className="text-red-600 font-black text-sm">ETB {Number(item.price * 0.8).toFixed(0)}</p>
+                                <p className="text-gray-400 line-through text-[10px]">ETB {Number(item.price).toFixed(0)}</p>
                               </div>
                             </div>
                           ))}

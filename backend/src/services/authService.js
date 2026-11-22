@@ -9,8 +9,10 @@ const { getAccessTokenTtlMinutes, signAccessToken } = require("../utils/jwt");
 const {
   ALLOWED_ROLES,
   ALLOWED_PUBLIC_REGISTRATION_ROLES,
+  PUBLIC_REGISTRATION_ROLES,
   isAllowedRole,
   isAllowedPublicRegistrationRole,
+  isPublicRegistrationRole,
   normalizeRole,
 } = require("../utils/roles");
 const {
@@ -226,7 +228,7 @@ const registerUser = async ({
     throw createServiceError(
       normalizedRole === "admin"
         ? "Registration with administrative roles is forbidden"
-        : "Invalid role provided for registration",
+        : `Self-registration is only allowed for roles: ${ALLOWED_PUBLIC_REGISTRATION_ROLES.join(", ")}`,
       403
     );
   }

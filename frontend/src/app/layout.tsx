@@ -15,8 +15,8 @@ const anton = Anton({
 });
 
 export const metadata: Metadata = {
-  title: "Farmhub - Agritech and E-Groceries",
-  description: "Agritech platform connecting farmers with customers.",
+  title: "GreenHarvest Solutions - Ethiopian Agri-Ecommerce Platform",
+  description: "Direct-from-farm marketplace connecting local Ethiopian farmers with buyers.",
 };
 
 export default function RootLayout({

@@ -130,6 +130,30 @@ const createPaymentRecord = async (
 	return result.rows[0];
 };
 
+const createOrUpdatePayment = async (client = pool, params) => {
+	return createPaymentRecord(client, params);
+};
+
+const createPayment = async (client = pool, params) => {
+	return createPaymentRecord(client, params);
+};
+
+const createTransaction = async (
+	client = pool,
+	{ order_id, user_id, amount, payment_method, status }
+) => {
+	const result = await client.query(
+		`
+			INSERT INTO transactions (order_id, user_id, amount, payment_method, status, created_at)
+			VALUES ($1, $2, $3, $4, $5, NOW())
+			RETURNING id, order_id, user_id, amount, payment_method, status, created_at
+		`,
+		[order_id, user_id, amount, payment_method || 'chapa', status || 'paid']
+	);
+
+	return result.rows[0];
+};
+
 const updatePaymentStatus = async (
 	client,
 	{ payment_id, payment_status, reference_number, gateway_response, reconciled = true }
@@ -148,6 +172,26 @@ const updatePaymentStatus = async (
 	);
 
 	return result.rows[0] || null;
+};
+
+const updateOrderPaymentStatus = async (client = pool, { order_id, payment_status }) => {
+	await client.query(
+		`
+			UPDATE orders
+			SET payment_status = $1
+			WHERE id = $2
+		`,
+		[payment_status, order_id]
+	);
+
+	await client.query(
+		`
+			UPDATE payments
+			SET payment_status = $1
+			WHERE order_id = $2
+		`,
+		[payment_status, order_id]
+	);
 };
 
 const createEscrowEntry = async (
@@ -215,11 +259,35 @@ const getPaymentHistoryByBuyer = async (user_id) => {
 				p.created_at,
 				o.order_number,
 				o.order_status,
+				COALESCE(d.delivery_status, 'pending') AS delivery_status,
+				o.total_price,
 				o.total_amount
 			FROM payments p
 			JOIN orders o ON o.id = p.order_id
+			LEFT JOIN deliveries d ON d.order_id = o.id
 			WHERE o.buyer_id = $1
 			ORDER BY p.created_at DESC
+		`,
+		[user_id]
+	);
+
+	return result.rows;
+};
+
+const getTransactionHistoryByUser = async (user_id) => {
+	const result = await pool.query(
+		`
+			SELECT
+				t.id,
+				t.order_id,
+				t.user_id,
+				t.amount,
+				t.payment_method,
+				t.status,
+				t.created_at
+			FROM transactions t
+			WHERE t.user_id = $1
+			ORDER BY t.created_at DESC
 		`,
 		[user_id]
 	);
@@ -230,10 +298,15 @@ const getPaymentHistoryByBuyer = async (user_id) => {
 module.exports = {
 	createEscrowEntry,
 	createPaymentRecord,
+	createPayment,
+	createOrUpdatePayment,
+	createTransaction,
 	findOrderByIdForUpdate,
 	findPaymentByIdempotency,
 	findPaymentByReference,
 	findSubordersForOrder,
 	getPaymentHistoryByBuyer,
+	getTransactionHistoryByUser,
+	updateOrderPaymentStatus,
 	updatePaymentStatus,
 };

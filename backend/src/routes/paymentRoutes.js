@@ -3,6 +3,7 @@ const express = require("express");
 const authMiddleware = require("../middleware/authMiddleware");
 const {
   getPaymentHistory,
+  handleChapaWebhook,
   handleWebhook,
   initializeChapaPayment,
   initiatePayment,
@@ -13,9 +14,10 @@ const {
 
 const router = express.Router();
 
-// 1. PUBLIC Webhook Endpoint (Enforces cryptographic HMAC signature verification)
+// 1. PUBLIC Webhook Endpoints (Enforces cryptographic HMAC signature verification)
 router.post("/webhook/:provider", handleWebhook);
 router.post("/webhook", handleWebhook);
+router.post("/chapa/webhook", handleChapaWebhook);
 
 // 2. AUTHENTICATED Endpoints (Require valid user session)
 router.use(authMiddleware);

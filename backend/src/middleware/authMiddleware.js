@@ -66,20 +66,19 @@ const resolveActorId = async (user_id, role) => {
 
   if (role === "field_agent") {
     try {
-      const result = await pool.query(
+      await pool.query(
         `
           INSERT INTO field_agent_profiles (user_id)
           VALUES ($1)
-          ON CONFLICT (user_id)
-          DO UPDATE SET user_id = EXCLUDED.user_id
-          RETURNING agent_id
+          ON CONFLICT (user_id) DO NOTHING
         `,
         [user_id]
       );
-      return result.rows[0]?.agent_id || user_id;
     } catch (err) {
-      return user_id;
+      // Ignore if table doesn't exist
     }
+
+    return user_id;
   }
 
   return user_id;

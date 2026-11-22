@@ -2,114 +2,134 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 
+interface OrderItem {
+  product_id?: number;
+  product_name: string;
+  quantity: number;
+  price: number;
+  unit?: string;
+  category_name?: string;
+  image_url?: string;
+}
+
+interface FarmerOrder {
+  id?: number;
+  order_id: number;
+  suborder_id?: number;
+  order_status: 'pending' | 'confirmed' | 'in_transit' | 'delivered' | 'cancelled';
+  fulfillment_status?: string;
+  delivery_mode?: string;
+  total_amount: number | string;
+  farmer_total?: number | string;
+  payment_status?: string;
+  delivery_address?: string;
+  delivery_status?: string;
+  created_at: string;
+  buyer_name: string;
+  buyer_phone?: string;
+  buyer_email?: string;
+  items: OrderItem[];
+}
+
 export default function ManageOrdersPage() {
-  const router = useRouter();
-  const { showError } = useToast();
-  const [orders, setOrders] = useState<any[]>([]);
+  const { showSuccess, showError } = useToast();
+  const [orders, setOrders] = useState<FarmerOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Pagination & Filtering state
+  const [activeTab, setActiveTab] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
-  const [activeTab, setActiveTab] = useState('all');
-  
-  // Search inputs
-  const [orderIdSearch, setOrderIdSearch] = useState('');
-  const [productSearch, setProductSearch] = useState('');
-  const [buyerSearch, setBuyerSearch] = useState('');
-  const [dateRange, setDateRange] = useState('');
-  
-  // Dashboard info for the sidebar
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [user, setUser] = useState<any>(null);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
-  useEffect(() => {
-    loadSidebarData();
-  }, []);
-
-  useEffect(() => {
-    loadOrders();
-  }, [page, activeTab]);
-
-  const loadSidebarData = async () => {
-    try {
-      const [dashRes, userRes, notifRes] = await Promise.all([
-        api.getFarmerDashboard().catch(() => ({})),
-        api.getUserProfile().catch(() => ({ user: null })),
-        api.getNotifications().catch(() => ({ notifications: [] }))
-      ]);
-      setDashboardData(dashRes || null);
-      setUser(userRes.user || null);
-      setNotifications(notifRes.notifications || []);
-    } catch (error) {
-      console.error("Failed to load sidebar data", error);
-    }
-  };
-
-  const loadOrders = async (searchOverride?: string) => {
+  const loadOrders = async () => {
     try {
       setLoading(true);
-      
-      // Combine searches for the backend generic search
-      const searchTerm = searchOverride !== undefined 
-        ? searchOverride 
-        : (orderIdSearch || buyerSearch) ? `${orderIdSearch} ${buyerSearch}`.trim() : undefined;
-
-      let mappedStatus = activeTab;
-      if (mappedStatus === 'pending shipment') mappedStatus = 'pending';
-      if (mappedStatus === 'in transit') mappedStatus = 'in_transit';
-      if (mappedStatus === 'returns/refunds') mappedStatus = 'returned'; // Assuming returned status
-      if (mappedStatus === 'canceled') mappedStatus = 'cancelled';
-      if (mappedStatus === 'all') mappedStatus = ''; // Backend expects 'all' or empty for all
-
+      const mappedStatus = activeTab === 'all' ? undefined : activeTab;
       const res = await api.getFarmerOrders({
         page,
         limit: 10,
-        status: mappedStatus === 'all' ? undefined : mappedStatus,
-        search: searchTerm || undefined
+        status: mappedStatus,
+        search: searchQuery.trim() || undefined,
       });
 
       setOrders(res.orders || []);
       setTotalPages(res.pagination?.total_pages || 1);
       setTotalOrders(res.pagination?.total || 0);
-    } catch (error) {
-      console.error("Failed to load orders", error);
+    } catch (err) {
+      console.error('Failed to load farmer orders:', err);
+      showError('Failed to load orders.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = () => {
+  useEffect(() => {
+    loadOrders();
+  }, [page, activeTab]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     setPage(1);
     loadOrders();
   };
 
   const handleReset = () => {
-    setOrderIdSearch('');
-    setProductSearch('');
-    setBuyerSearch('');
-    setDateRange('');
+    setSearchQuery('');
     setPage(1);
-    loadOrders('');
+    loadOrders();
   };
 
-  const handleUpdateStatus = async (order: any, nextStatus: string) => {
+  const handleStatusTransition = async (
+    orderId: number,
+    nextStatus: 'confirmed' | 'in_transit' | 'delivered'
+  ) => {
+    setUpdatingId(orderId);
     try {
-      if (order.suborder_id) {
+      const order = orders.find((o) => Number(o.order_id || o.id) === orderId);
+      if (order?.suborder_id) {
         await api.updateFarmerSuborderStatus(order.suborder_id, nextStatus);
       } else {
-        await api.updateOrderStatus(order.order_id, nextStatus);
+        await api.updateOrderStatus(String(orderId), nextStatus);
       }
-      loadOrders();
-    } catch (error) {
-      console.error("Failed to update order status", error);
-      showError('Failed to update order status. Please try again.');
+      setOrders((prev) =>
+        prev.map((o) => (Number(o.order_id || o.id) === orderId ? { ...o, order_status: nextStatus } : o))
+      );
+
+      const statusLabels: Record<string, string> = {
+        confirmed: 'Order confirmed and ready for packing!',
+        in_transit: 'Order marked as shipped / in transit!',
+        delivered: 'Order marked as delivered successfully!',
+      };
+      showSuccess(statusLabels[nextStatus] || 'Order status updated.');
+    } catch (err: any) {
+      console.error('Status transition failed:', err);
+      showError(err.response?.data?.message || 'Failed to update order status.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const getStepProgress = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 1;
+      case 'confirmed':
+      case 'accepted':
+      case 'packed':
+        return 2;
+      case 'in_transit':
+      case 'shipped':
+      case 'dispatched':
+        return 3;
+      case 'delivered':
+      case 'completed':
+        return 4;
+      default:
+        return 0; // cancelled
     }
   };
 
@@ -130,7 +150,7 @@ export default function ManageOrdersPage() {
         const confirmationCode = window.prompt("Enter Delivery Confirmation Code (optional if buyer confirmed directly):") || undefined;
         await api.confirmFarmerDelivery(order.suborder_id || order.order_id, confirmationCode);
       } else {
-        await handleUpdateStatus(order, action);
+        await handleStatusTransition(Number(order.order_id || order.id), action as any);
       }
       loadOrders();
     } catch (err: any) {
@@ -138,409 +158,354 @@ export default function ManageOrdersPage() {
     }
   };
 
-  const pendingShipments = dashboardData?.pending_shipments?.length || 0;
-  const unreadMessages = notifications.filter(n => !n.is_read).length;
-
-  const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
-  };
-
-  const tabs = [
-    { id: 'all', label: 'All', count: dashboardData?.summary?.total_orders_received || 0 },
-    { id: 'unpaid', label: 'Unpaid', count: 0 },
-    { id: 'pending shipment', label: 'Pending Shipment', count: dashboardData?.summary?.pending_orders || 0 },
-    { id: 'in transit', label: 'In Transit', count: dashboardData?.summary?.in_transit_orders || 0 },
-    { id: 'completed', label: 'Completed', count: dashboardData?.summary?.delivered_orders || 0 },
-    { id: 'returns/refunds', label: 'Returns/Refunds', count: 0 },
-    { id: 'canceled', label: 'Canceled', count: 0 },
-  ];
-
   return (
-    <>
-      
-      
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 space-y-8 bg-[#fafafa]">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Order Fulfillment & Sales</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Accept buyer orders, pack farm harvests, and hand over produce for delivery.
+          </p>
+        </div>
 
-      {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#fafafa]">
-        
-        {/* TOP HEADER */}
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 flex-shrink-0 z-10 sticky top-0">
-          <div className="flex items-center">
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight" style={{ fontFamily: 'Impact, Arial Black, sans-serif' }}>Orders Management</h1>
-            <p className="ml-4 text-sm text-gray-500 font-medium hidden md:block">View, track, and manage your agricultural sales.</p>
-          </div>
+        <Link
+          href="/farmer/shipping"
+          className="px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold transition-all shadow-xs flex items-center gap-2"
+        >
+          <span className="material-symbols-outlined text-base">local_shipping</span>
+          Shipping & Logistics Hub
+        </Link>
+      </div>
 
-          <div className="flex-1 max-w-xl mx-8 hidden lg:block">
-            <div className="flex items-center bg-gray-100/80 border border-gray-200 rounded-full px-4 py-2 w-full transition-all duration-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#2d9a33]/20 focus-within:border-[#2d9a33]">
-              <span className="material-symbols-outlined text-gray-400 text-[20px] mr-2">search</span>
-              <input 
-                type="text" 
-                placeholder="Search orders, products..." 
-                className="w-full bg-transparent border-none focus:outline-none text-sm text-gray-700 placeholder-gray-400"
-                value={orderIdSearch}
-                onChange={(e) => setOrderIdSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-5 ml-auto">
-            <button className="relative w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
-              <span className="material-symbols-outlined text-[24px]">notifications_none</span>
-              {notifications.length > 0 && (
-                <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
-                  {notifications.length}
-                </span>
-              )}
+      {/* Filter Tabs and Search */}
+      <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-xs flex flex-wrap items-center justify-between gap-4">
+        {/* Status Tabs */}
+        <div className="flex items-center gap-1 bg-gray-50 p-1.5 rounded-2xl border border-gray-100 overflow-x-auto max-w-full">
+          {[
+            { label: 'All Orders', val: 'all' },
+            { label: 'Pending Confirmation', val: 'pending' },
+            { label: 'Confirmed / Packing', val: 'confirmed' },
+            { label: 'In Transit', val: 'in_transit' },
+            { label: 'Delivered', val: 'delivered' },
+            { label: 'Cancelled', val: 'cancelled' },
+          ].map((tab) => (
+            <button
+              key={tab.val}
+              type="button"
+              onClick={() => {
+                setActiveTab(tab.val);
+                setPage(1);
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                activeTab === tab.val ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              {tab.label}
             </button>
-            <button className="relative w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
-              <span className="material-symbols-outlined text-[24px]">chat_bubble_outline</span>
-              {unreadMessages > 0 && (
-                <span className="absolute top-2 right-2 bg-orange-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
-                  {unreadMessages}
-                </span>
-              )}
-            </button>
-            
-            <div className="h-8 w-px bg-gray-200 mx-2"></div>
+          ))}
+        </div>
 
-            {/* USER PROFILE */}
-            <div className="flex items-center cursor-pointer group relative pl-2">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#2d9a33] to-[#74df41] p-[2px] mr-3">
-                <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden border border-white">
-                  {user?.image_url ? (
-                    <img src={user.image_url} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-[#2d9a33] font-bold text-sm">
-                      {user?.name?.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+        {/* Search */}
+        <form onSubmit={handleSearchSubmit} className="relative">
+          <span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400 text-lg">search</span>
+          <input
+            type="text"
+            placeholder="Search by Order ID or Buyer Name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#16a34a]/30 focus:border-[#16a34a] w-64 sm:w-80 font-medium"
+          />
+        </form>
+      </div>
+
+      {/* Orders List */}
+      <div className="space-y-6">
+        {loading ? (
+          <div className="bg-white rounded-3xl p-12 text-center text-gray-400 border border-gray-100">
+            <div className="w-8 h-8 border-3 border-[#16a34a] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            Loading your farm orders...
           </div>
-        </header>
+        ) : orders.length === 0 ? (
+          <div className="bg-white rounded-3xl p-12 text-center text-gray-500 border border-gray-100">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#16a34a] flex items-center justify-center mx-auto mb-3">
+              <span className="material-symbols-outlined text-3xl">receipt_long</span>
+            </div>
+            <p className="font-bold text-gray-800 text-base mb-1">No orders found</p>
+            <p className="text-xs text-gray-400">
+              {activeTab === 'all'
+                ? 'Your farm has not received any buyer orders yet.'
+                : `No orders in "${activeTab}" status.`}
+            </p>
+          </div>
+        ) : (
+          orders.map((order) => {
+            const currentOrderId = Number(order.order_id || order.id);
+            const step = getStepProgress(order.order_status);
+            const isCancelled = order.order_status === 'cancelled';
+            const isUpdating = updatingId === currentOrderId;
 
-        {/* DASHBOARD CONTENT */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
-          <div className="max-w-[1440px] mx-auto space-y-6">
-            
-            <div className="flex justify-end gap-3 mb-2">
-              <button
-                onClick={async () => {
-                  try {
-                    let exportStatus: string | undefined;
-                    if (activeTab === 'pending shipment') exportStatus = 'pending';
-                    else if (activeTab === 'in transit') exportStatus = 'in_transit';
-                    else if (activeTab === 'returns/refunds') exportStatus = 'returned';
-                    else if (activeTab === 'canceled') exportStatus = 'cancelled';
-                    else if (activeTab !== 'all') exportStatus = activeTab;
-                    await api.exportFarmerOrdersCSV({ status: exportStatus });
-                  } catch {
-                    showError('Failed to export orders');
-                  }
-                }}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+            return (
+              <div
+                key={currentOrderId}
+                className="bg-white rounded-3xl border border-gray-100 shadow-xs hover:shadow-md transition-shadow overflow-hidden"
               >
-                <span className="material-symbols-outlined text-[18px]">download</span>
-                Export CSV
-              </button>
-              <button className="px-4 py-2 bg-[#2d9a33] hover:bg-[#25822a] text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
-                <span className="material-symbols-outlined text-[18px]">print</span>
-                Batch Print Labels
-              </button>
-            </div>
+                {/* Order Top Card Header */}
+                <div className="bg-gray-50/70 p-4 sm:p-6 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-800 font-bold text-sm shadow-2xs">
+                      #{currentOrderId}
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-400 block">
+                        Placed on {new Date(order.created_at).toLocaleDateString()} at{' '}
+                        {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span className="font-bold text-gray-900 text-sm">
+                        Buyer: {order.buyer_name || 'Verified Buyer'}
+                      </span>
+                    </div>
+                  </div>
 
-            {/* TABS */}
-            <div className="bg-white rounded-t-xl border-b-2 border-transparent px-2 flex overflow-x-auto custom-scrollbar space-x-6 text-sm font-medium border-x border-t border-gray-200">
-              {tabs.map((tab) => {
-                const isActive = activeTab === tab.id;
-                let badgeClass = 'bg-gray-100 text-gray-600';
-                if (isActive) badgeClass = 'bg-[#2d9a33] text-white';
-                else if (tab.id === 'pending shipment' && tab.count > 0) badgeClass = 'bg-orange-100 text-orange-600';
-                else if (tab.id === 'in transit' && tab.count > 0) badgeClass = 'bg-[#fff200] text-gray-900';
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Payment Badge */}
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                        order.payment_status === 'paid'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {order.payment_status === 'paid' ? 'check_circle' : 'pending'}
+                      </span>
+                      {order.payment_status === 'paid' ? 'Paid via Chapa' : 'Payment Pending'}
+                    </span>
 
-                return (
-                  <button 
-                    key={tab.id}
-                    onClick={() => { setActiveTab(tab.id); setPage(1); }}
-                    className={`py-4 px-2 whitespace-nowrap transition-colors flex items-center gap-2 border-b-2 ${isActive ? 'border-[#2d9a33] text-[#2d9a33]' : 'border-transparent text-gray-600 hover:text-gray-900'}`}
-                    style={{ marginBottom: '-2px' }}
-                  >
-                    {tab.label} {tab.count !== undefined && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${badgeClass}`}>{tab.count}</span>}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* FILTERS */}
-            <div className="bg-white border-x border-b border-gray-200 p-6 flex flex-wrap gap-4 items-end rounded-b-xl shadow-sm mb-6">
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-gray-500 mb-2">Order ID</label>
-                <input 
-                  type="text" 
-                  value={orderIdSearch}
-                  onChange={(e) => setOrderIdSearch(e.target.value)}
-                  placeholder="e.g. GH-2023-..." 
-                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] text-sm"
-                />
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-gray-500 mb-2">Product Name</label>
-                <input 
-                  type="text" 
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  placeholder="Search by product" 
-                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] text-sm"
-                />
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-gray-500 mb-2">Buyer Info</label>
-                <input 
-                  type="text" 
-                  value={buyerSearch}
-                  onChange={(e) => setBuyerSearch(e.target.value)}
-                  placeholder="Name or Email" 
-                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] text-sm"
-                />
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-gray-500 mb-2">Date Range</label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">calendar_today</span>
-                  <input 
-                    type="text" 
-                    value={dateRange}
-                    onChange={(e) => setDateRange(e.target.value)}
-                    placeholder="Select dates" 
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2d9a33]/20 focus:border-[#2d9a33] text-sm"
-                  />
+                    {/* Order Status Badge */}
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                        isCancelled
+                          ? 'bg-red-50 text-red-700'
+                          : order.order_status === 'delivered'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : order.order_status === 'in_transit'
+                          ? 'bg-blue-50 text-blue-700'
+                          : order.order_status === 'confirmed'
+                          ? 'bg-purple-50 text-purple-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {order.order_status.replace('_', ' ')}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleReset} className="px-6 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded-lg text-sm font-bold transition-colors">
-                  Reset
-                </button>
-                <button onClick={handleSearch} className="px-6 py-2.5 bg-[#2d9a33] hover:bg-[#25822a] text-white rounded-lg text-sm font-bold transition-colors">
-                  Search
-                </button>
-              </div>
-            </div>
 
-            {/* ORDERS TABLE */}
-            {loading ? (
-              <div className="flex justify-center p-12">
-                <div className="w-10 h-10 border-4 border-[#2d9a33] border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        <th className="p-4 w-12"><input type="checkbox" className="rounded border-gray-300 text-[#2d9a33] focus:ring-[#2d9a33] cursor-pointer" /></th>
-                        <th className="p-4 min-w-[250px]">PRODUCT SUMMARY</th>
-                        <th className="p-4">ORDER DETAILS</th>
-                        <th className="p-4">BUYER INFO</th>
-                        <th className="p-4">TOTAL AMOUNT</th>
-                        <th className="p-4">STATUS</th>
-                        <th className="p-4 text-right">ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                      {orders.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="p-12 text-center text-gray-500">
-                            <div className="flex flex-col items-center justify-center">
-                              <span className="material-symbols-outlined text-[48px] text-gray-300 mb-3">inbox</span>
-                              <p className="font-bold text-gray-900 text-lg">No orders found</p>
-                              <p className="text-sm mt-1 mb-4">Try adjusting your filters or search criteria.</p>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : orders.map((order) => {
-                        const item = order.items && order.items[0] ? order.items[0] : null;
-                        const dateObj = new Date(order.created_at);
-                        const dateStr = dateObj.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
-                        const timeStr = dateObj.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', hour12: false});
-                        
-                        const currentStatus = order.fulfillment_status || order.order_status;
-                        let statusBadge = null;
-                        if (currentStatus === 'pending') {
-                          statusBadge = <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">Pending</span>;
-                        } else if (currentStatus === 'confirmed' || currentStatus === 'accepted') {
-                          statusBadge = <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">Confirmed</span>;
-                        } else if (currentStatus === 'packed') {
-                          statusBadge = <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold">Packed</span>;
-                        } else if (currentStatus === 'in_transit' || currentStatus === 'dispatched') {
-                          statusBadge = <span className="bg-[#fff200] text-gray-900 px-3 py-1 rounded-full text-xs font-bold">In Transit</span>;
-                        } else if (currentStatus === 'delivered' || currentStatus === 'completed') {
-                          statusBadge = <span className="bg-[#4caf50] text-white px-3 py-1 rounded-full text-xs font-bold">Completed</span>;
-                        } else if (currentStatus === 'cancelled') {
-                          statusBadge = <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold">Cancelled</span>;
-                        } else if (currentStatus === 'returned') {
-                          statusBadge = <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold">Returned</span>;
-                        } else {
-                          statusBadge = <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold">{currentStatus}</span>;
-                        }
-                        
-                        return (
-                          <tr key={order.suborder_id || order.order_id} className="hover:bg-gray-50/80 transition-colors">
-                            <td className="p-4">
-                              <input type="checkbox" className="rounded border-gray-300 text-[#2d9a33] focus:ring-[#2d9a33] cursor-pointer" />
-                            </td>
-                            <td className="p-4">
-                              {item && (
-                                <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200 shrink-0">
-                                    {item.image_url ? (
-                                      <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
-                                    ) : (
-                                      <span className="material-symbols-outlined text-gray-400">image</span>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className="font-bold text-gray-900 line-clamp-1">{item.product_name}</p>
-                                    <p className="text-xs text-gray-500 font-medium mt-0.5">Qty: {item.quantity} {item.unit || 'kg'}</p>
-                                  </div>
-                                </div>
-                              )}
-                            </td>
-                            <td className="p-4">
-                              <p className="font-mono font-bold text-gray-800 text-sm">{order.suborder_number || `ORD-${order.order_id.toString().padStart(5, '0')}`}</p>
-                              {order.pickup_code && (
-                                <span className="inline-block mt-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[11px] font-mono font-bold">
-                                  Pickup: {order.pickup_code}
-                                </span>
-                              )}
-                              <p className="text-xs text-gray-500 font-medium mt-0.5">{dateStr} {timeStr}</p>
-                            </td>
-                            <td className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-green-50 text-[#2d9a33] border border-[#2d9a33]/20 flex items-center justify-center text-xs font-bold shrink-0">
-                                  {order.buyer_name ? order.buyer_name.substring(0, 2).toUpperCase() : 'BY'}
-                                </div>
-                                <div>
-                                  <p className="font-bold text-gray-900">{order.buyer_name || 'Buyer'}</p>
-                                  <p className="text-xs text-gray-500 font-medium">{order.buyer_email || 'No email'}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4 font-bold text-gray-900 text-sm">
-                              ETB {Number(order.total_amount).toLocaleString('en-US', {minimumFractionDigits: 2})}
-                              {order.fulfillment_type && (
-                                <p className="text-[11px] font-normal text-gray-500 capitalize">{order.fulfillment_type.replace(/_/g, ' ')}</p>
-                              )}
-                            </td>
-                            <td className="p-4">
-                              {statusBadge}
-                            </td>
-                            <td className="p-4">
-                              <div className="flex items-center justify-end gap-2">
-                                {order.fulfillment_type === 'farmer_pickup' ? (
-                                  currentStatus === 'ready_for_pickup' ? (
-                                    <button
-                                      onClick={() => handleFulfillmentAction(order, 'confirm_pickup')}
-                                      className="px-3 py-1 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition"
-                                    >
-                                      Confirm Pickup
-                                    </button>
-                                  ) : currentStatus !== 'delivered' && currentStatus !== 'cancelled' ? (
-                                    <button
-                                      onClick={() => handleFulfillmentAction(order, 'ready_pickup')}
-                                      className="text-sm font-bold text-[#2d9a33] hover:underline"
-                                    >
-                                      Ready for Pickup
-                                    </button>
-                                  ) : (
-                                    <span className="text-xs font-semibold text-gray-400 capitalize">{currentStatus}</span>
-                                  )
-                                ) : order.fulfillment_type === 'farmer_delivery' ? (
-                                  currentStatus === 'in_transit' || currentStatus === 'dispatched' ? (
-                                    <button
-                                      onClick={() => handleFulfillmentAction(order, 'confirm_delivery')}
-                                      className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 transition"
-                                    >
-                                      Confirm Delivered
-                                    </button>
-                                  ) : currentStatus !== 'delivered' && currentStatus !== 'cancelled' ? (
-                                    <button
-                                      onClick={() => handleFulfillmentAction(order, 'dispatch_farmer')}
-                                      className="text-sm font-bold text-[#2d9a33] hover:underline"
-                                    >
-                                      Dispatch Delivery
-                                    </button>
-                                  ) : (
-                                    <span className="text-xs font-semibold text-gray-400 capitalize">{currentStatus}</span>
-                                  )
+                {/* Fulfillment Stepper */}
+                {!isCancelled && (
+                  <div className="px-6 pt-5 pb-2">
+                    <div className="flex items-center justify-between max-w-2xl mx-auto relative">
+                      {[
+                        { num: 1, label: 'Order Placed' },
+                        { num: 2, label: 'Confirmed & Packing' },
+                        { num: 3, label: 'In Transit / Shipped' },
+                        { num: 4, label: 'Delivered' },
+                      ].map((s, idx) => (
+                        <div key={s.num} className="flex flex-col items-center relative z-10">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                              step >= s.num
+                                ? 'bg-[#16a34a] text-white shadow-xs'
+                                : 'bg-gray-100 text-gray-400 border border-gray-200'
+                            }`}
+                          >
+                            {step > s.num ? (
+                              <span className="material-symbols-outlined text-sm">check</span>
+                            ) : (
+                              s.num
+                            )}
+                          </div>
+                          <span
+                            className={`text-[11px] font-semibold mt-1.5 whitespace-nowrap ${
+                              step >= s.num ? 'text-gray-900' : 'text-gray-400'
+                            }`}
+                          >
+                            {s.label}
+                          </span>
+                        </div>
+                      ))}
+
+                      {/* Stepper Progress Bar */}
+                      <div className="absolute top-4 left-6 right-6 h-0.5 bg-gray-200 -z-0">
+                        <div
+                          className="h-full bg-[#16a34a] transition-all duration-300"
+                          style={{
+                            width:
+                              step === 1
+                                ? '0%'
+                                : step === 2
+                                ? '33%'
+                                : step === 3
+                                ? '66%'
+                                : step >= 4
+                                ? '100%'
+                                : '0%',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Order Details Body */}
+                <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left 2 Cols: Itemized Produce */}
+                  <div className="lg:col-span-2 space-y-3">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">
+                      Harvest Produce Ordered
+                    </span>
+
+                    <div className="divide-y divide-gray-100 border border-gray-100 rounded-2xl overflow-hidden">
+                      {order.items &&
+                        order.items.map((item, idx) => (
+                          <div key={idx} className="p-3.5 flex items-center justify-between gap-3 bg-white">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-xl bg-gray-100 shrink-0 overflow-hidden border border-gray-200">
+                                {item.image_url ? (
+                                  <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
                                 ) : (
-                                  currentStatus === 'pending' || currentStatus === 'accepted' ? (
-                                    <button onClick={() => handleUpdateStatus(order, 'packed')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                      Pack Order
-                                    </button>
-                                  ) : currentStatus === 'packed' ? (
-                                    <button onClick={() => handleUpdateStatus(order, 'dispatched')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                      Dispatch
-                                    </button>
-                                  ) : currentStatus === 'in_transit' || currentStatus === 'dispatched' ? (
-                                    <button onClick={() => handleUpdateStatus(order, 'delivered')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                      Deliver
-                                    </button>
-                                  ) : (
-                                    <span className="text-xs font-semibold text-gray-400 capitalize">{currentStatus}</span>
-                                  )
+                                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                    <span className="material-symbols-outlined text-lg">spa</span>
+                                  </div>
                                 )}
                               </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {/* PAGINATION */}
-                <div className="p-4 border-t border-gray-200 flex justify-between items-center text-sm">
-                  <span className="text-gray-500 font-medium">Showing {orders.length > 0 ? (page - 1) * 10 + 1 : 0} to {Math.min(page * 10, totalOrders)} of {totalOrders.toLocaleString()} orders</span>
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => setPage(Math.max(1, page - 1))}
-                      disabled={page === 1}
-                      className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-                    </button>
-                    {/* Simplified pagination logic for demonstration */}
-                    <button className="w-8 h-8 flex items-center justify-center rounded bg-[#2d9a33] text-white font-bold">{page}</button>
-                    {page < totalPages && (
-                      <button onClick={() => setPage(page + 1)} className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold">{page + 1}</button>
-                    )}
-                    {page + 1 < totalPages && (
-                      <button onClick={() => setPage(page + 2)} className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold">{page + 2}</button>
-                    )}
-                    {page + 2 < totalPages && <span className="px-2 text-gray-400">...</span>}
-                    {page + 2 < totalPages && (
-                      <button onClick={() => setPage(totalPages)} className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold">{totalPages}</button>
-                    )}
-                    <button 
-                      onClick={() => setPage(Math.min(totalPages, page + 1))}
-                      disabled={page >= totalPages}
-                      className="w-8 h-8 flex items-center justify-center rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-                    </button>
+                              <div>
+                                <span className="font-bold text-gray-900 text-sm block">
+                                  {item.product_name}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {item.quantity} {item.unit || 'kg'} × ETB {Number(item.price).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span className="font-bold text-gray-900 text-sm">
+                              ETB {(Number(item.quantity) * Number(item.price)).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Right Col: Logistics & Action */}
+                  <div className="bg-gray-50/70 p-5 rounded-2xl border border-gray-100 flex flex-col justify-between gap-4">
+                    <div className="space-y-3">
+                      <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+                        Buyer & Delivery Address
+                      </span>
+
+                      <div>
+                        <span className="text-xs font-bold text-gray-800 block">{order.buyer_name}</span>
+                        {order.buyer_phone && (
+                          <a
+                            href={`tel:${order.buyer_phone}`}
+                            className="text-xs text-[#16a34a] hover:underline font-semibold flex items-center gap-1 mt-0.5"
+                          >
+                            <span className="material-symbols-outlined text-sm">call</span>
+                            {order.buyer_phone}
+                          </a>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1 flex items-start gap-1">
+                          <span className="material-symbols-outlined text-sm shrink-0 text-gray-400">pin_drop</span>
+                          <span>{order.delivery_address || 'Standard Delivery Location'}</span>
+                        </p>
+                      </div>
+
+                      <div className="border-t border-gray-200/80 pt-3 flex justify-between items-baseline">
+                        <span className="text-xs font-semibold text-gray-500">Your Share:</span>
+                        <span className="text-base font-black text-[#16a34a]">
+                          ETB {Number(order.farmer_total || order.total_amount).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="space-y-2 pt-2 border-t border-gray-200/60">
+                      {order.order_status === 'pending' && (
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={() => handleStatusTransition(currentOrderId, 'confirmed')}
+                          className="w-full py-2.5 bg-[#16a34a] hover:bg-[#15803d] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isUpdating ? 'Updating...' : 'Accept & Confirm Order'}
+                        </button>
+                      )}
+
+                      {order.order_status === 'confirmed' && (
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={() => handleStatusTransition(currentOrderId, 'in_transit')}
+                          className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isUpdating ? 'Updating...' : 'Mark Packed & Ship Harvest'}
+                        </button>
+                      )}
+
+                      {order.order_status === 'in_transit' && (
+                        <button
+                          type="button"
+                          disabled={isUpdating}
+                          onClick={() => handleStatusTransition(currentOrderId, 'delivered')}
+                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isUpdating ? 'Updating...' : 'Confirm Delivery Completed'}
+                        </button>
+                      )}
+
+                      <Link
+                        href={`/farmer/shipping?orderId=${currentOrderId}`}
+                        className="w-full py-2 bg-white hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-semibold border border-gray-200 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <span className="material-symbols-outlined text-sm">print</span>
+                        Print Packing Slip
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
-            )}
-
-          </div>
-        </main>
+            );
+          })
+        )}
       </div>
-    </>
+
+      {/* Pagination Footer */}
+      {totalPages > 1 && (
+        <div className="p-4 bg-white rounded-2xl border border-gray-100 flex items-center justify-between text-xs text-gray-500">
+          <span>
+            Page {page} of {totalPages} ({totalOrders} orders received)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors font-medium"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors font-medium"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

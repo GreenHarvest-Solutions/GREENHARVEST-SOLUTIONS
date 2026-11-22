@@ -20,8 +20,29 @@ const getMe = async (userId) => {
   };
 };
 
-const updateProfile = async (userId, { name, phone, address, bio }) => {
-  const updated = await userModel.updateUserProfile({ user_id: userId, name, phone, address, bio });
+const getFarmerPublicProfile = async (farmerId) => {
+  const numericId = Number(farmerId);
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    throw createServiceError("Invalid farmer ID", 400);
+  }
+
+  const user = await userModel.findUserById(numericId);
+  if (!user || normalizeRole(user.role_name || user.role) !== "farmer") {
+    throw createServiceError("Farmer not found", 404);
+  }
+
+  return {
+    id: user.id,
+    name: user.name,
+    role: "farmer",
+    bio: user.bio || null,
+    address: user.address || null,
+    created_at: user.created_at,
+  };
+};
+
+const updateProfile = async (userId, payload) => {
+  const updated = await userModel.updateUserProfile({ user_id: userId, ...payload });
 
   if (!updated) {
     throw createServiceError("User not found", 404);
@@ -67,6 +88,7 @@ const updateFarmerProfileExtended = async (userId, data) => {
 
 module.exports = {
   getMe,
+  getFarmerPublicProfile,
   updateProfile,
   listUsers,
   getFarmerProfileProgress,

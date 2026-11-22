@@ -60,3 +60,4 @@ class TelebirrAdapter extends BasePaymentAdapter {
 }
 
 module.exports = TelebirrAdapter;
+

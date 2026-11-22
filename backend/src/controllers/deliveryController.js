@@ -231,12 +231,29 @@ const trackDelivery = async (req, res) => {
 	}
 };
 
+const getAssignedDeliveries = async (req, res) => {
+	try {
+		const deliveries = await deliveryService.getAssignedDeliveries({
+			actor: req.user,
+		});
+
+		return res.status(200).json({
+			deliveries,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Get assigned deliveries failed", error, {
+			userId: req.user && req.user.id,
+		});
+	}
+};
+
 module.exports = {
 	assignDeliveryPartner,
 	claimPoolDelivery,
 	confirmFarmerDelivery,
 	confirmPickup,
 	dispatchFarmerDelivery,
+	getAssignedDeliveries,
 	getDeliveryPool,
 	markReadyForPickup,
 	trackDelivery,

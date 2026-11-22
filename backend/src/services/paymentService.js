@@ -348,21 +348,113 @@ const verifyPayment = async ({ user_id, order_id, provider = "chapa", reference 
  * Legacy processPayment (for direct/cash-on-delivery flows)
  */
 const processPayment = async ({ user_id, order_id, payment_method, amount }) => {
-  return processWebhook({
-    provider: payment_method || "chapa",
-    headers: {
-      "idempotency-key": `direct-${order_id}-${Date.now()}`,
-      "chapa-signature": crypto
-        .createHmac("sha256", process.env.CHAPA_WEBHOOK_SECRET || process.env.CHAPA_SECRET_KEY || "chapa_test_secret")
-        .update(JSON.stringify({ order_id, amount, status: "success" }))
-        .digest("hex"),
-    },
-    body: {
-      order_id,
-      amount,
-      status: "success",
-    },
-  });
+const processPayment = async ({ user_id, order_id, payment_method, amount }) => {
+	const client = await pool.connect();
+
+	try {
+		const parsed_order_id = Number(order_id);
+		const payment_amount = Number(amount);
+
+		if (
+			!isPositiveInteger(parsed_order_id) ||
+			!payment_method ||
+			Number.isNaN(payment_amount) ||
+			payment_amount <= 0
+		) {
+			throw createServiceError("order_id, payment_method, and a valid amount are required", 400);
+		}
+
+		await client.query("BEGIN");
+
+		const order = await paymentModel.findOrderByIdForUpdate(client, parsed_order_id);
+
+		if (!order) {
+			throw createServiceError("Order not found", 404);
+		}
+
+		if (Number(order.buyer_id) !== Number(user_id)) {
+			throw createServiceError("You can only pay for your own orders", 403);
+		}
+
+		if (order.payment_status === "paid") {
+			throw createServiceError("Order has already been paid", 409);
+		}
+
+		if (Number(order.total_amount) !== payment_amount) {
+			throw createServiceError("Payment amount does not match order total", 400);
+		}
+
+		const transaction_id = `tx-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+		const payment_status = "paid";
+
+		const payment = await paymentModel.createPayment(client, {
+			order_id: parsed_order_id,
+			payment_method: payment_method.trim(),
+			amount: payment_amount.toFixed(2),
+			payment_status,
+			transaction_id,
+		});
+
+		await paymentModel.createTransaction(client, {
+			order_id: parsed_order_id,
+			user_id,
+			amount: payment_amount.toFixed(2),
+			payment_method: payment_method.trim(),
+			status: payment_status,
+		});
+
+		await paymentModel.updateOrderPaymentStatus(client, {
+			order_id: parsed_order_id,
+			payment_status,
+		});
+
+		// Consume stock reservations if any
+		await client.query(
+			`UPDATE stock_reservations SET status = 'consumed' WHERE order_id = $1 AND status = 'active'`,
+			[parsed_order_id]
+		);
+
+		// Handle suborders and escrow if multi-vendor
+		const suborders = await paymentModel.findSubordersForOrder(client, parsed_order_id);
+		if (suborders && suborders.length > 0) {
+			for (const sub of suborders) {
+				await client.query(
+					`UPDATE suborders SET payment_status = 'paid', suborder_status = 'confirmed', updated_at = NOW() WHERE id = $1`,
+					[sub.id]
+				);
+				const existingEscrow = await client.query(
+					`SELECT id FROM escrow_ledger WHERE suborder_id = $1`,
+					[sub.id]
+				);
+				if (existingEscrow.rows.length === 0) {
+					await paymentModel.createEscrowEntry(client, {
+						order_id: parsed_order_id,
+						suborder_id: sub.id,
+						buyer_id: order.buyer_id,
+						farmer_id: sub.farmer_id,
+						escrow_amount: sub.total_amount,
+						platform_fee_pct: 0.05,
+						notes: `Direct payment escrow held for suborder ${sub.suborder_number}`,
+					});
+				}
+			}
+		}
+
+		await client.query("COMMIT");
+		await emitPaymentSucceededNotification({
+			user_id,
+			order_id: parsed_order_id,
+			order_number: order.order_number,
+		});
+		logger.info("Payment processed", { order_id: parsed_order_id, user_id, payment_id: payment.id });
+		return payment;
+	} catch (error) {
+		await client.query("ROLLBACK");
+		throw error;
+	} finally {
+		client.release();
+	}
+};
 };
 
 const getPaymentHistory = async (user_id) => {
