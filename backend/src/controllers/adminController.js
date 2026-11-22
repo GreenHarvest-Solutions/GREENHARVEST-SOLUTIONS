@@ -1,5 +1,6 @@
 const logger = require("../utils/logger");
 const adminService = require("../services/adminService");
+const intelligenceService = require("../services/intelligenceService");
 
 const handleControllerError = (res, context, error, meta = {}) => {
 	logger.error(context, {
@@ -489,6 +490,44 @@ const getKycDossier = async (req, res) => {
 		return res.status(200).json(dossier);
 	} catch (error) {
 		return handleControllerError(res, "Get KYC dossier failed", error);
+	}
+};
+
+const getKycIntelligence = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const dossier = await adminService.getKycDossier(id);
+		if (!dossier || !dossier.farmer) {
+			return res.status(404).json({ status: "error", message: `Farmer #${id} not found` });
+		}
+
+		const { farmer, documents = [] } = dossier;
+		const identityDoc = documents.find(
+			(d) => d.document_category === "identity" || d.document_type === "national_id" || d.id_hash
+		) || documents[0];
+
+		const duplicateDetection = await intelligenceService.checkIdentityDuplicates({
+			farmerId: farmer.id,
+			name: farmer.name,
+			idNumber: farmer.id_number || identityDoc?.extracted_data?.id_number,
+			idHash: identityDoc?.id_hash,
+			region: farmer.region,
+			woreda: farmer.woreda,
+			kebele: farmer.kebele,
+		});
+
+		return res.status(200).json({
+			farmer_id: farmer.id,
+			name: farmer.name,
+			ocr_data: identityDoc?.extracted_data || {},
+			ocr_raw_text: identityDoc?.ocr_raw_text || null,
+			ocr_confidence: identityDoc?.ocr_confidence || 0,
+			id_hash: identityDoc?.id_hash || null,
+			duplicate_detection: duplicateDetection,
+			risk_flags: dossier.riskFlags || [],
+		});
+	} catch (error) {
+		return handleControllerError(res, "Get KYC intelligence failed", error);
 	}
 };
 
@@ -2052,6 +2091,7 @@ module.exports = {
 	// Phase 1 Controllers
 	getKycQueue,
 	getKycDossier,
+	getKycIntelligence,
 	addKycDocument,
 	deleteKycDocument,
 	addFieldVisit,

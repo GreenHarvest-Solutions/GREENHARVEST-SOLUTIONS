@@ -1612,9 +1612,26 @@ class APIClient {
       documents: any[];
       fieldVisits: any[];
       reviews: any[];
+      riskFlags?: any[];
     }>({
       method: 'GET',
       url: `/admin/kyc/${id}`,
+    });
+  }
+
+  async getKycIntelligence(id: string | number) {
+    return this.request<{
+      farmer_id: number;
+      name: string;
+      ocr_data: Record<string, any>;
+      ocr_raw_text: string | null;
+      ocr_confidence: number;
+      id_hash: string | null;
+      duplicate_detection: any;
+      risk_flags: any[];
+    }>({
+      method: 'GET',
+      url: `/admin/kyc/${id}/intelligence`,
     });
   }
 

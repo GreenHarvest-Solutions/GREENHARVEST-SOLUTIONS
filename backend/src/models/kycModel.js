@@ -169,7 +169,7 @@ const getKycDossier = async (farmerId) => {
 
   const farmer = userRes.rows[0];
 
-  const [docsRes, visitsRes, reviewsRes] = await Promise.all([
+  const [docsRes, visitsRes, reviewsRes, flagsRes] = await Promise.all([
     pool.query(
       `SELECT 
         kd.*,
@@ -200,6 +200,10 @@ const getKycDossier = async (farmerId) => {
       ORDER BY kr.created_at DESC`,
       [farmerId]
     ),
+    pool.query(
+      `SELECT * FROM risk_flags WHERE entity_type = 'farmer' AND entity_id = $1::text ORDER BY created_at DESC`,
+      [farmerId]
+    ),
   ]);
 
   return {
@@ -207,6 +211,7 @@ const getKycDossier = async (farmerId) => {
     documents: docsRes.rows,
     fieldVisits: visitsRes.rows,
     reviews: reviewsRes.rows,
+    riskFlags: flagsRes.rows,
   };
 };
 
@@ -222,16 +227,18 @@ const addKycDocument = async ({
   ocrRawText = null,
   extractedData = {},
   idHash = null,
+  ocrConfidence = null,
   expiresAt = null,
   reviewerId = null,
   actorId = null,
   ipAddress = null,
   userAgent = null,
 }) => {
+  const ocrProcessedAt = (ocrRawText || idHash) ? new Date() : null;
   const res = await pool.query(
     `INSERT INTO kyc_documents 
-      (user_id, document_type, document_url, public_id, document_category, ocr_raw_text, extracted_data, id_hash, status, reviewer_id, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
+      (user_id, document_type, document_url, public_id, document_category, ocr_raw_text, extracted_data, id_hash, ocr_confidence, ocr_processed_at, status, reviewer_id, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12)
      RETURNING *`,
     [
       userId,
@@ -242,6 +249,8 @@ const addKycDocument = async ({
       ocrRawText,
       JSON.stringify(extractedData || {}),
       idHash,
+      ocrConfidence,
+      ocrProcessedAt,
       reviewerId,
       expiresAt,
     ]

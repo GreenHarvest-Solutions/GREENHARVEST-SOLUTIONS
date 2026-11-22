@@ -76,6 +76,8 @@ const getProductsAdmin = async ({
       p.stock,
       p.status,
       p.image_url,
+      p.image_hash,
+      p.moderation_risk_score,
       p.created_at,
       p.moderation_status,
       p.moderation_reason,
@@ -104,6 +106,7 @@ const getProductsAdmin = async ({
            WHEN p.moderation_status = 'changes_requested' THEN 2
            WHEN p.moderation_status = 'rejected' THEN 3
            ELSE 4 END ASC,
+      COALESCE(p.moderation_risk_score, 0) DESC,
       p.created_at DESC
     LIMIT $${params.length + 1} OFFSET $${params.length + 2}
   `;

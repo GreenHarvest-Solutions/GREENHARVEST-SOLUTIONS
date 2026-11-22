@@ -53,6 +53,7 @@ const createProduct = async ({
 	stock,
 	farm_location,
 	image_url,
+	image_hash = null,
 	status = 'draft',
 	moderation_status = 'pending',
 	moderation_reason = null,
@@ -77,6 +78,7 @@ const createProduct = async ({
 				stock,
 				farm_location,
 				image_url,
+				image_hash,
 				status,
 				moderation_status,
 				moderation_reason,
@@ -89,7 +91,7 @@ const createProduct = async ({
 				farmer_delivery_available,
 				delivery_radius_km
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 			RETURNING *
 		`,
 		[
@@ -102,6 +104,7 @@ const createProduct = async ({
 			stock ?? 0,
 			farm_location || null,
 			image_url || null,
+			image_hash || null,
 			status,
 			moderation_status,
 			moderation_reason,
@@ -120,8 +123,8 @@ const createProduct = async ({
 		const hasImagesTable = await tableExists('product_images');
 		if (hasImagesTable) {
 			await pool.query(
-				`INSERT INTO product_images (product_id, image_url) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-				[result.rows[0].id, image_url]
+				`INSERT INTO product_images (product_id, image_url, image_hash) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+				[result.rows[0].id, image_url, image_hash || null]
 			);
 		}
 	}

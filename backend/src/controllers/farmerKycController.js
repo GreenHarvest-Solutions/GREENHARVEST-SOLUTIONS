@@ -1,6 +1,8 @@
 const logger = require("../utils/logger");
 const kycModel = require("../models/kycModel");
 const { kycUpload } = require("../config/cloudinary");
+const intelligenceService = require("../services/intelligenceService");
+const riskAdminModel = require("../models/riskAdminModel");
 
 const handleControllerError = (res, context, error, meta = {}) => {
   logger.error(context, {
@@ -74,15 +76,75 @@ const uploadFarmerKycDocument = [
         return res.status(400).json({ message: "No document file or URL provided" });
       }
 
+      // 1. Process Document Intelligence & OCR Extraction
+      let finalOcrText = ocr_raw_text || null;
+      let finalExtracted = extracted_data ? (typeof extracted_data === "string" ? JSON.parse(extracted_data) : extracted_data) : {};
+      let finalIdHash = id_hash || null;
+      let ocrConfidence = null;
+
+      try {
+        const intel = intelligenceService.processKycDocumentOcr({
+          filePath: req.file ? req.file.path : null,
+          rawText: ocr_raw_text || null,
+          documentType: document_type,
+        });
+
+        if (intel && (intel.raw_text || intel.id_hash || intel.confidence_score > 0)) {
+          finalOcrText = intel.raw_text || finalOcrText;
+          finalExtracted = { ...finalExtracted, ...intel.extracted_fields };
+          finalIdHash = intel.id_hash || finalIdHash;
+          ocrConfidence = intel.confidence_score || null;
+        }
+      } catch (ocrErr) {
+        logger.warn("Automated OCR extraction error", { message: ocrErr.message });
+      }
+
+      // 2. Check for Duplicate Identities (Fayda / Kebele / Name)
+      try {
+        const dupCheck = await intelligenceService.checkIdentityDuplicates({
+          farmerId: userId,
+          idNumber: finalExtracted?.id_number,
+          idHash: finalIdHash,
+          name: finalExtracted?.full_name,
+          region: finalExtracted?.region,
+          woreda: finalExtracted?.woreda,
+          kebele: finalExtracted?.kebele,
+        });
+
+        if (dupCheck.is_duplicate) {
+          logger.warn("Duplicate farmer identity detected", {
+            farmerId: userId,
+            matchCount: dupCheck.match_count,
+            highestRisk: dupCheck.highest_risk,
+          });
+
+          await riskAdminModel.createRiskFlag({
+            entity_type: "farmer",
+            entity_id: userId,
+            flag_type: "duplicate_identity",
+            severity: "critical",
+            flag_reason: `Duplicate farmer registration detected: matches farmer #${dupCheck.matches[0].farmer_id} (${dupCheck.matches[0].match_type})`,
+            evidence: {
+              matches: dupCheck.matches,
+              highest_risk: dupCheck.highest_risk,
+            },
+            confidence_score: dupCheck.matches[0].similarity || 90.0,
+          });
+        }
+      } catch (dupErr) {
+        logger.warn("Duplicate identity check error", { message: dupErr.message });
+      }
+
       const newDoc = await kycModel.addKycDocument({
         userId,
         documentType: document_type,
         documentUrl: finalUrl,
         publicId: finalPublicId,
         documentCategory: document_category || "identity",
-        ocrRawText: ocr_raw_text || null,
-        extractedData: extracted_data || {},
-        idHash: id_hash || null,
+        ocrRawText: finalOcrText,
+        extractedData: finalExtracted,
+        idHash: finalIdHash,
+        ocrConfidence,
         expiresAt: expires_at || null,
         actorId: userId,
         ipAddress: req.ip,

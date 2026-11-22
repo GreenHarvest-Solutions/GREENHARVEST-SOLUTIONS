@@ -222,7 +222,7 @@ export default function AdminKycDossierPage({ params }: Props) {
     );
   }
 
-  const { farmer, documents = [], fieldVisits = [] } = dossier;
+  const { farmer, documents = [], fieldVisits = [], riskFlags = [] } = dossier;
 
   return (
     <div className="min-h-screen bg-[#FCF9F8] p-6 space-y-6">
@@ -241,6 +241,12 @@ export default function AdminKycDossierPage({ params }: Props) {
             <span className="px-2 py-0.5 text-xs font-semibold uppercase bg-gray-100 text-gray-800 border border-gray-300">
               {farmer.kyc_tier || 'tier_0'}
             </span>
+            {riskFlags.length > 0 && (
+              <span className="px-2 py-0.5 text-xs font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                {riskFlags.length} Risk Alert{riskFlags.length > 1 ? 's' : ''}
+              </span>
+            )}
           </div>
           <p className="text-xs text-gray-500">
             Producer Dossier #{farmer.id} • Registered{' '}
@@ -278,6 +284,31 @@ export default function AdminKycDossierPage({ params }: Props) {
           </button>
         </div>
       </div>
+
+      {/* Risk Alert Banner */}
+      {riskFlags.length > 0 && (
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
+            <AlertCircle className="w-4 h-4 text-amber-600" />
+            Security & Identity Risk Alerts ({riskFlags.length})
+          </div>
+          <div className="space-y-1.5">
+            {riskFlags.map((rf: any) => (
+              <div key={rf.id} className="text-xs text-amber-800 flex items-start gap-2">
+                <span className="font-semibold uppercase tracking-wider px-1.5 py-0.5 bg-amber-200 text-amber-900 text-[10px]">
+                  {rf.severity}
+                </span>
+                <span>{rf.flag_reason}</span>
+                {rf.confidence_score && (
+                  <span className="text-amber-700 font-mono text-[10px]">
+                    (Confidence: {rf.confidence_score}%)
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -847,33 +878,113 @@ export default function AdminKycDossierPage({ params }: Props) {
         description={`Attached on ${previewDoc?.created_at ? new Date(previewDoc.created_at).toLocaleDateString() : ''}`}
       >
         <div className="space-y-4">
-          <div className="max-h-[60vh] overflow-auto border border-gray-200 bg-gray-50 p-2 flex items-center justify-center">
-            {previewDoc?.document_url?.endsWith('.pdf') ? (
-              <iframe
-                src={previewDoc.document_url}
-                className="w-full h-96 border-none"
-                title="Document PDF"
-              />
-            ) : (
-              <img
-                src={previewDoc?.document_url}
-                alt="Document preview"
-                className="max-h-[55vh] max-w-full object-contain"
-              />
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Visual Document View */}
+            <div className="max-h-[50vh] overflow-auto border border-gray-200 bg-gray-50 p-2 flex items-center justify-center">
+              {previewDoc?.document_url?.endsWith('.pdf') ? (
+                <iframe
+                  src={previewDoc.document_url}
+                  className="w-full h-80 border-none"
+                  title="Document PDF"
+                />
+              ) : (
+                <img
+                  src={previewDoc?.document_url}
+                  alt="Document preview"
+                  className="max-h-[48vh] max-w-full object-contain"
+                />
+              )}
+            </div>
+
+            {/* OCR & Document Intelligence Extraction */}
+            <div className="space-y-3 bg-gray-50 border border-gray-200 p-3 text-xs">
+              <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                <span className="font-bold uppercase tracking-wider text-gray-700">
+                  OCR Extracted Metadata
+                </span>
+                {previewDoc?.ocr_confidence ? (
+                  <span className={`px-2 py-0.5 font-bold font-mono text-[11px] ${Number(previewDoc.ocr_confidence) >= 80 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                    Confidence: {previewDoc.ocr_confidence}%
+                  </span>
+                ) : (
+                  <span className="text-gray-400 font-mono text-[11px]">Unscored</span>
+                )}
+              </div>
+
+              {previewDoc?.extracted_data && Object.keys(previewDoc.extracted_data).length > 0 ? (
+                <div className="space-y-2">
+                  <div>
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase">Extracted Full Name</div>
+                    <div className="font-bold text-gray-900 flex items-center gap-1.5">
+                      {previewDoc.extracted_data.full_name || 'Not detected'}
+                      {previewDoc.extracted_data.full_name && (
+                        farmer.name.toLowerCase().includes(previewDoc.extracted_data.full_name.toLowerCase()) ||
+                        previewDoc.extracted_data.full_name.toLowerCase().includes(farmer.name.toLowerCase()) ? (
+                          <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1 border border-emerald-200">Matches Profile</span>
+                        ) : (
+                          <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1 border border-amber-200">Name Discrepancy</span>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase">Detected ID Number & Type</div>
+                    <div className="font-mono font-bold text-gray-900">
+                      {previewDoc.extracted_data.id_number || 'Not detected'}
+                      {previewDoc.extracted_data.id_type_detected && (
+                        <span className="ml-2 text-[10px] text-gray-600 font-sans font-medium uppercase px-1 bg-gray-200">
+                          {previewDoc.extracted_data.id_type_detected.replace('_', ' ')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[10px] font-semibold text-gray-500 uppercase">Region / Woreda / Kebele</div>
+                    <div className="font-medium text-gray-800">
+                      {[previewDoc.extracted_data.region, previewDoc.extracted_data.woreda, previewDoc.extracted_data.kebele].filter(Boolean).join(' • ') || 'Not detected'}
+                    </div>
+                  </div>
+
+                  {previewDoc.id_hash && (
+                    <div>
+                      <div className="text-[10px] font-semibold text-gray-500 uppercase">SHA-256 ID Hash</div>
+                      <div className="font-mono text-[10px] text-gray-600 truncate bg-white p-1 border border-gray-200 select-all">
+                        {previewDoc.id_hash}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-gray-500 py-6 text-center">
+                  No automated OCR fields extracted. Document requires manual inspector review.
+                </div>
+              )}
+
+              {previewDoc?.ocr_raw_text && (
+                <div className="pt-2 border-t border-gray-200">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-1">OCR Raw Output Preview</div>
+                  <pre className="text-[10px] text-gray-600 font-mono bg-white p-2 border border-gray-200 max-h-24 overflow-y-auto whitespace-pre-wrap">
+                    {previewDoc.ocr_raw_text}
+                  </pre>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex justify-between items-center text-xs text-gray-500">
+
+          <div className="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-200">
             <a
               href={previewDoc?.document_url}
               target="_blank"
               rel="noreferrer"
               className="text-[#007a6c] font-semibold flex items-center gap-1 hover:underline"
             >
-              <ExternalLink className="w-3.5 h-3.5" /> Open in full window
+              <ExternalLink className="w-3.5 h-3.5" /> Open full resolution
             </a>
             <button
               onClick={() => setPreviewDoc(null)}
-              className="px-4 py-1.5 border border-gray-300 bg-white text-gray-700 font-semibold"
+              className="px-4 py-1.5 border border-gray-300 bg-white text-gray-700 font-semibold hover:bg-gray-50"
             >
               Close
             </button>

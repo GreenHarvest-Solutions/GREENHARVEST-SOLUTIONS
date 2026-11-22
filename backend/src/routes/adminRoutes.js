@@ -30,6 +30,7 @@ const {
 	// Phase 1 Controllers
 	getKycQueue,
 	getKycDossier,
+	getKycIntelligence,
 	addKycDocument,
 	deleteKycDocument,
 	addFieldVisit,
@@ -138,6 +139,7 @@ router.patch("/users/:id/status", permissionMiddleware("users.manage"), updateUs
 // Farmer KYC & Accreditation (Phase 1)
 router.get("/kyc", permissionMiddleware("kyc.read"), getKycQueue);
 router.get("/kyc/:id", permissionMiddleware("kyc.read"), getKycDossier);
+router.get("/kyc/:id/intelligence", permissionMiddleware("kyc.read"), getKycIntelligence);
 router.post("/kyc/:id/documents", permissionMiddleware("kyc.manage"), (req, res, next) => {
 	kycUpload.single("document")(req, res, (err) => {
 		if (err) {

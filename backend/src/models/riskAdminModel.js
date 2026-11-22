@@ -168,11 +168,56 @@ const resolveRiskFlag = async (id, { status, resolution_notes, actor_id }) => {
   return res.rows[0] || null;
 };
 
+const createRiskFlag = async ({
+  rule_id = null,
+  entity_type,
+  entity_id,
+  flag_type = null,
+  severity = "medium",
+  flag_reason,
+  evidence = {},
+  confidence_score = null,
+  status = "flagged",
+}) => {
+  const res = await pool.query(
+    `
+      INSERT INTO risk_flags (
+        rule_id,
+        entity_type,
+        entity_id,
+        flag_type,
+        severity,
+        flag_reason,
+        evidence,
+        confidence_score,
+        status,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      RETURNING *
+    `,
+    [
+      rule_id,
+      entity_type,
+      String(entity_id),
+      flag_type,
+      severity,
+      flag_reason,
+      JSON.stringify(evidence || {}),
+      confidence_score,
+      status,
+    ]
+  );
+  return res.rows[0];
+};
+
 module.exports = {
   getRiskRules,
   createRiskRule,
   updateRiskRule,
   getRiskFlags,
   resolveRiskFlag,
+  createRiskFlag,
 };
 

@@ -43,6 +43,12 @@ out/
 # Dependency directories (nested workspaces/tools)
 **/node_modules/
 
+# Python virtual environments & bytecode
+venv/
+.venv/
+__pycache__/
+*.pyc
+
 # Local database / misc
 *.sqlite
 *.sqlite3

@@ -4,6 +4,7 @@ const categoryModel = require("../models/categoryModel");
 const inventoryModel = require("../models/inventoryModel");
 const productModel = require("../models/productModel");
 const moderationEngine = require("./moderationEngine");
+const riskAdminModel = require("../models/riskAdminModel");
 const { canManageProduct, isAgentAssignedToFarmer } = require("../utils/authorization");
 const { normalizeRole } = require("../utils/roles");
 const {
@@ -93,6 +94,12 @@ const buildProductValues = (payload = {}) => {
 					? String(payload.image_url).trim()
 					: null
 				: undefined,
+		image_hash:
+			payload.image_hash !== undefined
+				? payload.image_hash
+					? String(payload.image_hash).trim()
+					: null
+				: undefined,
 		harvest_date: payload.harvest_date || payload.harvestDate || undefined,
 		unit: payload.unit ? String(payload.unit).trim() : undefined,
 		min_order_quantity: payload.min_order_quantity !== undefined && payload.min_order_quantity !== null && payload.min_order_quantity !== '' ? Number(payload.min_order_quantity) : undefined,
@@ -133,6 +140,7 @@ const createProduct = async ({ user, payload }) => {
 	let moderation_reason = null;
 	let moderation_risk_score = 0.0;
 	let is_published = false;
+	let evaluation = null;
 
 	if (isDraft) {
 		status = 'draft';
@@ -161,7 +169,7 @@ const createProduct = async ({ user, payload }) => {
 		}
 
 		// Evaluate with Moderation Engine
-		const evaluation = await moderationEngine.evaluateListing({
+		evaluation = await moderationEngine.evaluateListing({
 			...productValues,
 			category_id: payload.category_id,
 		}, farmer_id);
@@ -185,6 +193,7 @@ const createProduct = async ({ user, payload }) => {
 		stock: productValues.stock || 0,
 		farm_location: productValues.farm_location || null,
 		image_url: productValues.image_url || null,
+		image_hash: evaluation?.image_hash || payload.image_hash || null,
 		status,
 		moderation_status,
 		moderation_reason,
@@ -207,6 +216,48 @@ const createProduct = async ({ user, payload }) => {
 			});
 		} catch (invErr) {
 			logger.warn("Initial inventory upsert skipped:", invErr.message);
+		}
+	}
+
+	// Record any automated intelligence risk flags in risk_flags table
+	if (evaluation && evaluation.flags && evaluation.flags.length > 0) {
+		for (const flag of evaluation.flags) {
+			if (flag === "IMAGE_DUPLICATE") {
+				try {
+					await riskAdminModel.createRiskFlag({
+						entity_type: "product",
+						entity_id: product.id,
+						flag_type: "duplicate_image",
+						severity: "medium",
+						flag_reason: `Perceptual image hash matches existing product listing`,
+						evidence: {
+							image_hash: product.image_hash,
+						},
+						confidence_score: 95.0,
+					});
+				} catch (rfErr) {
+					logger.warn("Failed to create duplicate_image risk flag", { message: rfErr.message });
+				}
+			}
+
+			if (flag === "PRICE_OUTLIER") {
+				try {
+					await riskAdminModel.createRiskFlag({
+						entity_type: "product",
+						entity_id: product.id,
+						flag_type: "price_outlier",
+						severity: "high",
+						flag_reason: `Price of ETB ${product.price} deviates from regional price corridor benchmarks`,
+						evidence: {
+							price: product.price,
+							moderation_risk_score: product.moderation_risk_score,
+						},
+						confidence_score: 90.0,
+					});
+				} catch (rfErr) {
+					logger.warn("Failed to create price_outlier risk flag", { message: rfErr.message });
+				}
+			}
 		}
 	}
 

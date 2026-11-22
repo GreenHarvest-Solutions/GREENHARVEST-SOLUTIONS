@@ -1,5 +1,7 @@
 const { pool } = require("../config/db");
 const logger = require("../utils/logger");
+const intelligenceService = require("./intelligenceService");
+const riskAdminModel = require("../models/riskAdminModel");
 
 // Prohibited terms across prohibited chemicals, contraband, weapons, and non-agricultural products
 const BANNED_KEYWORDS = [
@@ -134,13 +136,35 @@ const evaluateListing = async (product, farmerId) => {
           price,
           corridor: { min: corridor.min_price, max: corridor.max_price, commodity: corridor.commodity_name },
         });
+
+        // Record high severity risk flag in risk_flags if product.id exists
+        if (product.id) {
+          try {
+            await riskAdminModel.createRiskFlag({
+              entity_type: "product",
+              entity_id: product.id,
+              flag_type: "price_outlier",
+              severity: "high",
+              flag_reason: `Price ETB ${price} deviates from corridor benchmark [${corridor.min_price} - ${corridor.max_price}] for ${corridor.commodity_name}`,
+              evidence: {
+                price,
+                min_price: corridor.min_price,
+                max_price: corridor.max_price,
+                threshold_pct: corridor.deviation_threshold_pct,
+              },
+              confidence_score: 90.0,
+            });
+          } catch (flagErr) {
+            logger.warn("Failed to create price outlier risk flag", { message: flagErr.message });
+          }
+        }
       }
     }
   } catch (err) {
     logger.warn("Price corridor check skipped due to query error", { message: err.message });
   }
 
-  // 4. Duplicate Listing Check
+  // 4. Duplicate Listing Check (Name / Content)
   try {
     const dupRes = await pool.query(
       `SELECT id FROM products 
@@ -158,6 +182,50 @@ const evaluateListing = async (product, farmerId) => {
     }
   } catch (err) {
     logger.warn("Duplicate listing check skipped", { message: err.message });
+  }
+
+  // 4b. Perceptual Image Hash Duplicate Screen
+  try {
+    const imageSource = product.image_url || (product.images && product.images[0]);
+    const imgHash = product.image_hash || (imageSource ? intelligenceService.computeImageHash(imageSource) : null);
+    if (imgHash) {
+      product.image_hash = imgHash;
+      const imgDup = await intelligenceService.checkProductImageDuplicates({
+        imageHash: imgHash,
+        currentProductId: product.id || null,
+      });
+
+      if (imgDup.is_duplicate) {
+        flags.push("IMAGE_DUPLICATE");
+        riskScore += 30.0;
+        logger.info("Duplicate product image detected via perceptual hash", {
+          productId: product.id,
+          matchedProductId: imgDup.matches[0]?.product_id,
+          distance: imgDup.matches[0]?.distance,
+        });
+
+        if (product.id) {
+          try {
+            await riskAdminModel.createRiskFlag({
+              entity_type: "product",
+              entity_id: product.id,
+              flag_type: "duplicate_image",
+              severity: "medium",
+              flag_reason: `Perceptual image hash matches existing product #${imgDup.matches[0].product_id} (Hamming distance: ${imgDup.matches[0].distance})`,
+              evidence: {
+                image_hash: imgHash,
+                matches: imgDup.matches,
+              },
+              confidence_score: 95.0,
+            });
+          } catch (flagErr) {
+            logger.warn("Failed to create image duplicate risk flag", { message: flagErr.message });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn("Perceptual image duplicate check skipped", { message: err.message });
   }
 
   // 5. Seller Trust Level Check (Authoritative Business Policy)
