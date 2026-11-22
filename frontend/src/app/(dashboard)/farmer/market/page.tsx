@@ -21,7 +21,7 @@ export default function MarketInsightsPage() {
   const [myProducts, setMyProducts] = useState<any[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [commodityKeys, setCommodityKeys] = useState<string[]>([]);
-  const [months, setMonths] = useState(6);
+  const [months, setMonths] = useState(12);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
