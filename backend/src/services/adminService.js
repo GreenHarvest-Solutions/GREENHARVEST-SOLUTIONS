@@ -547,6 +547,151 @@ const deleteNotificationTemplateAdmin = async (id, actorId, ipAddress, userAgent
 	return deleted;
 };
 
+// Phase 5: Risk, Reports & System Health
+const getRiskRules = async () => {
+	return adminModel.getRiskRules();
+};
+
+const createRiskRule = async (data, actorId, ipAddress, userAgent) => {
+	const rule = await adminModel.createRiskRule(data);
+	await auditService.record({
+		actorId,
+		action: "RISK_RULE_CREATED",
+		entityType: "risk_rules",
+		entityId: rule.id,
+		beforeValues: null,
+		afterValues: rule,
+		reason: `Created heuristic risk rule ${rule.name}`,
+		ipAddress,
+		userAgent,
+	});
+	return rule;
+};
+
+const updateRiskRule = async (id, data, actorId, ipAddress, userAgent) => {
+	const updated = await adminModel.updateRiskRule(id, data);
+	await auditService.record({
+		actorId,
+		action: "RISK_RULE_UPDATED",
+		entityType: "risk_rules",
+		entityId: id,
+		beforeValues: null,
+		afterValues: updated,
+		reason: `Updated risk rule ${id}`,
+		ipAddress,
+		userAgent,
+	});
+	return updated;
+};
+
+const getRiskFlags = async (options) => {
+	return adminModel.getRiskFlags(options);
+};
+
+const resolveRiskFlag = async (id, data, actorId, ipAddress, userAgent) => {
+	const resolved = await adminModel.resolveRiskFlag(id, { ...data, actor_id: actorId });
+	await auditService.record({
+		actorId,
+		action: "RISK_FLAG_RESOLVED",
+		entityType: "risk_flags",
+		entityId: id,
+		beforeValues: null,
+		afterValues: resolved,
+		reason: `Resolved risk flag: ${data.status}. Notes: ${data.resolution_notes}`,
+		ipAddress,
+		userAgent,
+	});
+	return resolved;
+};
+
+const getReportsCatalogAdmin = async () => {
+	return adminModel.getReportsCatalogAdmin();
+};
+
+const getReportJobsAdmin = async (options) => {
+	return adminModel.getReportJobsAdmin(options);
+};
+
+const getReportJobById = async (id) => {
+	return adminModel.getReportJobById(id);
+};
+
+const executeReportExport = async (data, actorId, ipAddress, userAgent) => {
+	const result = await adminModel.executeReportExport({ ...data, actor_id: actorId });
+	await auditService.record({
+		actorId,
+		action: "REPORT_EXPORT_EXECUTED",
+		entityType: "report_jobs",
+		entityId: result.job?.id,
+		beforeValues: null,
+		afterValues: { report_type: data.report_type, row_count: result.rowCount },
+		reason: `Exported ${data.report_type} report with ${result.rowCount} rows`,
+		ipAddress,
+		userAgent,
+	});
+	return result;
+};
+
+const getReportSchedulesAdmin = async () => {
+	return adminModel.getReportSchedulesAdmin();
+};
+
+const createReportScheduleAdmin = async (data, actorId, ipAddress, userAgent) => {
+	const schedule = await adminModel.createReportScheduleAdmin({ ...data, created_by: actorId });
+	await auditService.record({
+		actorId,
+		action: "REPORT_SCHEDULE_CREATED",
+		entityType: "report_schedules",
+		entityId: schedule.id,
+		beforeValues: null,
+		afterValues: schedule,
+		reason: `Created ${schedule.cadence} schedule for ${schedule.report_type}`,
+		ipAddress,
+		userAgent,
+	});
+	return schedule;
+};
+
+const updateReportScheduleAdmin = async (id, data, actorId, ipAddress, userAgent) => {
+	const updated = await adminModel.updateReportScheduleAdmin(id, data);
+	await auditService.record({
+		actorId,
+		action: "REPORT_SCHEDULE_UPDATED",
+		entityType: "report_schedules",
+		entityId: id,
+		beforeValues: null,
+		afterValues: updated,
+		reason: `Updated report schedule ${id}`,
+		ipAddress,
+		userAgent,
+	});
+	return updated;
+};
+
+const deleteReportScheduleAdmin = async (id, actorId, ipAddress, userAgent) => {
+	const deleted = await adminModel.deleteReportScheduleAdmin(id);
+	await auditService.record({
+		actorId,
+		action: "REPORT_SCHEDULE_DELETED",
+		entityType: "report_schedules",
+		entityId: id,
+		beforeValues: null,
+		afterValues: null,
+		reason: `Deleted report schedule ${id}`,
+		ipAddress,
+		userAgent,
+	});
+	return deleted;
+};
+
+const getSystemHealthAdmin = async () => {
+	return adminModel.getSystemHealthAdmin();
+};
+
+const getSystemEventsAdmin = async (options) => {
+	return adminModel.getSystemEventsAdmin(options);
+};
+
 module.exports = {
 	getDashboardAnalytics,
 	getAdminMe,
@@ -641,4 +786,20 @@ module.exports = {
 	createNotificationTemplateAdmin,
 	updateNotificationTemplateAdmin,
 	deleteNotificationTemplateAdmin,
+	// Phase 5 exports
+	getRiskRules,
+	createRiskRule,
+	updateRiskRule,
+	getRiskFlags,
+	resolveRiskFlag,
+	getReportsCatalogAdmin,
+	getReportJobsAdmin,
+	getReportJobById,
+	executeReportExport,
+	getReportSchedulesAdmin,
+	createReportScheduleAdmin,
+	updateReportScheduleAdmin,
+	deleteReportScheduleAdmin,
+	getSystemHealthAdmin,
+	getSystemEventsAdmin,
 };

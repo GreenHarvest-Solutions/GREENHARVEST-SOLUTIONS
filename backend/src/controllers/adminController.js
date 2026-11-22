@@ -1762,6 +1762,239 @@ const deleteNotificationTemplate = async (req, res) => {
 	}
 };
 
+// Phase 5: Risk, Reports & System Health Controllers
+
+const getRiskRules = async (req, res) => {
+	try {
+		const rules = await adminService.getRiskRules();
+		return res.status(200).json({ rules });
+	} catch (error) {
+		return handleControllerError(res, "Get risk rules failed", error);
+	}
+};
+
+const createRiskRule = async (req, res) => {
+	try {
+		const { name, rule_type, description, severity, threshold_config, action } = req.body;
+		if (!name || !rule_type) {
+			return res.status(400).json({ status: "error", message: "Rule name and rule type are required" });
+		}
+		const rule = await adminService.createRiskRule(
+			{ name, rule_type, description, severity, threshold_config, action },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		return res.status(201).json({ message: "Risk rule created successfully", rule });
+	} catch (error) {
+		return handleControllerError(res, "Create risk rule failed", error);
+	}
+};
+
+const updateRiskRule = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const updated = await adminService.updateRiskRule(
+			id,
+			req.body,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!updated) {
+			return res.status(404).json({ status: "error", message: `Risk rule #${id} not found` });
+		}
+		return res.status(200).json({ message: "Risk rule updated successfully", rule: updated });
+	} catch (error) {
+		return handleControllerError(res, "Update risk rule failed", error);
+	}
+};
+
+const getRiskFlags = async (req, res) => {
+	try {
+		const { status, severity, entity_type, search, page = 1, limit = 20 } = req.query;
+		const result = await adminService.getRiskFlags({
+			status,
+			severity,
+			entity_type,
+			search,
+			page: parseInt(page, 10),
+			limit: parseInt(limit, 10),
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get risk flags failed", error);
+	}
+};
+
+const resolveRiskFlag = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const { status, resolution_notes } = req.body;
+		if (!status || !resolution_notes || !resolution_notes.trim()) {
+			return res.status(400).json({ status: "error", message: "Resolution status and investigation notes are required" });
+		}
+		const resolved = await adminService.resolveRiskFlag(
+			id,
+			{ status, resolution_notes },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!resolved) {
+			return res.status(404).json({ status: "error", message: `Risk flag #${id} not found` });
+		}
+		return res.status(200).json({ message: "Risk flag resolved successfully", flag: resolved });
+	} catch (error) {
+		return handleControllerError(res, "Resolve risk flag failed", error);
+	}
+};
+
+const getReports = async (req, res) => {
+	try {
+		const { page = 1, limit = 15 } = req.query;
+		const result = await adminService.getReportJobsAdmin({
+			page: parseInt(page, 10),
+			limit: parseInt(limit, 10),
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get reports failed", error);
+	}
+};
+
+const getReportJobById = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const job = await adminService.getReportJobById(id);
+		if (!job) {
+			return res.status(404).json({ status: "error", message: `Report job #${id} not found` });
+		}
+		return res.status(200).json({ job });
+	} catch (error) {
+		return handleControllerError(res, "Get report job failed", error);
+	}
+};
+
+const exportReport = async (req, res) => {
+	try {
+		const { report_type, name, parameters, format = "csv" } = req.body;
+		if (!report_type) {
+			return res.status(400).json({ status: "error", message: "report_type is required" });
+		}
+		const result = await adminService.executeReportExport(
+			{ report_type, name, parameters, format },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+
+		// If client asked for raw CSV attachment directly via accept header or query param
+		if (req.query.download === "true") {
+			res.setHeader("Content-Type", "text/csv");
+			res.setHeader("Content-Disposition", `attachment; filename="${report_type}_export.csv"`);
+			return res.status(200).send(result.csv);
+		}
+
+		return res.status(200).json({
+			message: "Report exported successfully",
+			job: result.job,
+			csv: result.csv,
+			row_count: result.rowCount,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Export report failed", error);
+	}
+};
+
+const getReportSchedules = async (req, res) => {
+	try {
+		const schedules = await adminService.getReportSchedulesAdmin();
+		return res.status(200).json({ schedules });
+	} catch (error) {
+		return handleControllerError(res, "Get report schedules failed", error);
+	}
+};
+
+const createReportSchedule = async (req, res) => {
+	try {
+		const { report_type, name, cadence, recipients, parameters } = req.body;
+		if (!report_type || !name) {
+			return res.status(400).json({ status: "error", message: "report_type and schedule name are required" });
+		}
+		const schedule = await adminService.createReportScheduleAdmin(
+			{ report_type, name, cadence, recipients, parameters },
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		return res.status(201).json({ message: "Report schedule created successfully", schedule });
+	} catch (error) {
+		return handleControllerError(res, "Create report schedule failed", error);
+	}
+};
+
+const updateReportSchedule = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const updated = await adminService.updateReportScheduleAdmin(
+			id,
+			req.body,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!updated) {
+			return res.status(404).json({ status: "error", message: `Schedule #${id} not found` });
+		}
+		return res.status(200).json({ message: "Report schedule updated successfully", schedule: updated });
+	} catch (error) {
+		return handleControllerError(res, "Update report schedule failed", error);
+	}
+};
+
+const deleteReportSchedule = async (req, res) => {
+	try {
+		const { id } = req.params;
+		const deleted = await adminService.deleteReportScheduleAdmin(
+			id,
+			req.user.id,
+			req.ip || req.headers["x-forwarded-for"],
+			req.headers["user-agent"]
+		);
+		if (!deleted) {
+			return res.status(404).json({ status: "error", message: `Schedule #${id} not found` });
+		}
+		return res.status(200).json({ message: "Report schedule deleted successfully" });
+	} catch (error) {
+		return handleControllerError(res, "Delete report schedule failed", error);
+	}
+};
+
+const getSystemHealth = async (req, res) => {
+	try {
+		const health = await adminService.getSystemHealthAdmin();
+		return res.status(200).json(health);
+	} catch (error) {
+		return handleControllerError(res, "Get system health failed", error);
+	}
+};
+
+const getSystemEvents = async (req, res) => {
+	try {
+		const { event_type, severity, page = 1, limit = 20 } = req.query;
+		const result = await adminService.getSystemEventsAdmin({
+			event_type,
+			severity,
+			page: parseInt(page, 10),
+			limit: parseInt(limit, 10),
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Get system events failed", error);
+	}
+};
+
 module.exports = {
 	getAdminMe,
 	getAdminDashboard,
@@ -1855,4 +2088,19 @@ module.exports = {
 	createNotificationTemplate,
 	updateNotificationTemplate,
 	deleteNotificationTemplate,
+	// Phase 5 Controllers
+	getRiskRules,
+	createRiskRule,
+	updateRiskRule,
+	getRiskFlags,
+	resolveRiskFlag,
+	getReports,
+	getReportJobById,
+	exportReport,
+	getReportSchedules,
+	createReportSchedule,
+	updateReportSchedule,
+	deleteReportSchedule,
+	getSystemHealth,
+	getSystemEvents,
 };

@@ -98,6 +98,21 @@ const {
 	createNotificationTemplate,
 	updateNotificationTemplate,
 	deleteNotificationTemplate,
+	// Phase 5 Controllers
+	getRiskRules,
+	createRiskRule,
+	updateRiskRule,
+	getRiskFlags,
+	resolveRiskFlag,
+	getReports,
+	getReportJobById,
+	exportReport,
+	getReportSchedules,
+	createReportSchedule,
+	updateReportSchedule,
+	deleteReportSchedule,
+	getSystemHealth,
+	getSystemEvents,
 } = require("../controllers/adminController");
 
 const router = express.Router();
@@ -253,6 +268,32 @@ router.get("/notification-templates", permissionMiddleware("templates.manage"), 
 router.post("/notification-templates", permissionMiddleware("templates.manage"), createNotificationTemplate);
 router.patch("/notification-templates/:id", permissionMiddleware("templates.manage"), updateNotificationTemplate);
 router.delete("/notification-templates/:id", permissionMiddleware("templates.manage"), deleteNotificationTemplate);
+
+// ==========================================
+// Phase 5: Risk & Fraud Governance
+// ==========================================
+router.get("/risk/rules", permissionMiddleware("risk.read"), getRiskRules);
+router.post("/risk/rules", permissionMiddleware("risk.manage"), createRiskRule);
+router.patch("/risk/rules/:id", permissionMiddleware("risk.manage"), updateRiskRule);
+router.get("/risk/flags", permissionMiddleware("risk.read"), getRiskFlags);
+router.patch("/risk/flags/:id", permissionMiddleware("risk.manage"), resolveRiskFlag);
+
+// ==========================================
+// Phase 5: Reports & Data Exports
+// ==========================================
+router.get("/reports", permissionMiddleware("reports.read"), getReports);
+router.post("/reports/export", permissionMiddleware("reports.export"), exportReport);
+router.get("/reports/jobs/:id", permissionMiddleware("reports.read"), getReportJobById);
+router.get("/reports/schedules", permissionMiddleware("reports.read"), getReportSchedules);
+router.post("/reports/schedules", permissionMiddleware("reports.export"), createReportSchedule);
+router.patch("/reports/schedules/:id", permissionMiddleware("reports.export"), updateReportSchedule);
+router.delete("/reports/schedules/:id", permissionMiddleware("reports.export"), deleteReportSchedule);
+
+// ==========================================
+// Phase 5: System Health & Diagnostics
+// ==========================================
+router.get("/system/health", permissionMiddleware("system.health.read"), getSystemHealth);
+router.get("/system/events", permissionMiddleware("system.health.read"), getSystemEvents);
 
 // Platform Global Settings
 router.get("/settings", permissionMiddleware("settings.read"), getPlatformSettings);

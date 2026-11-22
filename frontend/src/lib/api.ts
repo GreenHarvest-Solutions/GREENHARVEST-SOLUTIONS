@@ -1138,6 +1138,240 @@ class APIClient {
     });
   }
 
+  // ==========================================
+  // Phase 5: Risk & Fraud Governance
+  // ==========================================
+
+  async getAdminRiskRules() {
+    return this.request<{ rules: any[] }>({
+      method: 'GET',
+      url: '/admin/risk/rules',
+    });
+  }
+
+  async createAdminRiskRule(data: {
+    name: string;
+    rule_type: string;
+    description?: string;
+    severity?: string;
+    threshold_config?: any;
+    action?: string;
+  }) {
+    return this.request<{ message: string; rule: any }>({
+      method: 'POST',
+      url: '/admin/risk/rules',
+      data,
+    });
+  }
+
+  async updateAdminRiskRule(id: string | number, data: any) {
+    return this.request<{ message: string; rule: any }>({
+      method: 'PATCH',
+      url: `/admin/risk/rules/${id}`,
+      data,
+    });
+  }
+
+  async getAdminRiskFlags(params?: {
+    status?: string;
+    severity?: string;
+    entity_type?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      flags: any[];
+      metrics: {
+        total_flags: number;
+        open_flags: number;
+        critical_flags: number;
+        under_investigation: number;
+        resolved_safe: number;
+        confirmed_fraud: number;
+      };
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/risk/flags',
+      params,
+    });
+  }
+
+  async resolveAdminRiskFlag(id: string | number, data: { status: string; resolution_notes: string }) {
+    return this.request<{ message: string; flag: any }>({
+      method: 'PATCH',
+      url: `/admin/risk/flags/${id}`,
+      data,
+    });
+  }
+
+  // ==========================================
+  // Phase 5: Reports & Data Exports
+  // ==========================================
+
+  async getAdminReports(params?: { page?: number; limit?: number }) {
+    return this.request<{
+      jobs: any[];
+      catalog: Array<{
+        type: string;
+        name: string;
+        description: string;
+        category: string;
+      }>;
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/reports',
+      params,
+    });
+  }
+
+  async getAdminReportJobById(id: string | number) {
+    return this.request<{ job: any }>({
+      method: 'GET',
+      url: `/admin/reports/jobs/${id}`,
+    });
+  }
+
+  async exportAdminReport(data: {
+    report_type: string;
+    name?: string;
+    parameters?: any;
+    format?: string;
+  }) {
+    return this.request<{
+      message: string;
+      job: any;
+      csv: string;
+      row_count: number;
+    }>({
+      method: 'POST',
+      url: '/admin/reports/export',
+      data,
+    });
+  }
+
+  async exportReport(data: {
+    report_type: string;
+    name?: string;
+    parameters?: any;
+    format?: string;
+  }) {
+    return this.exportAdminReport(data);
+  }
+
+  async getAdminReportSchedules() {
+    return this.request<{ schedules: any[] }>({
+      method: 'GET',
+      url: '/admin/reports/schedules',
+    });
+  }
+
+  async createAdminReportSchedule(data: {
+    report_type: string;
+    name: string;
+    cadence?: string;
+    recipients?: string[];
+    parameters?: any;
+  }) {
+    return this.request<{ message: string; schedule: any }>({
+      method: 'POST',
+      url: '/admin/reports/schedules',
+      data,
+    });
+  }
+
+  async updateAdminReportSchedule(id: string | number, data: any) {
+    return this.request<{ message: string; schedule: any }>({
+      method: 'PATCH',
+      url: `/admin/reports/schedules/${id}`,
+      data,
+    });
+  }
+
+  async deleteAdminReportSchedule(id: string | number) {
+    return this.request<{ message: string }>({
+      method: 'DELETE',
+      url: `/admin/reports/schedules/${id}`,
+    });
+  }
+
+  // ==========================================
+  // Phase 5: System Health & Diagnostics
+  // ==========================================
+
+  async getAdminSystemHealth() {
+    return this.request<{
+      status: string;
+      timestamp: string;
+      uptime_seconds: number;
+      node_version: string;
+      environment: string;
+      database: {
+        status: string;
+        latency_ms: number;
+        pool_total_count: number;
+        pool_idle_count: number;
+        pool_waiting_count: number;
+      };
+      system_memory: {
+        heap_used_mb: number;
+        heap_total_mb: number;
+        rss_mb: number;
+      };
+      queues: {
+        unverified_kyc: number;
+        pending_products: number;
+        active_breaches: number;
+        open_tickets: number;
+        active_disputes: number;
+        unreconciled_payments: number;
+      };
+      telemetry: {
+        failed_webhooks_count: number;
+        failed_deliveries_count: number;
+        audit_events_24h: number;
+      };
+      recent_jobs: any[];
+      recent_events: any[];
+    }>({
+      method: 'GET',
+      url: '/admin/system/health',
+    });
+  }
+
+  async getAdminSystemEvents(params?: {
+    event_type?: string;
+    severity?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.request<{
+      events: any[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        total_pages: number;
+      };
+    }>({
+      method: 'GET',
+      url: '/admin/system/events',
+      params,
+    });
+  }
+
   async getAdminAnalytics() {
     return this.request<{ analytics: any[] }>({
       method: 'GET',

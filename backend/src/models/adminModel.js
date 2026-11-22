@@ -10,6 +10,9 @@ const paymentAdminModel = require("./paymentAdminModel");
 const logisticsAdminModel = require("./logisticsAdminModel");
 const supportAdminModel = require("./supportAdminModel");
 const announcementAdminModel = require("./announcementAdminModel");
+const riskAdminModel = require("./riskAdminModel");
+const reportAdminModel = require("./reportAdminModel");
+const systemHealthAdminModel = require("./systemHealthAdminModel");
 
 const getAdminMe = async (userId) => {
 	const result = await pool.query(
@@ -1095,4 +1098,8 @@ module.exports = {
 	// Phase 4: Support & Broadcast Communications
 	...supportAdminModel,
 	...announcementAdminModel,
+	// Phase 5: Risk, Reports, System Health
+	...riskAdminModel,
+	...reportAdminModel,
+	...systemHealthAdminModel,
 };
