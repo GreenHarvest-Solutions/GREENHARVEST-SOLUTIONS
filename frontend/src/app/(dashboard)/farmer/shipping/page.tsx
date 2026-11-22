@@ -681,12 +681,12 @@ function ShippingManagementContent() {
                 </div>
 
                 <div className="text-right">
-                  <h2 className="text-lg font-black uppercase tracking-wider text-gray-900">HARVEST DISPATCH SLIP</h2>
+                  <h2 className="text-lg font-black uppercase tracking-wider text-gray-900">HARVEST DISPATCH & COMMERCIAL WAYBILL</h2>
                   <p className="text-xs font-mono font-bold text-[#16a34a] mt-0.5">
-                    DOC #GH-PACK-{(selectedOrderForSlip.id || selectedOrderForSlip.order_id).toString().padStart(6, '0')}
+                    DOC #GH-WAYBILL-{(selectedOrderForSlip.id || selectedOrderForSlip.order_id).toString().padStart(6, '0')}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Order Ref: #GH-{selectedOrderForSlip.id || selectedOrderForSlip.order_id}
+                    Transport Ref: #ET-GH-{(selectedOrderForSlip.id || selectedOrderForSlip.order_id).toString().padStart(5, '0')}
                   </p>
                   <p className="text-xs text-gray-500">
                     Date: {new Date(selectedOrderForSlip.created_at).toLocaleDateString('en-US', {
