@@ -113,6 +113,31 @@ export default function ManageOrdersPage() {
     }
   };
 
+  const handleFulfillmentAction = async (order: any, action: string) => {
+    try {
+      if (action === 'ready_pickup') {
+        await api.markSuborderReadyForPickup(order.suborder_id || order.order_id);
+      } else if (action === 'confirm_pickup') {
+        const inputCode = window.prompt("Enter Buyer Pickup Verification Code (e.g. GH-XXXXXX):");
+        if (!inputCode) return;
+        await api.confirmSuborderPickup(order.suborder_id || order.order_id, inputCode);
+      } else if (action === 'dispatch_farmer') {
+        await api.dispatchFarmerDelivery(order.suborder_id || order.order_id, {
+          estimated_time: 'Within 24 hours',
+          vehicle_info: 'Farmer Vehicle Dispatch',
+        });
+      } else if (action === 'confirm_delivery') {
+        const confirmationCode = window.prompt("Enter Delivery Confirmation Code (optional if buyer confirmed directly):") || undefined;
+        await api.confirmFarmerDelivery(order.suborder_id || order.order_id, confirmationCode);
+      } else {
+        await handleUpdateStatus(order, action);
+      }
+      loadOrders();
+    } catch (err: any) {
+      showError(err.response?.data?.message || err.message || 'Failed to update order fulfillment');
+    }
+  };
+
   const pendingShipments = dashboardData?.pending_shipments?.length || 0;
   const unreadMessages = notifications.filter(n => !n.is_read).length;
 
@@ -415,25 +440,59 @@ export default function ManageOrdersPage() {
                               {statusBadge}
                             </td>
                             <td className="p-4">
-                              <div className="flex items-center justify-end gap-3">
-                                {currentStatus === 'pending' ? (
-                                  <button onClick={() => handleUpdateStatus(order, 'packed')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                    Pack Order
-                                  </button>
-                                ) : currentStatus === 'confirmed' || currentStatus === 'accepted' ? (
-                                  <button onClick={() => handleUpdateStatus(order, 'packed')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                    Pack
-                                  </button>
-                                ) : currentStatus === 'packed' ? (
-                                  <button onClick={() => handleUpdateStatus(order, 'dispatched')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                    Dispatch
-                                  </button>
-                                ) : currentStatus === 'in_transit' || currentStatus === 'dispatched' ? (
-                                  <button onClick={() => handleUpdateStatus(order, 'delivered')} className="text-sm font-bold text-[#2d9a33] hover:underline">
-                                    Deliver
-                                  </button>
+                              <div className="flex items-center justify-end gap-2">
+                                {order.fulfillment_type === 'farmer_pickup' ? (
+                                  currentStatus === 'ready_for_pickup' ? (
+                                    <button
+                                      onClick={() => handleFulfillmentAction(order, 'confirm_pickup')}
+                                      className="px-3 py-1 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition"
+                                    >
+                                      Confirm Pickup
+                                    </button>
+                                  ) : currentStatus !== 'delivered' && currentStatus !== 'cancelled' ? (
+                                    <button
+                                      onClick={() => handleFulfillmentAction(order, 'ready_pickup')}
+                                      className="text-sm font-bold text-[#2d9a33] hover:underline"
+                                    >
+                                      Ready for Pickup
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-gray-400 capitalize">{currentStatus}</span>
+                                  )
+                                ) : order.fulfillment_type === 'farmer_delivery' ? (
+                                  currentStatus === 'in_transit' || currentStatus === 'dispatched' ? (
+                                    <button
+                                      onClick={() => handleFulfillmentAction(order, 'confirm_delivery')}
+                                      className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 transition"
+                                    >
+                                      Confirm Delivered
+                                    </button>
+                                  ) : currentStatus !== 'delivered' && currentStatus !== 'cancelled' ? (
+                                    <button
+                                      onClick={() => handleFulfillmentAction(order, 'dispatch_farmer')}
+                                      className="text-sm font-bold text-[#2d9a33] hover:underline"
+                                    >
+                                      Dispatch Delivery
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-gray-400 capitalize">{currentStatus}</span>
+                                  )
                                 ) : (
-                                  <button className="text-sm font-bold text-gray-500 hover:text-gray-700">View</button>
+                                  currentStatus === 'pending' || currentStatus === 'accepted' ? (
+                                    <button onClick={() => handleUpdateStatus(order, 'packed')} className="text-sm font-bold text-[#2d9a33] hover:underline">
+                                      Pack Order
+                                    </button>
+                                  ) : currentStatus === 'packed' ? (
+                                    <button onClick={() => handleUpdateStatus(order, 'dispatched')} className="text-sm font-bold text-[#2d9a33] hover:underline">
+                                      Dispatch
+                                    </button>
+                                  ) : currentStatus === 'in_transit' || currentStatus === 'dispatched' ? (
+                                    <button onClick={() => handleUpdateStatus(order, 'delivered')} className="text-sm font-bold text-[#2d9a33] hover:underline">
+                                      Deliver
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-gray-400 capitalize">{currentStatus}</span>
+                                  )
                                 )}
                               </div>
                             </td>

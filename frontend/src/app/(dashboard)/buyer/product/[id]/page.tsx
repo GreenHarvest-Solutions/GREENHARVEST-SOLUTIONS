@@ -299,12 +299,12 @@ export default function ProductDetailPage() {
                 <nav aria-label="Breadcrumb" className="flex items-center gap-2 overflow-x-auto whitespace-nowrap text-xs text-[#6B7280]">
                     <Link href="/" className="transition-colors hover:text-[#286c00]">Home</Link>
                     <span className="material-symbols-outlined text-[14px] text-[#9CA3AF]">chevron_right</span>
-                    <Link href="/products" className="transition-colors hover:text-[#286c00]">{product.category_name || 'Produce'}</Link>
+                    <Link href="/products" className="transition-colors hover:text-[#286c00]">{product.category_name || 'Meat & Poultry'}</Link>
                     <span className="material-symbols-outlined text-[14px] text-[#9CA3AF]">chevron_right</span>
                     <span className="font-semibold text-[#111827]" aria-current="page">{product.name}</span>
                 </nav>
 
-                <div className="mt-5 grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,66fr)_minmax(0,34fr)] xl:gap-8">
+                <div className="mt-5 grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,66fr)_minmax(340px,34fr)] xl:gap-8">
                     {/* Hero card */}
                     <section className="min-w-0 border border-[#D1D5DB] bg-white lg:col-start-1 lg:row-start-1">
                         <div className="p-5 sm:p-6">
@@ -318,7 +318,7 @@ export default function ProductDetailPage() {
                                 </span>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
                                 {/* Gallery */}
                                 <div className="min-w-0">
                                     <div className="relative aspect-square overflow-hidden border border-[#D1D5DB] bg-white">

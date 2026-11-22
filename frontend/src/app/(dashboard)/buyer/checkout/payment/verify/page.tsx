@@ -23,15 +23,16 @@ function VerifyPaymentContent() {
             }
             
             try {
-                const res = await api.verifyChapaPayment(tx_ref, order_id);
-                if (res.status === 'success') {
+                const provider = searchParams?.get('provider') || 'chapa';
+                const res = await api.verifyPayment({ order_id, tx_ref, reference: tx_ref, provider });
+                if (res.status === 'success' || res.payment_status === 'paid') {
                     setStatus('success');
                     setTimeout(() => {
                         router.push(`/buyer/orders/${order_id}/track`);
                     }, 2000);
                 } else {
                     setStatus('failed');
-                    setErrorMessage(res.message || 'Payment was not successful.');
+                    setErrorMessage(res.message || 'Payment is pending verification with provider.');
                 }
             } catch (error: any) {
                 console.error("Verification error", error);

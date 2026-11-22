@@ -247,6 +247,85 @@ class APIClient {
     });
   }
 
+  async initiatePayment(data: { order_id: string | number; payment_method: string; return_url?: string }) {
+    return this.request<{ checkout_url: string; transaction_id: string; provider: string; message: string }>({
+      method: 'POST',
+      url: '/payments/initiate',
+      data,
+    });
+  }
+
+  async verifyPayment(data: { order_id: string | number; provider?: string; reference?: string; tx_ref?: string }) {
+    return this.request<{ status: string; payment_status?: string; message: string }>({
+      method: 'POST',
+      url: '/payments/verify',
+      data,
+    });
+  }
+
+  // Phase 5 Fulfillment Endpoints
+  async markSuborderReadyForPickup(suborderId: string | number, data?: { pickup_location?: string; farmer_notes?: string }) {
+    return this.request<{ message: string; suborder_id: number; pickup_code: string }>({
+      method: 'POST',
+      url: `/deliveries/suborders/${suborderId}/ready-pickup`,
+      data: data || {},
+    });
+  }
+
+  async confirmSuborderPickup(suborderId: string | number, pickup_code: string) {
+    return this.request<{ message: string; suborder_id: number; fulfillment_status: string }>({
+      method: 'POST',
+      url: `/deliveries/suborders/${suborderId}/confirm-pickup`,
+      data: { pickup_code },
+    });
+  }
+
+  async dispatchFarmerDelivery(suborderId: string | number, data: { estimated_time?: string; vehicle_info?: string; farmer_notes?: string }) {
+    return this.request<{ message: string; suborder_id: number; delivery_confirmation_code: string }>({
+      method: 'POST',
+      url: `/deliveries/suborders/${suborderId}/dispatch-farmer`,
+      data,
+    });
+  }
+
+  async confirmFarmerDelivery(suborderId: string | number, confirmation_code?: string) {
+    return this.request<{ message: string; suborder_id: number; fulfillment_status: string }>({
+      method: 'POST',
+      url: `/deliveries/suborders/${suborderId}/confirm-delivery`,
+      data: { confirmation_code },
+    });
+  }
+
+  async getDeliveryPool() {
+    return this.request<{ pool: any[]; count: number }>({
+      method: 'GET',
+      url: '/deliveries/pool',
+    });
+  }
+
+  async claimPoolDelivery(suborderId: string | number, data?: { estimated_time?: string }) {
+    return this.request<{ message: string; suborder_id: number; claimed_by: number }>({
+      method: 'POST',
+      url: `/deliveries/pool/${suborderId}/claim`,
+      data: data || {},
+    });
+  }
+
+  async updatePartnerTransitStatus(suborderId: string | number, data: { status: string; proof_of_delivery_image_url?: string; notes?: string }) {
+    return this.request<{ message: string; suborder_id: number; status: string }>({
+      method: 'PATCH',
+      url: `/deliveries/suborders/${suborderId}/partner-status`,
+      data,
+    });
+  }
+
+  async getSuborderDelivery(suborderId: string | number) {
+    return this.request<{ delivery: any }>({
+      method: 'GET',
+      url: `/deliveries/suborders/${suborderId}`,
+    });
+  }
+
   // Category endpoints
   async getCategories() {
     return this.request<{ categories: any[] }>({

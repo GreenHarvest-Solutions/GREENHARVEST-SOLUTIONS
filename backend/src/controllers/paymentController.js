@@ -1,4 +1,4 @@
-// Payment controller delegates business logic to the payment service.
+// Payment controller coordinating multi-provider checkouts and server-side webhook reconciliation
 const logger = require("../utils/logger");
 const paymentService = require("../services/paymentService");
 
@@ -13,6 +13,72 @@ const handleControllerError = (res, context, error, meta = {}) => {
   return res.status(error.statusCode || 500).json({
     message: error.statusCode ? error.message : "Internal server error",
   });
+};
+
+const initiatePayment = async (req, res) => {
+  try {
+    const { order_id, payment_method, return_url } = req.body;
+    const session = await paymentService.initiatePayment({
+      user_id: req.user.id,
+      order_id,
+      payment_method,
+      return_url,
+    });
+
+    return res.status(200).json({
+      message: "Payment initialized successfully",
+      ...session,
+    });
+  } catch (error) {
+    return handleControllerError(res, "Payment initialization failed", error, {
+      userId: req.user && req.user.id,
+      body: req.body,
+    });
+  }
+};
+
+const handleWebhook = async (req, res) => {
+  try {
+    const provider = req.params.provider || "chapa";
+    const result = await paymentService.processWebhook({
+      provider,
+      headers: req.headers,
+      body: req.body,
+      rawBody: req.rawBody,
+    });
+
+    return res.status(200).json({
+      message: "Webhook processed successfully",
+      ...result,
+    });
+  } catch (error) {
+    return handleControllerError(res, "Webhook processing failed", error, {
+      provider: req.params.provider,
+      headers: req.headers,
+    });
+  }
+};
+
+const verifyPayment = async (req, res) => {
+  try {
+    const { order_id, provider, reference, tx_ref } = req.body;
+    const result = await paymentService.verifyPayment({
+      user_id: req.user.id,
+      order_id,
+      provider: provider || "chapa",
+      reference: reference || tx_ref,
+    });
+
+    return res.status(200).json({
+      message: "Payment verification evaluated",
+      ...result,
+    });
+  } catch (error) {
+    return handleControllerError(res, "Payment verification failed", error, {
+      userId: req.user && req.user.id,
+      body: req.body,
+    });
+  }
 };
 
 const processPayment = async (req, res) => {
@@ -37,10 +103,7 @@ const processPayment = async (req, res) => {
 const getPaymentHistory = async (req, res) => {
   try {
     const history = await paymentService.getPaymentHistory(req.user.id);
-
-    return res.status(200).json({
-      ...history,
-    });
+    return res.status(200).json(history);
   } catch (error) {
     return handleControllerError(res, "Fetch payment history failed", error, {
       userId: req.user && req.user.id,
@@ -48,137 +111,23 @@ const getPaymentHistory = async (req, res) => {
   }
 };
 
-// Original exports removed since we redefined them at the bottom
-
-const crypto = require("crypto");
-const orderModel = require("../models/orderModel");
-
+// Aliases for backward compatibility with existing frontend calls
 const initializeChapaPayment = async (req, res) => {
-    try {
-        const { order_id, return_url } = req.body;
-        
-        if (!order_id || !return_url) {
-            return res.status(400).json({ message: "order_id and return_url are required" });
-        }
-
-        const CHAPA_SECRET_KEY = process.env.CHAPA_SECRET_KEY;
-        if (!CHAPA_SECRET_KEY) {
-            return res.status(500).json({ message: "Chapa secret key is not configured on the server" });
-        }
-
-        const order = await orderModel.findOrderById(Number(order_id));
-        if (!order) {
-            return res.status(404).json({ message: "Order not found" });
-        }
-        
-        if (order.buyer_id !== req.user.id) {
-            return res.status(403).json({ message: "You don't have permission to pay for this order" });
-        }
-
-        const tx_ref = `tx-${order_id}-${crypto.randomBytes(8).toString('hex')}`;
-
-        const chapaPayload = {
-            amount: order.total_amount,
-            currency: "ETB",
-            email: req.user.email || "customer@greenharvest.com",
-            first_name: req.user.first_name || req.user.name || "Customer",
-            last_name: req.user.last_name || "",
-            tx_ref: tx_ref,
-            callback_url: process.env.CHAPA_CALLBACK_URL || "https://webhook.site/placeholder",
-            return_url: `${return_url}?tx_ref=${tx_ref}&order_id=${order_id}`,
-            customization: {
-                title: "GreenHarvest Order Payment",
-                description: `Payment for order #${order_id}`
-            }
-        };
-
-        const response = await fetch("https://api.chapa.co/v1/transaction/initialize", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${CHAPA_SECRET_KEY}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(chapaPayload)
-        });
-
-        const data = await response.json();
-
-        if (data.status !== "success") {
-            logger.error("Chapa initialization failed", { data });
-            return res.status(400).json({ message: "Failed to initialize payment gateway", details: data });
-        }
-
-        return res.status(200).json({
-            message: "Payment initialized successfully",
-            checkout_url: data.data.checkout_url,
-            tx_ref
-        });
-        
-    } catch (error) {
-        return handleControllerError(res, "Initialize payment failed", error, {
-            userId: req.user && req.user.id,
-            body: req.body,
-        });
-    }
+  req.body.payment_method = "chapa";
+  return initiatePayment(req, res);
 };
 
 const verifyChapaPayment = async (req, res) => {
-    try {
-        const { tx_ref, order_id } = req.body;
-        
-        if (!tx_ref || !order_id) {
-            return res.status(400).json({ message: "tx_ref and order_id are required" });
-        }
-
-        const CHAPA_SECRET_KEY = process.env.CHAPA_SECRET_KEY;
-        if (!CHAPA_SECRET_KEY) {
-            return res.status(500).json({ message: "Chapa secret key is not configured on the server" });
-        }
-
-        const order = await orderModel.findOrderById(Number(order_id));
-        if (!order) {
-            return res.status(404).json({ message: "Order not found" });
-        }
-        if (order.buyer_id !== req.user.id) {
-            return res.status(403).json({ message: "You don't have permission to verify this order" });
-        }
-
-        const response = await fetch(`https://api.chapa.co/v1/transaction/verify/${tx_ref}`, {
-            method: "GET",
-            headers: {
-                "Authorization": `Bearer ${CHAPA_SECRET_KEY}`,
-            }
-        });
-
-        if (!response.ok) {
-            logger.error("Chapa verification request failed", { status: response.status, tx_ref });
-            return res.status(502).json({ message: "Failed to verify payment with Chapa", status: "failed" });
-        }
-
-        const data = await response.json();
-
-        if (data.status === "success" && data.data.status === "success") {
-            await orderModel.updateOrderStatusesById(Number(order_id), {
-                order_status: null,
-                payment_status: 'paid',
-                delivery_status: null
-            });
-
-            return res.status(200).json({ message: "Payment verified successfully", status: "success" });
-        } else {
-            return res.status(400).json({ message: "Payment not successful or pending", status: "failed" });
-        }
-    } catch (error) {
-         return handleControllerError(res, "Verify payment failed", error, {
-            userId: req.user && req.user.id,
-            body: req.body,
-        });
-    }
-}
+  req.body.provider = "chapa";
+  return verifyPayment(req, res);
+};
 
 module.exports = {
-  processPayment,
   getPaymentHistory,
+  handleWebhook,
   initializeChapaPayment,
-  verifyChapaPayment
+  initiatePayment,
+  processPayment,
+  verifyChapaPayment,
+  verifyPayment,
 };
