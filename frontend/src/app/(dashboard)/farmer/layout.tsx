@@ -8,9 +8,9 @@ export default function FarmerLayout({ children }: { children: React.ReactNode }
   return (
     <FarmerProvider>
       <ToastProvider>
-        <div className="flex h-screen bg-[#f1f5f9] font-sans overflow-hidden text-slate-900 antialiased selection:bg-emerald-100 selection:text-emerald-900">
+        <div className="flex h-screen bg-white font-sans overflow-hidden text-gray-900 antialiased selection:bg-emerald-100 selection:text-emerald-900">
           <FarmerSidebar />
-          <div className="flex-1 flex flex-col h-full min-w-0 overflow-y-auto custom-scrollbar bg-[#f8fafc]">
+          <div className="flex-1 flex flex-col h-full min-w-0 overflow-y-auto custom-scrollbar bg-white">
             <ErrorBoundary>{children}</ErrorBoundary>
           </div>
         </div>

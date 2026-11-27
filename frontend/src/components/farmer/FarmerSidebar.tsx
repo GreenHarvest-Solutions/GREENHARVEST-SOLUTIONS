@@ -21,171 +21,274 @@ export default function FarmerSidebar() {
     } catch {
       // Continue
     } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+      }
       router.push('/login');
     }
   };
 
   return (
-    <div className="py-6 pl-6 h-full flex-shrink-0 z-30">
-      <aside className={`${isCollapsed ? 'w-[96px]' : 'w-[260px]'} bg-white rounded-[24px] shadow-sm flex flex-col h-full overflow-hidden transition-all duration-300`}>
-       
-        {/* Logo */}
-        <div className={`flex items-center pb-6 mt-6 ${isCollapsed ? 'px-0 justify-center' : 'px-6'}`}>
-          <div className={`w-10 h-10 bg-gradient-to-tr from-emerald-600 to-green-500 rounded-xl flex items-center justify-center text-white flex-shrink-0 shadow-xs ${isCollapsed ? '' : 'mr-3'}`}>
-            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>agriculture</span>
-          </div>
-          {!isCollapsed && (
-            <div className="flex flex-col">
-              <span className="font-extrabold text-base tracking-tight text-gray-900 leading-none">GreenHarvest</span>
-              <span className="text-[10px] font-bold text-emerald-700 tracking-wider uppercase mt-1">Producer Hub</span>
+    <aside
+      className={`${
+        isCollapsed ? 'w-20' : 'w-64'
+      } bg-white border-r border-gray-300 flex flex-col h-full shrink-0 z-30 transition-all duration-200 ease-in-out`}
+    >
+      {/* Header: Brand & Collapse Toggle (Admin-Inspired Lined Architecture) */}
+      <div className="px-4 py-4 border-b border-gray-300 bg-white flex items-center justify-between shrink-0">
+        {!isCollapsed ? (
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 bg-[#1f5400] flex items-center justify-center text-white shrink-0">
+              <span className="material-symbols-outlined text-[19px]">agriculture</span>
             </div>
-          )}
-        </div>
-
-        {/* Menu */}
-        <div className={`flex-1 overflow-y-auto custom-scrollbar pb-6 ${isCollapsed ? 'px-3' : 'px-4'}`}>
-          <div className={`mb-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider ${isCollapsed ? 'text-center px-0' : 'px-2'}`}>
-            {isCollapsed ? '•••' : 'Main Menu'}
+            <div className="min-w-0">
+              <span className="text-sm font-bold tracking-tight text-gray-900 block truncate">
+                Green<span className="text-[#1f5400]">Harvest</span>
+              </span>
+              <span className="text-[10px] font-bold text-[#007a6c] uppercase tracking-wider block">
+                Seller Center
+              </span>
+            </div>
           </div>
-          
-          <NavItem 
-            href="/farmer/dashboard" 
-            icon="dashboard" 
-            label="Dashboard" 
-            isActive={pathname === '/farmer/dashboard'} 
-            isCollapsed={isCollapsed}
-          />
-          
-          <NavGroup 
-            icon="inventory_2" 
-            label="Products"
-            activePaths={['/farmer/products', '/farmer/products/new']}
-            pathname={pathname}
-            isCollapsed={isCollapsed}
-            onExpand={() => setIsCollapsed(false)}
-          >
-            <SubNavItem href="/farmer/products" label="Manage Products" isActive={pathname === '/farmer/products' || pathname.startsWith('/farmer/products/edit')} />
-            <SubNavItem href="/farmer/products/new" label="Add New Product" isActive={pathname === '/farmer/products/new'} />
-          </NavGroup>
-
-          <NavGroup 
-            icon="receipt_long" 
-            label="Orders"
-            activePaths={['/farmer/orders', '/farmer/shipping', '/farmer/returns']}
-            pathname={pathname}
-            isCollapsed={isCollapsed}
-            onExpand={() => setIsCollapsed(false)}
-          >
-            <SubNavItem 
-              href="/farmer/orders" 
-              label="All Orders" 
-              isActive={pathname === '/farmer/orders'}
-              badge={totalOrdersReceived}
-            />
-            <SubNavItem 
-              href="/farmer/shipping" 
-              label="Shipping" 
-              isActive={pathname === '/farmer/shipping'}
-              badge={pendingShipments > 0 ? pendingShipments : undefined}
-            />
-            <SubNavItem 
-              href="/farmer/returns" 
-              label="Returns" 
-              isActive={pathname === '/farmer/returns'}
-            />
-          </NavGroup>
-
-          <NavGroup 
-            icon="campaign" 
-            label="Marketing"
-            activePaths={['/farmer/campaigns', '/farmer/store']}
-            pathname={pathname}
-            isCollapsed={isCollapsed}
-            onExpand={() => setIsCollapsed(false)}
-          >
-            <SubNavItem href="/farmer/campaigns" label="Campaigns" isActive={pathname === '/farmer/campaigns'} />
-            <SubNavItem href="/farmer/store" label="Store Decoration" isActive={pathname === '/farmer/store'} />
-          </NavGroup>
-
-          <NavGroup 
-            icon="bar_chart" 
-            label="Analytics"
-            activePaths={['/farmer/advisor', '/farmer/market']}
-            pathname={pathname}
-            isCollapsed={isCollapsed}
-            onExpand={() => setIsCollapsed(false)}
-          >
-            <SubNavItem href="/farmer/advisor" label="Business Advisor" isActive={pathname === '/farmer/advisor'} />
-            <SubNavItem href="/farmer/market" label="Market Insights" isActive={pathname === '/farmer/market'} />
-          </NavGroup>
-
-          <div className={`mt-4 mb-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider ${isCollapsed ? 'text-center px-0' : 'px-2'}`}>
-            {isCollapsed ? '•••' : 'Farm Center'}
+        ) : (
+          <div className="mx-auto w-8 h-8 bg-[#1f5400] flex items-center justify-center text-white shrink-0">
+            <span className="material-symbols-outlined text-[19px]">agriculture</span>
           </div>
+        )}
 
-          <NavItem 
-            href="/farmer/verification" 
-            icon="verified_user" 
-            label="Verification Center" 
-            isActive={pathname === '/farmer/verification'} 
-            isCollapsed={isCollapsed}
-          />
-
-          <NavItem 
-            href="/farmer/profile" 
-            icon="badge" 
-            label="Farm Profile & KYC" 
-            isActive={pathname === '/farmer/profile'} 
-            isCollapsed={isCollapsed}
-          />
-
-        </div>
-
-        {/* Footer Actions */}
-        <div className="mt-auto border-t border-gray-100 p-3 space-y-1.5 bg-white z-10">
+        {!isCollapsed && (
           <button
             type="button"
-            onClick={handleLogout}
-            className={`w-full flex items-center py-2.5 rounded-xl text-red-600 hover:bg-red-50 transition-colors text-xs font-bold ${
-              isCollapsed ? 'justify-center px-0' : 'px-3'
-            }`}
-            title="Sign Out of Seller Center"
+            onClick={() => setIsCollapsed(true)}
+            title="Collapse Sidebar"
+            aria-label="Collapse Sidebar"
+            className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 border border-gray-300 rounded-none transition-colors shrink-0"
           >
-            <span className="material-symbols-outlined text-[20px] shrink-0">logout</span>
-            {!isCollapsed && <span className="ml-2.5">Sign Out</span>}
+            <span className="material-symbols-outlined text-[16px]">keyboard_double_arrow_left</span>
           </button>
+        )}
+      </div>
 
-          <button 
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors flex items-center justify-center w-full"
-            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      {/* Expand button when collapsed */}
+      {isCollapsed && (
+        <div className="px-2 py-2 border-b border-gray-200 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(false)}
+            title="Expand Sidebar"
+            aria-label="Expand Sidebar"
+            className="w-8 h-7 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 border border-gray-300 rounded-none transition-colors"
           >
-            <span className="material-symbols-outlined text-[18px]">
-              {isCollapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'}
-            </span>
+            <span className="material-symbols-outlined text-[16px]">keyboard_double_arrow_right</span>
           </button>
         </div>
-      </aside>
-    </div>
+      )}
+
+      {/* Navigation Menu */}
+      <nav className={`flex-1 overflow-y-auto custom-scrollbar py-3 ${isCollapsed ? 'px-2' : 'px-3'}`}>
+        <div
+          className={`mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider ${
+            isCollapsed ? 'text-center px-0' : 'px-2'
+          }`}
+        >
+          {isCollapsed ? '•••' : 'Main Menu'}
+        </div>
+
+        <NavItem
+          href="/farmer/dashboard"
+          icon="dashboard"
+          label="Dashboard"
+          isActive={pathname === '/farmer/dashboard'}
+          isCollapsed={isCollapsed}
+        />
+
+        <NavGroup
+          icon="inventory_2"
+          label="Products"
+          activePaths={['/farmer/products', '/farmer/products/new']}
+          pathname={pathname}
+          isCollapsed={isCollapsed}
+          onExpand={() => setIsCollapsed(false)}
+        >
+          <SubNavItem
+            href="/farmer/products"
+            label="Manage Products"
+            isActive={pathname === '/farmer/products' || pathname.startsWith('/farmer/products/edit')}
+          />
+          <SubNavItem
+            href="/farmer/products/new"
+            label="Add New Product"
+            isActive={pathname === '/farmer/products/new'}
+          />
+        </NavGroup>
+
+        <NavGroup
+          icon="receipt_long"
+          label="Orders"
+          activePaths={['/farmer/orders', '/farmer/shipping', '/farmer/returns']}
+          pathname={pathname}
+          isCollapsed={isCollapsed}
+          onExpand={() => setIsCollapsed(false)}
+        >
+          <SubNavItem
+            href="/farmer/orders"
+            label="All Orders"
+            isActive={pathname === '/farmer/orders'}
+            badge={totalOrdersReceived}
+          />
+          <SubNavItem
+            href="/farmer/shipping"
+            label="Shipping"
+            isActive={pathname === '/farmer/shipping'}
+            badge={pendingShipments > 0 ? pendingShipments : undefined}
+          />
+          <SubNavItem
+            href="/farmer/returns"
+            label="Returns"
+            isActive={pathname === '/farmer/returns'}
+          />
+        </NavGroup>
+
+        <NavGroup
+          icon="campaign"
+          label="Marketing"
+          activePaths={['/farmer/campaigns', '/farmer/store']}
+          pathname={pathname}
+          isCollapsed={isCollapsed}
+          onExpand={() => setIsCollapsed(false)}
+        >
+          <SubNavItem
+            href="/farmer/campaigns"
+            label="Campaigns"
+            isActive={pathname === '/farmer/campaigns'}
+          />
+          <SubNavItem
+            href="/farmer/store"
+            label="Store Decoration"
+            isActive={pathname === '/farmer/store'}
+          />
+        </NavGroup>
+
+        <NavGroup
+          icon="bar_chart"
+          label="Analytics"
+          activePaths={['/farmer/advisor', '/farmer/market']}
+          pathname={pathname}
+          isCollapsed={isCollapsed}
+          onExpand={() => setIsCollapsed(false)}
+        >
+          <SubNavItem
+            href="/farmer/advisor"
+            label="Business Advisor"
+            isActive={pathname === '/farmer/advisor'}
+          />
+          <SubNavItem
+            href="/farmer/market"
+            label="Market Insights"
+            isActive={pathname === '/farmer/market'}
+          />
+        </NavGroup>
+
+        <div
+          className={`mt-4 pt-3 border-t border-gray-200 mb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider ${
+            isCollapsed ? 'text-center px-0' : 'px-2'
+          }`}
+        >
+          {isCollapsed ? '•••' : 'Farm Center'}
+        </div>
+
+        <NavItem
+          href="/farmer/verification"
+          icon="verified_user"
+          label="Verification Center"
+          isActive={pathname === '/farmer/verification'}
+          isCollapsed={isCollapsed}
+        />
+
+        <NavItem
+          href="/farmer/profile"
+          icon="badge"
+          label="Farm Profile & KYC"
+          isActive={pathname === '/farmer/profile'}
+          isCollapsed={isCollapsed}
+        />
+      </nav>
+
+      {/* Footer Actions */}
+      <div className="mt-auto border-t border-gray-300 p-3 bg-white shrink-0">
+        <button
+          type="button"
+          onClick={handleLogout}
+          className={`w-full flex items-center py-2 text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-none transition-colors text-xs font-bold ${
+            isCollapsed ? 'justify-center px-0' : 'px-3'
+          }`}
+          title="Sign Out of Seller Center"
+        >
+          <span className="material-symbols-outlined text-[18px] shrink-0">logout</span>
+          {!isCollapsed && <span className="ml-2.5">Sign Out</span>}
+        </button>
+      </div>
+    </aside>
   );
 }
 
-function NavItem({ href, icon, label, isActive, isCollapsed }: { href: string, icon: string, label: string, isActive: boolean, isCollapsed: boolean }) {
+function NavItem({
+  href,
+  icon,
+  label,
+  isActive,
+  isCollapsed,
+}: {
+  href: string;
+  icon: string;
+  label: string;
+  isActive: boolean;
+  isCollapsed: boolean;
+}) {
   return (
-    <Link 
-      href={href} 
-      title={isCollapsed ? label : undefined} 
-      className={`flex items-center py-3 mb-1 rounded-xl transition-all relative ${isActive ? 'bg-[#f3f4f6] text-gray-900 font-semibold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'} ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
+    <Link
+      href={href}
+      title={isCollapsed ? label : undefined}
+      className={`flex items-center py-2.5 mb-0.5 rounded-none transition-colors relative text-xs ${
+        isActive
+          ? 'bg-[#1f5400] text-white font-bold'
+          : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-950 font-medium'
+      } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
     >
-      <span className={`material-symbols-outlined text-[22px] flex-shrink-0 ${isCollapsed ? '' : 'mr-3'} ${isActive && isCollapsed ? 'text-gray-900' : ''}`}>{icon}</span>
-      {!isCollapsed && <span className="text-sm whitespace-nowrap overflow-hidden">{label}</span>}
-      {/* Optional: Add a small active dot when collapsed if needed, but background color handles it */}
+      <span
+        className={`material-symbols-outlined text-[19px] shrink-0 ${
+          isCollapsed ? '' : 'mr-2.5'
+        } ${isActive ? 'text-white' : 'text-gray-500'}`}
+      >
+        {icon}
+      </span>
+      {!isCollapsed && <span className="whitespace-nowrap overflow-hidden truncate">{label}</span>}
     </Link>
   );
 }
 
-function NavGroup({ icon, label, children, activePaths, pathname, isCollapsed, onExpand }: { icon: string, label: string, children: React.ReactNode, activePaths: string[], pathname: string, isCollapsed: boolean, onExpand: () => void }) {
-  const isChildActive = activePaths.some(path => pathname === path || pathname.startsWith(path + '/'));
+function NavGroup({
+  icon,
+  label,
+  children,
+  activePaths,
+  pathname,
+  isCollapsed,
+  onExpand,
+}: {
+  icon: string;
+  label: string;
+  children: React.ReactNode;
+  activePaths: string[];
+  pathname: string;
+  isCollapsed: boolean;
+  onExpand: () => void;
+}) {
+  const isChildActive = activePaths.some(
+    (path) => pathname === path || pathname.startsWith(path + '/')
+  );
   const [isOpen, setIsOpen] = useState(isChildActive);
 
   const handleClick = () => {
@@ -198,30 +301,44 @@ function NavGroup({ icon, label, children, activePaths, pathname, isCollapsed, o
   };
 
   return (
-    <div className="mb-1">
-      <button 
+    <div className="mb-0.5">
+      <button
+        type="button"
         onClick={handleClick}
         title={isCollapsed ? label : undefined}
-        className={`w-full flex items-center py-3 rounded-xl transition-all relative ${isChildActive ? 'text-gray-900 font-semibold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'} ${isCollapsed ? 'justify-center px-0' : 'px-3 justify-between'}`}
+        className={`w-full flex items-center py-2.5 rounded-none transition-colors relative text-xs ${
+          isChildActive
+            ? 'text-[#007a6c] font-bold bg-gray-50'
+            : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-950 font-medium'
+        } ${isCollapsed ? 'justify-center px-0' : 'px-3 justify-between'}`}
       >
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
-          <span className={`material-symbols-outlined text-[22px] flex-shrink-0 ${isChildActive ? 'text-gray-900' : ''} ${isCollapsed ? '' : 'mr-3'}`}>{icon}</span>
-          {!isCollapsed && <span className="text-sm whitespace-nowrap overflow-hidden">{label}</span>}
+          <span
+            className={`material-symbols-outlined text-[19px] shrink-0 ${
+              isChildActive ? 'text-[#007a6c]' : 'text-gray-500'
+            } ${isCollapsed ? '' : 'mr-2.5'}`}
+          >
+            {icon}
+          </span>
+          {!isCollapsed && <span className="whitespace-nowrap overflow-hidden">{label}</span>}
         </div>
         {!isCollapsed && (
-          <span className="material-symbols-outlined text-[18px] transition-transform duration-200 flex-shrink-0" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          <span
+            className="material-symbols-outlined text-[16px] text-gray-400 transition-transform duration-200 shrink-0"
+            style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+          >
             expand_more
           </span>
         )}
-        {/* If collapsed and active, show background like NavItem. Actually wait, NavItem background is applied to the button itself. Let's add background to button if collapsed and active. */}
-        {isCollapsed && isChildActive && (
-          <div className="absolute inset-0 bg-[#f3f4f6] rounded-xl -z-10"></div>
-        )}
       </button>
-      
+
       {/* Sub items */}
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen && !isCollapsed ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-        <div className="ml-[22px] pl-4 border-l border-gray-100 flex flex-col gap-1 py-1">
+      <div
+        className={`overflow-hidden transition-all duration-200 ease-in-out ${
+          isOpen && !isCollapsed ? 'max-h-64 opacity-100 mt-0.5' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="ml-[20px] pl-3 border-l border-gray-300 flex flex-col gap-0.5 py-0.5">
           {children}
         </div>
       </div>
@@ -229,15 +346,35 @@ function NavGroup({ icon, label, children, activePaths, pathname, isCollapsed, o
   );
 }
 
-function SubNavItem({ href, label, badge, isActive }: { href: string, label: string, badge?: React.ReactNode, isActive: boolean }) {
+function SubNavItem({
+  href,
+  label,
+  badge,
+  isActive,
+}: {
+  href: string;
+  label: string;
+  badge?: React.ReactNode;
+  isActive: boolean;
+}) {
   return (
     <Link href={href} className="group flex items-center justify-between relative">
-      <div className="absolute -left-4 top-1/2 w-3 border-t border-gray-100 group-hover:border-gray-200"></div>
-      
-      <div className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all text-sm ${isActive ? 'bg-[#dcfce7] text-[#16a34a] font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}>
+      <div
+        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-none transition-colors text-xs ${
+          isActive
+            ? 'bg-emerald-50 text-[#1f5400] font-bold border-l-2 border-[#1f5400]'
+            : 'text-gray-600 hover:text-gray-950 hover:bg-gray-100/70'
+        }`}
+      >
         <span className="whitespace-nowrap overflow-hidden text-ellipsis">{label}</span>
         {badge !== undefined && (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ml-2 ${isActive ? 'bg-white text-[#16a34a]' : 'bg-gray-100 text-gray-500'}`}>
+          <span
+            className={`text-[10px] font-bold px-1.5 py-0.2 rounded-none tabular-nums border shrink-0 ml-2 ${
+              isActive
+                ? 'bg-white text-[#1f5400] border-[#1f5400]'
+                : 'bg-white text-gray-700 border-gray-300'
+            }`}
+          >
             {badge}
           </span>
         )}
