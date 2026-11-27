@@ -101,7 +101,10 @@ const loginUser = async (req, res) => {
       });
     }
 
-    setRefreshTokenCookie(res, result.refresh_token);
+    setRefreshTokenCookie(res, result.refresh_token, {
+      rememberMe: result.remember_me,
+      ttlDays: result.refresh_ttl_days,
+    });
     return res.status(200).json(buildSessionResponseBody(result, "Login successful"));
   } catch (error) {
     return handleControllerError(res, "User login failed", error, {
@@ -118,7 +121,10 @@ const refreshSession = async (req, res) => {
       userAgent: req.get("user-agent") || null,
     });
 
-    setRefreshTokenCookie(res, result.refresh_token);
+    setRefreshTokenCookie(res, result.refresh_token, {
+      rememberMe: result.remember_me,
+      ttlDays: result.refresh_ttl_days,
+    });
     return res.status(200).json(buildSessionResponseBody(result, "Token refreshed successfully"));
   } catch (error) {
     return handleControllerError(res, "Token refresh failed", error);

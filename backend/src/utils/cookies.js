@@ -45,19 +45,25 @@ const getRefreshTokenFromRequest = (req) => {
   return cookies[REFRESH_TOKEN_COOKIE_NAME] || null;
 };
 
-const buildRefreshCookieOptions = () => {
-  return {
+const buildRefreshCookieOptions = ({ rememberMe, ttlDays } = {}) => {
+  const options = {
     httpOnly: true,
-    sameSite: process.env.REFRESH_COOKIE_SAMESITE || "strict",
+    sameSite: process.env.REFRESH_COOKIE_SAMESITE || "lax",
     secure:
       process.env.REFRESH_COOKIE_SECURE === "true" || process.env.NODE_ENV === "production",
     path: process.env.REFRESH_COOKIE_PATH || "/api/auth",
-    maxAge: getRefreshCookieMaxAgeMs(),
   };
+
+  if (rememberMe !== false) {
+    const days = Number.isInteger(ttlDays) && ttlDays > 0 ? ttlDays : getRefreshTokenTtlDays();
+    options.maxAge = days * 24 * 60 * 60 * 1000;
+  }
+
+  return options;
 };
 
-const setRefreshTokenCookie = (res, token) => {
-  res.cookie(REFRESH_TOKEN_COOKIE_NAME, token, buildRefreshCookieOptions());
+const setRefreshTokenCookie = (res, token, options = {}) => {
+  res.cookie(REFRESH_TOKEN_COOKIE_NAME, token, buildRefreshCookieOptions(options));
 };
 
 const clearRefreshTokenCookie = (res) => {
