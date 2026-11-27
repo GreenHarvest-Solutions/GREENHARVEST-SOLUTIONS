@@ -244,6 +244,59 @@ class APIClient {
     return response;
   }
 
+  async getOAuthProviders() {
+    return this.request<{
+      providers: Array<{ id: string; name: string; configured: boolean; env_keys?: string[] }>;
+    }>({
+      method: 'GET',
+      url: '/auth/oauth/providers',
+    });
+  }
+
+  getOAuthStartUrl(
+    provider: 'google' | 'facebook' | 'github',
+    options?: { role?: string; rememberMe?: boolean }
+  ): string {
+    const baseUrl = getApiBaseUrl().replace(/\/$/, '');
+    const params = new URLSearchParams();
+    if (options?.role) params.set('role', options.role);
+    if (options?.rememberMe !== undefined) {
+      params.set('remember_me', options.rememberMe ? 'true' : 'false');
+    }
+    if (typeof window !== 'undefined') {
+      params.set('frontend_origin', window.location.origin);
+    }
+    return `${baseUrl}/auth/oauth/${provider}?${params.toString()}`;
+  }
+
+  async exchangeOAuthCode(code: string) {
+    const response = await this.request<{
+      access_token: string;
+      refresh_token?: string;
+      user: any;
+      remember_me?: boolean;
+    }>({
+      method: 'POST',
+      url: '/auth/oauth/exchange',
+      data: { code },
+    });
+
+    this.setToken(response.access_token);
+    if (typeof window !== 'undefined') {
+      if (response.refresh_token) {
+        localStorage.setItem('refreshToken', response.refresh_token);
+      }
+      if (response.user) {
+        localStorage.setItem('user', JSON.stringify(response.user));
+        if (response.remember_me && response.user.email) {
+          localStorage.setItem('gh_remember_email', response.user.email);
+        }
+      }
+      localStorage.setItem('gh_keep_logged_in', response.remember_me ? 'true' : 'false');
+    }
+    return response;
+  }
+
   async verifyEmail(token: string) {
     return this.request({
       method: 'GET',

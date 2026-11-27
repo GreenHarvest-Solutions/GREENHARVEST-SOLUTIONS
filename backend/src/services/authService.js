@@ -621,6 +621,7 @@ const getUserProfile = async (userId) => {
 
 module.exports = {
   allowedRoles,
+  createRefreshSession,
   forgotPassword,
   generateToken,
   getUserProfile,

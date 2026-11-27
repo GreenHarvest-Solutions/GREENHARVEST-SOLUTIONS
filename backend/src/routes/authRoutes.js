@@ -5,13 +5,17 @@ const express = require("express");
 const {
   disableMfa,
   enableMfa,
+  exchangeOAuthCode,
   forgotPassword,
+  getOAuthProviders,
+  handleOAuthCallback,
   registerUser,
   loginUser,
   getUserProfile,
   logoutUser,
   refreshSession,
   resetPassword,
+  startOAuth,
   verifyEmail,
   verifyOtp,
 } = require("../controllers/authController");
@@ -24,6 +28,10 @@ const {
 
 const router = express.Router();
 
+router.get("/oauth/providers", getOAuthProviders);
+router.post("/oauth/exchange", loginRateLimiter, exchangeOAuthCode);
+router.get("/oauth/:provider", startOAuth);
+router.get("/oauth/:provider/callback", handleOAuthCallback);
 router.post("/register", registerUser);
 router.post("/login", loginRateLimiter, loginUser);
 router.post("/refresh", refreshRateLimiter, refreshSession);

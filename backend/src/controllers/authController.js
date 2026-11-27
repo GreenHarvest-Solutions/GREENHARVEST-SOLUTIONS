@@ -1,6 +1,7 @@
 // Auth controller delegates business logic to the auth service.
 const logger = require("../utils/logger");
 const authService = require("../services/authService");
+const oauthService = require("../services/oauthService");
 const {
   clearRefreshTokenCookie,
   getRefreshTokenFromRequest,
@@ -250,16 +251,132 @@ const disableMfa = async (req, res) => {
   }
 };
 
+const resolveFrontendOrigin = (req) => {
+  const originParam = req.query && req.query.frontend_origin ? String(req.query.frontend_origin) : null;
+  const fallback = process.env.FRONTEND_URL || "http://localhost:3000";
+  if (!originParam) return fallback;
+  try {
+    const parsed = new URL(originParam);
+    if (["http:", "https:"].includes(parsed.protocol)) {
+      return parsed.origin;
+    }
+  } catch {
+    // fallback below
+  }
+  return fallback;
+};
+
+const resolveBackendBaseUrl = (req) => {
+  if (process.env.BACKEND_URL) return process.env.BACKEND_URL.replace(/\/$/, "");
+  return `${req.protocol}://${req.get("host")}`;
+};
+
+const getOAuthProviders = async (req, res) => {
+  return res.status(200).json({
+    providers: oauthService.listProvidersStatus(),
+  });
+};
+
+const startOAuth = async (req, res) => {
+  const provider = String(req.params.provider || "").toLowerCase();
+  const frontendOrigin = resolveFrontendOrigin(req);
+  const role = req.query && req.query.role ? String(req.query.role) : "buyer";
+  const rememberMe = !(req.query && req.query.remember_me === "false");
+
+  try {
+    const authUrl = oauthService.buildAuthorizationUrl({
+      providerId: provider,
+      role,
+      rememberMe,
+      frontendOrigin,
+      backendBaseUrl: resolveBackendBaseUrl(req),
+    });
+    return res.redirect(authUrl);
+  } catch (error) {
+    logger.warn("OAuth start blocked/failed", { provider, message: error.message });
+    const params = new URLSearchParams({
+      oauth_error: error.message || "Could not start social sign-in",
+      oauth_provider: provider,
+    });
+    if (error.envKeys) {
+      params.set("oauth_setup", "missing_env");
+    }
+    return res.redirect(`${frontendOrigin}/login?${params.toString()}`);
+  }
+};
+
+const handleOAuthCallback = async (req, res) => {
+  const provider = String(req.params.provider || "").toLowerCase();
+  const frontendFallback = process.env.FRONTEND_URL || "http://localhost:3000";
+
+  if (req.query && req.query.error) {
+    const msg = req.query.error_description || req.query.error || "Sign-in was cancelled";
+    return res.redirect(
+      `${frontendFallback}/login?oauth_error=${encodeURIComponent(String(msg))}&oauth_provider=${encodeURIComponent(
+        provider
+      )}`
+    );
+  }
+
+  try {
+    const result = await oauthService.completeOAuthCallback({
+      providerId: provider,
+      code: req.query && req.query.code,
+      state: req.query && req.query.state,
+      backendBaseUrl: resolveBackendBaseUrl(req),
+    });
+
+    const params = new URLSearchParams({
+      code: result.handoffCode,
+      remember_me: result.rememberMe ? "1" : "0",
+      provider,
+    });
+    return res.redirect(`${result.frontendOrigin || frontendFallback}/oauth/callback?${params.toString()}`);
+  } catch (error) {
+    logger.error("OAuth callback failed", { provider, message: error.message });
+    return res.redirect(
+      `${frontendFallback}/login?oauth_error=${encodeURIComponent(
+        error.message || "Social sign-in failed"
+      )}&oauth_provider=${encodeURIComponent(provider)}`
+    );
+  }
+};
+
+const exchangeOAuthCode = async (req, res) => {
+  try {
+    const result = await oauthService.exchangeHandoffCode({
+      code: req.body && req.body.code,
+      ip: req.ip,
+      userAgent: req.get("user-agent") || null,
+    });
+
+    setRefreshTokenCookie(res, result.refresh_token, {
+      rememberMe: result.remember_me,
+      ttlDays: result.refresh_ttl_days,
+    });
+    return res.status(200).json({
+      ...buildSessionResponseBody(result, "OAuth sign-in successful"),
+      remember_me: Boolean(result.remember_me),
+    });
+  } catch (error) {
+    return handleControllerError(res, "OAuth code exchange failed", error);
+  }
+};
+
 module.exports = {
   disableMfa,
   enableMfa,
+  exchangeOAuthCode,
   forgotPassword,
+  getOAuthProviders,
   getUserProfile,
+  handleOAuthCallback,
   loginUser,
   logoutUser,
   refreshSession,
   registerUser,
   resetPassword,
+  startOAuth,
   verifyEmail,
   verifyOtp,
 };
