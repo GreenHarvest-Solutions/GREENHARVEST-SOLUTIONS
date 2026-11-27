@@ -6,22 +6,40 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { api } from '@/lib/api';
+import AuthAnimatedInput from '@/components/auth/AuthAnimatedInput';
+import SocialAuthButtons from '@/components/auth/SocialAuthButtons';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [formData, setFormData] = useState({ email: '', password: '' });
+  const [rememberMe, setRememberMe] = useState(true);
   const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
+  const [socialNotice, setSocialNotice] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // If credentials accidentally leaked into the query string via a native GET submit, recover them and wipe the URL
+  // Recover leaked query params securely AND restore remembered email preference
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.search) {
+    if (typeof window === 'undefined') return;
+
+    const savedEmail = localStorage.getItem('gh_remember_email');
+    const savedKeepPref = localStorage.getItem('gh_keep_logged_in');
+    if (savedEmail) {
+      setFormData((prev) => ({ ...prev, email: prev.email || savedEmail }));
+      setRememberMe(true);
+    } else if (savedKeepPref === 'false') {
+      setRememberMe(false);
+    }
+
+    if (window.location.search) {
       const params = new URLSearchParams(window.location.search);
       const emailParam = params.get('email');
       const passParam = params.get('password');
+      const oauthErrorParam = params.get('oauth_error');
+      if (oauthErrorParam) {
+        setSocialNotice(oauthErrorParam);
+      }
       if (emailParam) {
         setFormData((prev) => ({
           ...prev,
@@ -29,7 +47,6 @@ export default function LoginPage() {
           password: passParam || prev.password,
         }));
       }
-      // Immediately remove credentials from the browser address bar for security
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -58,8 +75,9 @@ export default function LoginPage() {
     if (!validateForm()) return;
     setLoading(true);
     setErrors({});
+    setSocialNotice('');
     try {
-      const response = await api.login(formData.email.trim(), formData.password);
+      const response = await api.login(formData.email.trim(), formData.password, rememberMe);
       const role = response.user?.role;
       const redirectMap: Record<string, string> = {
         admin: '/admin/dashboard',
@@ -72,9 +90,10 @@ export default function LoginPage() {
     } catch (error: any) {
       console.error('Login failed:', error);
       const serverMsg = error.response?.data?.message;
-      const networkMsg = error.message === 'Network Error'
-        ? 'Cannot reach backend server. Please verify backend service is running on port 5000.'
-        : 'Invalid email or password.';
+      const networkMsg =
+        error.message === 'Network Error'
+          ? 'Cannot reach backend server. Please verify backend service is running on port 5000.'
+          : 'Invalid email or password.';
       setErrors({ general: serverMsg || networkMsg });
     } finally {
       setLoading(false);
@@ -82,181 +101,215 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-surface-container-low font-body-md text-on-surface">
-      {/* Left panel — decorative */}
+    <div className="min-h-screen flex bg-surface-container-lowest font-body-md text-on-surface">
+      {/* Left panel — matching typography & smooth animations */}
       <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12 relative overflow-hidden bg-primary text-on-primary">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-primary-fixed/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-secondary-container/20 rounded-full blur-3xl" />
-        <div className="absolute top-10 left-10 text-secondary-container animate-pulse opacity-50">
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.2, 0.3, 0.2] }}
+          transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-0 right-0 w-80 h-80 bg-primary-fixed/20 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{ scale: [1, 1.12, 1], opacity: [0.2, 0.32, 0.2] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          className="absolute bottom-0 left-0 w-64 h-64 bg-secondary-container/20 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{ rotate: [0, 12, -8, 0], scale: [1, 1.06, 1] }}
+          transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute top-10 left-10 text-secondary-container opacity-45"
+        >
           <span className="material-symbols-outlined text-8xl">spark</span>
-        </div>
-        
-        <div className="relative text-center max-w-sm z-10">
-          <div className="w-20 h-20 bg-surface-container-lowest rounded-[24px] flex items-center justify-center mx-auto mb-8 shadow-xl">
-            <span className="material-symbols-outlined text-5xl text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>eco</span>
-          </div>
-          <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg mb-4 leading-tight">
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          className="relative text-center max-w-sm z-10"
+        >
+          <motion.div
+            animate={{ y: [0, -6, 0] }}
+            transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+            className="w-20 h-20 bg-surface-container-lowest rounded-[24px] flex items-center justify-center mx-auto mb-8 shadow-xl"
+          >
+            <span
+              className="material-symbols-outlined text-5xl text-primary"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
+              eco
+            </span>
+          </motion.div>
+
+          <h2 className="font-body-lg text-[40px] md:text-[46px] font-extrabold tracking-tight mb-4 leading-[1.12]">
             Welcome Back To <span className="text-secondary-container">GreenHarvest</span>
           </h2>
-          <p className="font-body-lg text-body-lg text-on-primary/80 leading-relaxed">
+          <p className="font-body-md text-[17px] text-on-primary/80 leading-relaxed">
             Your trusted marketplace for fresh, sustainable produce straight from local farms.
           </p>
+
           <div className="mt-12 grid grid-cols-2 gap-4 text-left">
             {[
               { emoji: '🌾', label: '500+ Farmers' },
               { emoji: '🥦', label: '2,000+ Products' },
               { emoji: '🚚', label: 'Fast Delivery' },
               { emoji: '💯', label: 'Verified Quality' },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center gap-3 bg-on-primary/10 backdrop-blur-sm border border-on-primary/20 rounded-[24px] px-5 py-4">
+            ].map((item, idx) => (
+              <motion.div
+                key={item.label}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.18 + idx * 0.08, duration: 0.4 }}
+                whileHover={{ y: -3, scale: 1.02 }}
+                className="flex items-center gap-3 bg-on-primary/10 backdrop-blur-sm border border-on-primary/20 rounded-[24px] px-5 py-4 transition-colors hover:bg-on-primary/15"
+              >
                 <span className="text-2xl">{item.emoji}</span>
                 <span className="font-label-md text-label-md">{item.label}</span>
-              </div>
+              </motion.div>
             ))}
           </div>
-        </div>
+        </motion.div>
       </div>
 
-      {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center py-12 px-4 sm:px-8">
-        <div className="w-full max-w-md bg-surface-container-lowest p-8 md:p-12 rounded-[40px] shadow-[0_20px_60px_rgba(0,0,0,0.05)] border border-surface-container">
+      {/* Right panel — borderless UX form with bottom-curved underline inputs */}
+      <div className="flex-1 flex items-center justify-center py-12 px-6 sm:px-10 bg-surface-container-lowest">
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full max-w-[400px]"
+        >
           {/* Mobile logo */}
-          <div className="flex items-center justify-center gap-2 mb-10 lg:hidden">
-            <span className="material-symbols-outlined text-primary text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>eco</span>
-            <span className="font-headline-md text-headline-md font-bold text-on-background">
+          <div className="flex items-center justify-center gap-2 mb-8 lg:hidden">
+            <span
+              className="material-symbols-outlined text-primary text-3xl"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
+              eco
+            </span>
+            <span className="font-body-lg text-2xl font-extrabold tracking-tight text-on-background">
               Green<span className="text-primary">Harvest</span>
             </span>
           </div>
 
-          <h1 className="font-headline-md text-[32px] font-bold text-on-background mb-2 text-center lg:text-left">Sign In</h1>
-          <p className="font-body-md text-body-md text-on-surface-variant mb-10 text-center lg:text-left">
-            Don't have an account?{' '}
-            <Link href="/register" className="text-primary hover:text-primary-container font-bold transition-colors">
-              Sign up free
-            </Link>
-          </p>
+          {/* Centered Header */}
+          <div className="text-center mb-7">
+            <h1 className="font-body-lg text-[30px] font-extrabold tracking-tight text-on-background">
+              Welcome Back!
+            </h1>
+            <p className="text-sm text-on-surface-variant mt-1.5">
+              Sign in to your GreenHarvest Marketplace
+            </p>
+          </div>
+
+          {/* 3-Column Social Provider Row (Google, Facebook, GitHub) */}
+          <SocialAuthButtons
+            mode="login"
+            rememberMe={rememberMe}
+            initialNotice={socialNotice}
+          />
+
+          {/* OR Divider */}
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1 h-px bg-outline-variant/50" />
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-on-surface-variant/60">
+              OR
+            </span>
+            <div className="flex-1 h-px bg-outline-variant/50" />
+          </div>
 
           {errors.general && (
-            <div className="flex items-start gap-3 bg-error-container border border-error/20 text-on-error-container rounded-[20px] p-4 mb-6">
-              <span className="material-symbols-outlined shrink-0 mt-0.5">error</span>
-              <p className="font-body-md text-sm">{errors.general}</p>
+            <div className="flex items-start gap-2.5 bg-error-container border border-error/20 text-on-error-container rounded-xl px-4 py-3 mb-5">
+              <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">error</span>
+              <p className="text-xs font-medium leading-relaxed">{errors.general}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} method="POST" action="#" className="space-y-6">
-            <div>
-              <label htmlFor="email" className="block font-label-lg text-label-lg text-on-background mb-2">
-                Email Address
+          {/* Login Form with Bottom-Border Curved Inputs */}
+          <form onSubmit={handleSubmit} method="POST" action="#" className="space-y-5">
+            <AuthAnimatedInput
+              id="email"
+              label="Email Address"
+              icon="mail"
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="you@greenharvest.com"
+              autoComplete="email"
+              error={errors.email}
+              required
+            />
+
+            <AuthAnimatedInput
+              id="password"
+              label="Password"
+              icon="lock"
+              type={showPassword ? 'text' : 'password'}
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              error={errors.password}
+              isPasswordToggle
+              showPassword={showPassword}
+              onTogglePassword={() => setShowPassword(!showPassword)}
+              required
+            />
+
+            {/* Keep me logged in + Forgot password row */}
+            <div className="flex items-center justify-between pt-1 pb-2">
+              <label
+                htmlFor="remember"
+                className="inline-flex items-center gap-2 text-[13px] text-on-surface-variant cursor-pointer select-none"
+              >
+                <input
+                  type="checkbox"
+                  id="remember"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-outline-variant text-primary accent-primary focus:ring-primary/30 cursor-pointer"
+                />
+                <span>Keep me logged in</span>
               </label>
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">mail</span>
-                <input
-                  id="email"
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  required
-                  className={`w-full pl-12 pr-4 py-4 bg-surface-container-low border rounded-[24px] text-on-background placeholder-on-surface-variant/50 text-base focus:outline-none focus:bg-surface-container-lowest focus:ring-2 transition-all ${
-                    errors.email ? 'border-error focus:ring-error-container' : 'border-outline-variant focus:border-primary focus:ring-primary-container/30'
-                  }`}
-                />
-              </div>
-              {errors.email && <p className="text-error font-body-md text-xs mt-2">{errors.email}</p>}
+
+              <Link
+                href="/forgot-password"
+                className="text-[13px] font-medium text-on-background underline underline-offset-4 hover:text-primary transition-colors"
+              >
+                Forgot password?
+              </Link>
             </div>
 
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label htmlFor="password" className="block font-label-lg text-label-lg text-on-background">
-                  Password
-                </label>
-                <Link href="/forgot-password" className="font-label-md text-label-md text-primary hover:text-primary-container transition-colors">
-                  Forgot password?
-                </Link>
-              </div>
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">lock</span>
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  required
-                  className={`w-full pl-12 pr-12 py-4 bg-surface-container-low border rounded-[24px] text-on-background placeholder-on-surface-variant/50 text-base focus:outline-none focus:bg-surface-container-lowest focus:ring-2 transition-all ${
-                    errors.password ? 'border-error focus:ring-error-container' : 'border-outline-variant focus:border-primary focus:ring-primary-container/30'
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-background transition-colors cursor-pointer"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  <span className="material-symbols-outlined">{showPassword ? 'visibility_off' : 'visibility'}</span>
-                </button>
-              </div>
-              {errors.password && <p className="text-error font-body-md text-xs mt-2">{errors.password}</p>}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="remember"
-                className="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary-container cursor-pointer"
-              />
-              <label htmlFor="remember" className="font-body-md text-sm text-on-surface-variant cursor-pointer">Remember me for 30 days</label>
-            </div>
-
-            <button
+            <motion.button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary hover:bg-surface-tint text-on-primary font-label-lg text-[16px] py-4 rounded-full shadow-[0_10px_20px_rgba(40,108,0,0.2)] hover:-translate-y-1 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              whileTap={{ scale: 0.99 }}
+              className="w-full bg-primary hover:bg-surface-tint text-on-primary font-semibold text-sm py-3.5 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
             >
               {loading ? (
                 <>
-                  <span className="w-5 h-5 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin" />
-                  Signing In...
+                  <span className="w-4 h-4 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin" />
+                  <span>Logging in...</span>
                 </>
               ) : (
-                <>Sign In <span className="material-symbols-outlined">arrow_forward</span></>
+                <span>Login</span>
               )}
-            </button>
+            </motion.button>
           </form>
 
-          {/* Divider */}
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-outline-variant" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="px-4 bg-surface-container-lowest font-label-md text-xs text-on-surface-variant uppercase tracking-widest">Or continue with</span>
-            </div>
-          </div>
-
-          {/* Social */}
-          <div className="grid grid-cols-2 gap-4">
-            <button type="button" className="flex items-center justify-center gap-3 px-4 py-3 border-2 border-surface-container hover:border-primary/30 rounded-[20px] hover:bg-surface-container-low transition-all font-label-lg text-sm text-on-background cursor-pointer">
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-              Google
-            </button>
-            <button type="button" className="flex items-center justify-center gap-3 px-4 py-3 border-2 border-surface-container hover:border-primary/30 rounded-[20px] hover:bg-surface-container-low transition-all font-label-lg text-sm text-on-background cursor-pointer">
-              <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-              </svg>
-              Facebook
-            </button>
-          </div>
-        </div>
+          {/* Footer Sign Up Link */}
+          <p className="text-center text-[13px] text-on-surface-variant mt-6">
+            Don&apos;t have an account?{' '}
+            <Link
+              href="/register"
+              className="font-bold text-primary hover:text-on-primary-container transition-colors"
+            >
+              Sign up
+            </Link>
+          </p>
+        </motion.div>
       </div>
     </div>
   );

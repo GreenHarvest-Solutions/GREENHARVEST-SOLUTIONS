@@ -18,25 +18,52 @@ const getApiBaseUrl = (): string => {
 
 class APIClient {
   private client: AxiosInstance;
+  private refreshPromise: Promise<string | null> | null = null;
 
   constructor() {
     this.client = axios.create({
       baseURL: getApiBaseUrl(),
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
-    // Request interceptor to add auth token and adapt baseURL to client host
+    if (typeof window !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          const token = this.getToken();
+          if (token && this.isTokenExpiringSoon(token, 120)) {
+            void this.refreshAccessToken();
+          }
+        }
+      });
+    }
+
+    // Request interceptor to add auth token, proactively refresh expiring JWTs, and adapt baseURL to client host
     this.client.interceptors.request.use(
-      (config) => {
+      async (config) => {
         if (typeof window !== 'undefined') {
           const currentHost = window.location.hostname;
           if (config.baseURL && (config.baseURL.includes('localhost') || config.baseURL.includes('127.0.0.1'))) {
             config.baseURL = `${window.location.protocol}//${currentHost}:5000/api`;
           }
         }
-        const token = this.getToken();
+
+        const url = config.url || '';
+        const isAuthEndpoint =
+          url.includes('/auth/login') ||
+          url.includes('/auth/register') ||
+          url.includes('/auth/refresh') ||
+          url.includes('/auth/forgot-password') ||
+          url.includes('/auth/reset-password');
+
+        let token = this.getToken();
+        if (token && !isAuthEndpoint && this.isTokenExpiringSoon(token, 90)) {
+          const refreshed = await this.refreshAccessToken();
+          if (refreshed) token = refreshed;
+        }
+
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -45,12 +72,34 @@ class APIClient {
       (error) => Promise.reject(error)
     );
 
-    // Response interceptor for error handling
+    // Response interceptor: seamlessly refresh expired access tokens once before redirecting
     this.client.interceptors.response.use(
       (response) => response,
       async (error) => {
-        if (error.response?.status === 401) {
-          // Token expired or invalid
+        const originalRequest = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
+        const url = originalRequest?.url || '';
+        const isAuthEndpoint =
+          url.includes('/auth/login') ||
+          url.includes('/auth/register') ||
+          url.includes('/auth/refresh') ||
+          url.includes('/auth/forgot-password') ||
+          url.includes('/auth/reset-password') ||
+          url.includes('/auth/logout');
+
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthEndpoint) {
+          originalRequest._retry = true;
+          const newToken = await this.refreshAccessToken();
+          if (newToken) {
+            originalRequest.headers = {
+              ...(originalRequest.headers || {}),
+              Authorization: `Bearer ${newToken}`,
+            };
+            return this.client.request(originalRequest);
+          }
+        }
+
+        if (error.response?.status === 401 && !isAuthEndpoint) {
+          // Refresh failed or session revoked
           this.clearToken();
           if (
             typeof window !== 'undefined' &&
@@ -65,6 +114,78 @@ class APIClient {
         return Promise.reject(error);
       }
     );
+  }
+
+  private decodeJwtExp(token: string): number | null {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64));
+      return typeof payload.exp === 'number' ? payload.exp : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private isTokenExpiringSoon(token: string, thresholdSeconds = 90): boolean {
+    const exp = this.decodeJwtExp(token);
+    if (!exp) return false;
+    return exp - Math.floor(Date.now() / 1000) <= thresholdSeconds;
+  }
+
+  async ensureFreshToken(): Promise<string | null> {
+    const token = this.getToken();
+    if (!token) return null;
+    if (this.isTokenExpiringSoon(token, 90)) {
+      const refreshed = await this.refreshAccessToken();
+      return refreshed || this.getToken();
+    }
+    return token;
+  }
+
+  async refreshAccessToken(): Promise<string | null> {
+    if (this.refreshPromise) return this.refreshPromise;
+
+    this.refreshPromise = (async () => {
+      try {
+        const storedRefreshToken =
+          typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
+        const response = await axios.post<{
+          access_token: string;
+          refresh_token?: string;
+          user?: any;
+        }>(
+          `${getApiBaseUrl()}/auth/refresh`,
+          storedRefreshToken ? { refresh_token: storedRefreshToken } : {},
+          {
+            withCredentials: true,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+
+        const nextAccessToken = response.data?.access_token;
+        if (nextAccessToken) {
+          this.setToken(nextAccessToken);
+          if (typeof window !== 'undefined') {
+            if (response.data.refresh_token) {
+              localStorage.setItem('refreshToken', response.data.refresh_token);
+            }
+            if (response.data.user) {
+              localStorage.setItem('user', JSON.stringify(response.data.user));
+            }
+          }
+          return nextAccessToken;
+        }
+        return null;
+      } catch {
+        return null;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
   }
 
   private getToken(): string | null {
@@ -87,6 +208,7 @@ class APIClient {
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('gh_keep_logged_in');
     }
   }
 
@@ -97,11 +219,11 @@ class APIClient {
   }
 
   // Auth endpoints
-  async login(email: string, password: string) {
+  async login(email: string, password: string, rememberMe = true) {
     const response = await this.request<{ access_token: string; refresh_token?: string; user: any }>({
       method: 'POST',
       url: '/auth/login',
-      data: { email, password },
+      data: { email, password, remember_me: rememberMe },
     });
     // Backend returns snake_case: access_token
     this.setToken(response.access_token);
@@ -112,6 +234,65 @@ class APIClient {
       if (response.user) {
         localStorage.setItem('user', JSON.stringify(response.user));
       }
+      localStorage.setItem('gh_keep_logged_in', rememberMe ? 'true' : 'false');
+      if (rememberMe) {
+        localStorage.setItem('gh_remember_email', email.trim());
+      } else {
+        localStorage.removeItem('gh_remember_email');
+      }
+    }
+    return response;
+  }
+
+  async getOAuthProviders() {
+    return this.request<{
+      providers: Array<{ id: string; name: string; configured: boolean; env_keys?: string[] }>;
+    }>({
+      method: 'GET',
+      url: '/auth/oauth/providers',
+    });
+  }
+
+  getOAuthStartUrl(
+    provider: 'google' | 'facebook' | 'github',
+    options?: { role?: string; rememberMe?: boolean }
+  ): string {
+    const baseUrl = getApiBaseUrl().replace(/\/$/, '');
+    const params = new URLSearchParams();
+    if (options?.role) params.set('role', options.role);
+    if (options?.rememberMe !== undefined) {
+      params.set('remember_me', options.rememberMe ? 'true' : 'false');
+    }
+    if (typeof window !== 'undefined') {
+      params.set('frontend_origin', window.location.origin);
+    }
+    return `${baseUrl}/auth/oauth/${provider}?${params.toString()}`;
+  }
+
+  async exchangeOAuthCode(code: string) {
+    const response = await this.request<{
+      access_token: string;
+      refresh_token?: string;
+      user: any;
+      remember_me?: boolean;
+    }>({
+      method: 'POST',
+      url: '/auth/oauth/exchange',
+      data: { code },
+    });
+
+    this.setToken(response.access_token);
+    if (typeof window !== 'undefined') {
+      if (response.refresh_token) {
+        localStorage.setItem('refreshToken', response.refresh_token);
+      }
+      if (response.user) {
+        localStorage.setItem('user', JSON.stringify(response.user));
+        if (response.remember_me && response.user.email) {
+          localStorage.setItem('gh_remember_email', response.user.email);
+        }
+      }
+      localStorage.setItem('gh_keep_logged_in', response.remember_me ? 'true' : 'false');
     }
     return response;
   }
@@ -626,12 +807,13 @@ class APIClient {
   }
 
   async exportFarmerOrdersCSV(params?: { status?: string; search?: string }) {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    const token = await this.ensureFreshToken();
     const queryParams = new URLSearchParams();
     if (params?.status) queryParams.set('status', params.status);
     if (params?.search) queryParams.set('search', params.search);
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/dashboard/farmer/orders/export-csv?${queryParams.toString()}`;
+    const url = `${getApiBaseUrl()}/dashboard/farmer/orders/export-csv?${queryParams.toString()}`;
     const response = await fetch(url, {
+      credentials: 'include',
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Export failed');
@@ -644,9 +826,10 @@ class APIClient {
   }
 
   async exportFarmerProductsCSV() {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-    const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/dashboard/farmer/products/export-csv`;
+    const token = await this.ensureFreshToken();
+    const url = `${getApiBaseUrl()}/dashboard/farmer/products/export-csv`;
     const response = await fetch(url, {
+      credentials: 'include',
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Export failed');

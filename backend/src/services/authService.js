@@ -120,17 +120,24 @@ const createRefreshSession = async ({
   family_id = null,
   created_by_ip = null,
   user_agent = null,
+  remember_me = undefined,
 }) => {
   const access_token = issueAccessToken(user);
   const refresh_token = generateOpaqueToken(48);
   const token_hash = hashToken(refresh_token);
   const sessionFamilyId = family_id || generateOpaqueToken(16);
+  const ttlDays =
+    remember_me === true
+      ? Math.max(30, getRefreshTokenTtlDays())
+      : remember_me === false
+      ? 1
+      : getRefreshTokenTtlDays();
 
   await authSecurityModel.createRefreshToken({
     user_id: user.id,
     token_hash,
     family_id: sessionFamilyId,
-    expires_at: addDays(getRefreshTokenTtlDays()),
+    expires_at: addDays(ttlDays),
     created_by_ip,
     user_agent,
   });
@@ -143,6 +150,8 @@ const createRefreshSession = async ({
     }),
     refresh_token,
     family_id: sessionFamilyId,
+    remember_me,
+    refresh_ttl_days: ttlDays,
   };
 };
 
@@ -272,7 +281,7 @@ const registerUser = async ({
   };
 };
 
-const loginUser = async ({ email, password, ip = null, userAgent = null }) => {
+const loginUser = async ({ email, password, remember_me = undefined, ip = null, userAgent = null }) => {
   const missingFields = getMissingRequiredFields({ email, password }, ["email", "password"]);
 
   if (missingFields.length > 0) {
@@ -343,6 +352,7 @@ const loginUser = async ({ email, password, ip = null, userAgent = null }) => {
     user,
     created_by_ip: ip,
     user_agent: userAgent,
+    remember_me: typeof remember_me === "boolean" ? remember_me : undefined,
   });
 };
 
@@ -377,11 +387,20 @@ const refreshSession = async ({ refresh_token, ip = null, userAgent = null }) =>
     throw createServiceError("User not found", 404);
   }
 
+  // Preserve extended Remember-Me vs short session lifetime across token rotations
+  const durationDays =
+    storedToken.created_at && storedToken.expires_at
+      ? (new Date(storedToken.expires_at).getTime() - new Date(storedToken.created_at).getTime()) /
+        (24 * 60 * 60 * 1000)
+      : getRefreshTokenTtlDays();
+  const preservedRememberMe = durationDays >= 14 ? true : durationDays <= 1.5 ? false : undefined;
+
   const nextSession = await createRefreshSession({
     user,
     family_id: storedToken.family_id,
     created_by_ip: ip,
     user_agent: userAgent,
+    remember_me: preservedRememberMe,
   });
 
   await authSecurityModel.revokeRefreshTokenById(storedToken.id, {
@@ -602,6 +621,7 @@ const getUserProfile = async (userId) => {
 
 module.exports = {
   allowedRoles,
+  createRefreshSession,
   forgotPassword,
   generateToken,
   getUserProfile,
