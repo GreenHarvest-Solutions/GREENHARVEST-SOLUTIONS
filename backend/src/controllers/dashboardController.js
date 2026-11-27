@@ -589,6 +589,10 @@ const exportFarmerProductsCSV = async (req, res) => {
           p.description,
           p.price,
           COALESCE(p.stock, 0)::int AS stock,
+          COALESCE(p.unit, 'kg') AS unit,
+          p.status,
+          p.moderation_status,
+          p.farm_location,
           c.name AS category_name,
           COALESCE(SUM(oi.quantity), 0)::int AS units_sold,
           COALESCE(SUM(oi.quantity * oi.price), 0)::numeric(10,2) AS revenue,
@@ -596,7 +600,7 @@ const exportFarmerProductsCSV = async (req, res) => {
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN order_items oi ON oi.product_id = p.id
-        WHERE p.farmer_id = $1
+        WHERE p.farmer_id = $1 AND p.deleted_at IS NULL
         GROUP BY p.id, c.name, c.id
         ORDER BY p.created_at DESC
         LIMIT 5000
@@ -609,8 +613,12 @@ const exportFarmerProductsCSV = async (req, res) => {
       { label: 'Product Name', value: 'name' },
       { label: 'Description', value: 'description' },
       { label: 'Price (ETB)', value: 'price' },
-      { label: 'Stock (kg)', value: 'stock' },
+      { label: 'Stock', value: 'stock' },
+      { label: 'Unit', value: 'unit' },
+      { label: 'Status', value: 'status' },
+      { label: 'Moderation', value: 'moderation_status' },
       { label: 'Category', value: 'category_name' },
+      { label: 'Farm Location', value: 'farm_location' },
       { label: 'Units Sold', value: 'units_sold' },
       { label: 'Revenue (ETB)', value: 'revenue' },
       { label: 'Created At', value: 'created_at' },
@@ -646,9 +654,9 @@ const batchUpdateProductStatus = async (req, res) => {
       return res.status(400).json({ message: "action must be one of: delete, deactivate, reactivate" });
     }
 
-    // Validate ownership — only process products that belong to this farmer
+    // Validate ownership — only process non-deleted products that belong to this farmer
     const ownershipCheck = await pool.query(
-      `SELECT id FROM products WHERE id = ANY($1::int[]) AND farmer_id = $2`,
+      `SELECT id FROM products WHERE id = ANY($1::int[]) AND farmer_id = $2 AND deleted_at IS NULL`,
       [product_ids.map(Number), farmerId]
     );
 
@@ -661,7 +669,10 @@ const batchUpdateProductStatus = async (req, res) => {
     let message;
 
     if (action === 'delete') {
-      await pool.query(`DELETE FROM products WHERE id = ANY($1::int[]) AND farmer_id = $2`, [ownedIds, farmerId]);
+      await pool.query(
+        `UPDATE products SET deleted_at = NOW(), status = 'deactivated', moderation_status = 'rejected' WHERE id = ANY($1::int[]) AND farmer_id = $2`,
+        [ownedIds, farmerId]
+      );
       message = `${ownedIds.length} product(s) deleted successfully`;
     } else if (action === 'deactivate') {
       // Deactivate = set stock to 0 on the product
