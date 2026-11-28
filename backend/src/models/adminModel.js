@@ -77,8 +77,8 @@ const getSummaryMetrics = async () => {
 				(
 					SELECT COUNT(*)::int
 					FROM users u
-					JOIN roles r ON r.id = u.role_id
-					WHERE LOWER(r.name) = 'farmer'
+					JOIN roles r ON r.role_id = u.role_id
+					WHERE LOWER(r.role_name) = 'farmer'
 				) AS total_farmers,
 				(SELECT COUNT(*)::int FROM orders) AS total_orders,
 				(
@@ -111,8 +111,8 @@ const getSummaryMetrics = async () => {
 				(
 					SELECT COUNT(*)::int
 					FROM users u
-					JOIN roles r ON r.id = u.role_id
-					WHERE LOWER(r.name) = 'farmer' AND (u.kyc_status = 'pending' OR u.kyc_status = 'under_review' OR (u.is_verified IS FALSE AND u.kyc_status != 'approved'))
+					JOIN roles r ON r.role_id = u.role_id
+					WHERE LOWER(r.role_name) = 'farmer' AND (u.kyc_status = 'pending' OR u.kyc_status = 'under_review' OR (u.is_verified IS FALSE AND u.kyc_status != 'approved'))
 				) AS kyc_pending_count,
 				(
 					SELECT COUNT(*)::int
@@ -197,7 +197,7 @@ const getPendingFarmers = async ({ page = 1, limit = 20, search = "" } = {}) => 
 				COALESCE(fp.bio, 'Certified agricultural producer registered on GreenHarvest clearinghouse.') AS bio,
 				u.created_at
 			FROM users u
-			JOIN roles r ON r.id = u.role_id
+			JOIN roles r ON r.role_id = u.role_id
 			LEFT JOIN farmer_profiles fp ON fp.user_id = u.id
 			${whereClause}
 			ORDER BY (u.kyc_status = 'pending' OR u.kyc_status = 'under_review') DESC, u.created_at DESC

@@ -558,6 +558,10 @@ const releaseReservationsForOrder = async (orderId, client = pool) => {
   return inventoryModel.releaseReservationsByOrderId(client, orderId);
 };
 
+const releaseExpiredReservations = async (client = pool) => {
+  return inventoryModel.releaseExpiredReservations(client);
+};
+
 module.exports = {
   adjustBranchInventoryBucket,
   confirmReservation,
@@ -566,6 +570,7 @@ module.exports = {
   getBranchMovements,
   getInventoryByProductId,
   listFarmerTransfers,
+  releaseExpiredReservations,
   releaseReservationsForOrder,
   reserveStockForOrder,
   transitionInventoryTransfer,

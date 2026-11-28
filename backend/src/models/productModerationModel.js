@@ -276,7 +276,7 @@ const moderateProduct = async ({
       `UPDATE products 
        SET moderation_status = $1,
            status = $2,
-           is_published = ($1 = 'approved' AND $2 = 'active'),
+           is_published = ($1::varchar = 'approved' AND $2::varchar = 'active'),
            moderation_reason = $3,
            moderated_by = $4,
            moderated_at = CURRENT_TIMESTAMP,
@@ -532,12 +532,16 @@ const deleteCategoryAdmin = async (id, actorId) => {
   // Check if any product is assigned to this category
   const pCheck = await pool.query(`SELECT COUNT(*) as cnt FROM products WHERE category_id = $1`, [id]);
   if (parseInt(pCheck.rows[0].cnt, 10) > 0) {
-    throw new Error(`Cannot delete category #${id}: ${pCheck.rows[0].cnt} products are currently linked to it. Please reassign products first.`);
+    const err = new Error(`Cannot delete category #${id}: ${pCheck.rows[0].cnt} products are currently linked to it. Please reassign products first.`);
+    err.statusCode = 409;
+    throw err;
   }
 
   const existing = await pool.query(`SELECT * FROM categories WHERE id = $1`, [id]);
   if (existing.rows.length === 0) {
-    throw new Error(`Category #${id} not found`);
+    const err = new Error(`Category #${id} not found`);
+    err.statusCode = 404;
+    throw err;
   }
 
   await pool.query(`DELETE FROM categories WHERE id = $1`, [id]);
