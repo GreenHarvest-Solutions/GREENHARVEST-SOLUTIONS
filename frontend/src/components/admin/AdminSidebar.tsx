@@ -213,6 +213,8 @@ export default function AdminSidebar() {
             badgeColor: 'bg-red-50 text-red-900 border border-red-300',
           },
           { label: 'Carrier Partners', href: '/admin/logistics/carriers', icon: 'fa-building-shield' },
+          { label: 'Farmer Branches KYC', href: '/admin/logistics/branches', icon: 'fa-code-branch' },
+          { label: 'Pricing Rules & Zones', href: '/admin/logistics/pricing', icon: 'fa-sliders' },
           { label: 'Hubs & Depots', href: '/admin/logistics/hubs', icon: 'fa-route' },
           { label: 'Incident Queue', href: '/admin/logistics/incidents', icon: 'fa-triangle-exclamation' },
         ],

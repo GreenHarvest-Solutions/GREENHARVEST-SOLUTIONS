@@ -122,6 +122,11 @@ export default function FarmerSidebar() {
             label="Add New Product"
             isActive={pathname === '/farmer/products/new'}
           />
+          <SubNavItem
+            href="/farmer/branches"
+            label="Branches & Stock"
+            isActive={pathname === '/farmer/branches'}
+          />
         </NavGroup>
 
         <NavGroup

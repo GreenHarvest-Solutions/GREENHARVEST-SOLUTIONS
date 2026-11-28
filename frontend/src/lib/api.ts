@@ -606,43 +606,277 @@ class APIClient {
 
   async estimateCheckoutDelivery(data: {
     delivery_address?: string;
+    destination_lat?: number | null;
+    destination_lng?: number | null;
     fulfillment_selections?: Record<string, string>;
+    branch_selections?: Record<string, number>;
+    allocation_strategy?: string;
+    allow_split?: boolean;
+    enable_consolidation?: boolean;
+    is_same_day?: boolean;
+    create_quotes?: boolean;
   }) {
     return this.request<{
       destination_address: string;
+      detected_zone?: any;
       total_shipping_fee: number;
-      packages: Record<
-        string,
-        {
-          farmer_id: number;
-          farmer_name: string;
-          origin_address: string;
-          total_weight_kg: number;
-          distance_km: number;
-          selected_mode: string;
-          selected_fee: number;
-          modes: Record<
-            string,
-            {
-              shipping_fee: number;
-              distance_km: number;
-              total_weight_kg: number;
-              estimated_eta: string;
-              within_farmer_radius: boolean;
-              route_label: string;
-              breakdown: {
-                base_fee: number;
-                distance_fee: number;
-                weight_fee: number;
-                service_tier: string;
-              };
-            }
-          >;
-        }
-      >;
+      original_shipping_fee?: number;
+      consolidation?: {
+        consolidation_eligible: boolean;
+        estimated_savings: number;
+        groups: any[];
+        food_safety_rule?: string;
+      };
+      quotes?: Record<string, any>;
+      packages: Record<string, any>;
     }>({
       method: 'POST',
       url: '/deliveries/estimate',
+      data,
+    });
+  }
+
+  // Multi-Branch Business, Branches, Staff & Inventory Transfers
+  async getMyBranches() {
+    return this.request<{ business: any; branches: any[]; access_mode: string }>({
+      method: 'GET',
+      url: '/branches/my',
+    });
+  }
+
+  async updateMyBusiness(data: any) {
+    return this.request<{ business: any }>({
+      method: 'PUT',
+      url: '/branches/business/me',
+      data,
+    });
+  }
+
+  async createBranch(data: any) {
+    return this.request<{ branch: any }>({
+      method: 'POST',
+      url: '/branches',
+      data,
+    });
+  }
+
+  async getBranchDetails(branchId: number | string) {
+    return this.request<{ branch: any; staff: any[]; service_areas: any[]; verification_history: any[]; audit_logs: any[] }>({
+      method: 'GET',
+      url: `/branches/${branchId}`,
+    });
+  }
+
+  async updateBranch(branchId: number | string, data: any) {
+    return this.request<{ branch: any }>({
+      method: 'PUT',
+      url: `/branches/${branchId}`,
+      data,
+    });
+  }
+
+  async submitBranchVerification(branchId: number | string, notes?: string) {
+    return this.request<{ branch: any }>({
+      method: 'POST',
+      url: `/branches/${branchId}/submit-verification`,
+      data: { notes },
+    });
+  }
+
+  async updateBranchOperationalStatus(branchId: number | string, operational_status: string, closure_reason?: string) {
+    return this.request<{ branch: any; impacted_exceptions: any[] }>({
+      method: 'PATCH',
+      url: `/branches/${branchId}/operational-status`,
+      data: { operational_status, closure_reason },
+    });
+  }
+
+  async assignBranchStaff(branchId: number | string, data: any) {
+    return this.request<{ staff: any }>({
+      method: 'POST',
+      url: `/branches/${branchId}/staff`,
+      data,
+    });
+  }
+
+  async removeBranchStaff(branchId: number | string, staffId: number | string) {
+    return this.request<{ removed: any }>({
+      method: 'DELETE',
+      url: `/branches/${branchId}/staff/${staffId}`,
+    });
+  }
+
+  async getBranchInventory(branchId: number | string) {
+    return this.request<{ branch_id: number; items: any[] }>({
+      method: 'GET',
+      url: `/inventory/branches/${branchId}`,
+    });
+  }
+
+  async upsertBranchInventory(branchId: number | string, data: any) {
+    return this.request<{ item: any }>({
+      method: 'PUT',
+      url: `/inventory/branches/${branchId}`,
+      data,
+    });
+  }
+
+  async adjustBranchInventory(branchId: number | string, data: { product_id: number; quantity: number; adjustment_type: string; reason?: string }) {
+    return this.request<{ item: any }>({
+      method: 'POST',
+      url: `/inventory/branches/${branchId}/adjust`,
+      data,
+    });
+  }
+
+  async getBranchMovements(branchId: number | string) {
+    return this.request<{ movements: any[] }>({
+      method: 'GET',
+      url: `/inventory/branches/${branchId}/movements`,
+    });
+  }
+
+  async listTransfers() {
+    return this.request<{ transfers: any[] }>({
+      method: 'GET',
+      url: '/inventory/transfers',
+    });
+  }
+
+  async createTransfer(data: { source_branch_id: number; destination_branch_id: number; notes?: string; items: { product_id: number; quantity: number }[] }) {
+    return this.request<{ transfer: any }>({
+      method: 'POST',
+      url: '/inventory/transfers',
+      data,
+    });
+  }
+
+  async transitionTransfer(transferId: number | string, data: { action: string; items?: any[]; delay_reason?: string; discrepancy_notes?: string }) {
+    return this.request<{ transfer: any }>({
+      method: 'POST',
+      url: `/inventory/transfers/${transferId}/action`,
+      data,
+    });
+  }
+
+  // Buyer Saved Ethiopian Addresses
+  async getAddresses() {
+    return this.request<{ addresses: any[] }>({
+      method: 'GET',
+      url: '/addresses',
+    });
+  }
+
+  async createAddress(data: any) {
+    return this.request<{ address: any; detected_zone: any }>({
+      method: 'POST',
+      url: '/addresses',
+      data,
+    });
+  }
+
+  async deleteAddress(addressId: number | string) {
+    return this.request<{ deleted: boolean }>({
+      method: 'DELETE',
+      url: `/addresses/${addressId}`,
+    });
+  }
+
+  // Quotes, Zones, Pricing Rules, SLA & Reconciliation
+  async getDeliveryZones(includeInactive = false) {
+    return this.request<{ zones: any[] }>({
+      method: 'GET',
+      url: '/branches/zones',
+      params: { include_inactive: includeInactive ? 'true' : undefined },
+    });
+  }
+
+  async upsertDeliveryZone(data: any) {
+    return this.request<{ zone: any }>({
+      method: 'POST',
+      url: '/branches/zones',
+      data,
+    });
+  }
+
+  async adminListBranches(params?: { verification_status?: string; search?: string }) {
+    return this.request<{ branches: any[]; pagination: any }>({
+      method: 'GET',
+      url: '/branches/admin/all',
+      params,
+    });
+  }
+
+  async adminVerifyBranch(branchId: number | string, data: { verification_status: string; decision_notes?: string }) {
+    return this.request<{ branch: any; impacted_exceptions_created: number }>({
+      method: 'PATCH',
+      url: `/branches/admin/${branchId}/verify`,
+      data,
+    });
+  }
+
+  async adminGetPricingRules() {
+    return this.request<{ rules: any[] }>({
+      method: 'GET',
+      url: '/logistics-ops/admin/pricing-rules',
+    });
+  }
+
+  async adminCreatePricingRule(data: any) {
+    return this.request<{ rule: any }>({
+      method: 'POST',
+      url: '/logistics-ops/admin/pricing-rules',
+      data,
+    });
+  }
+
+  async adminGetAllocationStrategy() {
+    return this.request<{ value: string; allowed: string[] }>({
+      method: 'GET',
+      url: '/logistics-ops/admin/allocation-strategy',
+    });
+  }
+
+  async adminSetAllocationStrategy(strategy: string) {
+    return this.request<{ value: string; allowed: string[] }>({
+      method: 'PUT',
+      url: '/logistics-ops/admin/allocation-strategy',
+      data: { strategy },
+    });
+  }
+
+  async adminListExceptions() {
+    return this.request<{ exceptions: any[] }>({
+      method: 'GET',
+      url: '/logistics-ops/admin/exceptions',
+    });
+  }
+
+  async adminScanSla() {
+    return this.request<{ scanned_overdue_count: number; exceptions: any[] }>({
+      method: 'POST',
+      url: '/logistics-ops/admin/sla/scan',
+    });
+  }
+
+  async getFinancialReconciliation() {
+    return this.request<{ branch_financial_summary: any[]; parent_order_reconciliation: any[]; driver_compensation_summary: any }>({
+      method: 'GET',
+      url: '/logistics-ops/financial-reconciliation',
+    });
+  }
+
+  async getOrderCommunications(orderId: number | string) {
+    return this.request<{ messages: any[] }>({
+      method: 'GET',
+      url: `/logistics-ops/orders/${orderId}/messages`,
+    });
+  }
+
+  async postOrderCommunication(orderId: number | string, data: { suborder_id?: number; channel?: string; message: string }) {
+    return this.request<{ message: any }>({
+      method: 'POST',
+      url: `/logistics-ops/orders/${orderId}/messages`,
       data,
     });
   }

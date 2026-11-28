@@ -40,30 +40,49 @@ export default function CheckoutPage() {
 
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  const [showNewAddressForm, setShowNewAddressForm] = useState(false);
+  const [newAddr, setNewAddr] = useState({ label: 'Home / Business', region: 'Addis Ababa', city: 'Addis Ababa', subcity: '', landmark: '', line1: '', latitude: '', longitude: '', delivery_instructions: '' });
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [estimating, setEstimating] = useState(false);
   const [feeEstimate, setFeeEstimate] = useState<{
     total_shipping_fee: number;
+    original_shipping_fee?: number;
+    detected_zone?: any;
+    consolidation?: any;
     packages: Record<string, any>;
   } | null>(null);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('chapa');
   const [fulfillmentSelections, setFulfillmentSelections] = useState<Record<string, FulfillmentMode>>({});
+  const [branchSelections, setBranchSelections] = useState<Record<string, number>>({});
+  const [allowSplit, setAllowSplit] = useState(false);
+  const [enableConsolidation, setEnableConsolidation] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [cartRes, profileRes] = await Promise.all([
+        const [cartRes, profileRes, addrRes] = await Promise.all([
           api.getCart(),
           api.getUserProfile().catch(() => null),
+          api.getAddresses().catch(() => ({ addresses: [] })),
         ]);
         const items = cartRes.cart || [];
         setCartItems(items);
+        const addrs = addrRes?.addresses || [];
+        setSavedAddresses(addrs);
+        const defAddr = addrs.find((a: any) => a.is_default) || addrs[0];
+        if (defAddr) {
+          setSelectedAddressId(defAddr.address_id);
+          setDeliveryAddress([defAddr.landmark, defAddr.subcity, defAddr.city, defAddr.region, defAddr.line1].filter(Boolean).join(', '));
+        } else if (profileRes?.user) {
+          setDeliveryAddress(profileRes.user.address || '');
+        }
         if (profileRes?.user) {
           setUserProfile(profileRes.user);
-          setDeliveryAddress(profileRes.user.address || '');
         }
       } catch (err) {
         console.error('Failed to load checkout data', err);
@@ -126,7 +145,9 @@ export default function CheckoutPage() {
     });
   }, [storeGroups]);
 
-  // Live Distance + Weight Shipping Calculator (debounced)
+  const selectedAddrObj = savedAddresses.find((a) => a.address_id === selectedAddressId) || null;
+
+  // Live Multi-Branch Distance + Weight Shipping Calculator (debounced)
   useEffect(() => {
     if (cartItems.length === 0) return;
     const timer = setTimeout(async () => {
@@ -134,10 +155,18 @@ export default function CheckoutPage() {
       try {
         const res = await api.estimateCheckoutDelivery({
           delivery_address: deliveryAddress.trim(),
+          destination_lat: selectedAddrObj?.latitude ?? null,
+          destination_lng: selectedAddrObj?.longitude ?? null,
           fulfillment_selections: fulfillmentSelections,
+          branch_selections: branchSelections,
+          allow_split: allowSplit,
+          enable_consolidation: enableConsolidation,
         });
         setFeeEstimate({
           total_shipping_fee: res.total_shipping_fee,
+          original_shipping_fee: res.original_shipping_fee,
+          detected_zone: res.detected_zone,
+          consolidation: res.consolidation,
           packages: res.packages || {},
         });
       } catch {
@@ -147,7 +176,7 @@ export default function CheckoutPage() {
       }
     }, 280);
     return () => clearTimeout(timer);
-  }, [cartItems.length, deliveryAddress, fulfillmentSelections]);
+  }, [cartItems.length, deliveryAddress, selectedAddrObj, fulfillmentSelections, branchSelections, allowSplit, enableConsolidation]);
 
   const subtotal = cartItems.reduce(
     (acc, item) => acc + Number(item.product_price || item.price) * Number(item.quantity || 1),
@@ -177,9 +206,14 @@ export default function CheckoutPage() {
     setIsPlacingOrder(true);
     try {
       const orderRes: any = await api.createOrder({
-        address_id: undefined,
+        address_id: selectedAddressId || undefined,
         delivery_address: deliveryAddress.trim() || undefined,
+        destination_lat: selectedAddrObj?.latitude ?? undefined,
+        destination_lng: selectedAddrObj?.longitude ?? undefined,
         fulfillment_selections: fulfillmentSelections,
+        branch_selections: branchSelections,
+        allow_split: allowSplit,
+        enable_consolidation: enableConsolidation,
         notes: orderNotes.trim() || undefined,
       });
       const orderId = orderRes?.order?.id || orderRes?.id;
@@ -272,17 +306,98 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
+              {/* Saved Ethiopian Addresses + Map Coordinates */}
+              <div className="mb-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-700">Saved Ethiopian Addresses</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewAddressForm(!showNewAddressForm)}
+                    className="text-xs font-bold text-[#286c00] hover:underline cursor-pointer"
+                  >
+                    {showNewAddressForm ? 'Close' : '+ Add New Address'}
+                  </button>
+                </div>
+
+                {savedAddresses.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {savedAddresses.map((addr) => (
+                      <button
+                        key={addr.address_id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAddressId(addr.address_id);
+                          setDeliveryAddress([addr.landmark, addr.subcity, addr.city, addr.region, addr.line1].filter(Boolean).join(', '));
+                        }}
+                        className={`text-left p-2.5 rounded-lg border text-xs transition-all cursor-pointer ${
+                          selectedAddressId === addr.address_id
+                            ? 'border-[#286c00] bg-emerald-50/40 ring-1 ring-[#286c00]'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <p className="font-bold text-gray-900">{addr.label} · {addr.city}</p>
+                        <p className="text-[11px] text-gray-500 truncate">{addr.landmark || addr.line1}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {showNewAddressForm && (
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg grid grid-cols-2 gap-2 text-xs">
+                    <input placeholder="Label (Home/Shop)" value={newAddr.label} onChange={(e) => setNewAddr({ ...newAddr, label: e.target.value })} className="px-2.5 py-1.5 border border-gray-300 rounded bg-white" />
+                    <input placeholder="Region (Addis Ababa/Oromia)" value={newAddr.region} onChange={(e) => setNewAddr({ ...newAddr, region: e.target.value })} className="px-2.5 py-1.5 border border-gray-300 rounded bg-white" />
+                    <input placeholder="City / Town *" value={newAddr.city} onChange={(e) => setNewAddr({ ...newAddr, city: e.target.value })} className="px-2.5 py-1.5 border border-gray-300 rounded bg-white" />
+                    <input placeholder="Subcity / Woreda" value={newAddr.subcity} onChange={(e) => setNewAddr({ ...newAddr, subcity: e.target.value })} className="px-2.5 py-1.5 border border-gray-300 rounded bg-white" />
+                    <input placeholder="Landmark (e.g., Near Edna Mall) *" value={newAddr.landmark} onChange={(e) => setNewAddr({ ...newAddr, landmark: e.target.value })} className="col-span-2 px-2.5 py-1.5 border border-gray-300 rounded bg-white" />
+                    <input type="number" step="0.0001" placeholder="GPS Latitude (opt)" value={newAddr.latitude} onChange={(e) => setNewAddr({ ...newAddr, latitude: e.target.value })} className="px-2.5 py-1.5 border border-gray-300 rounded bg-white" />
+                    <input type="number" step="0.0001" placeholder="GPS Longitude (opt)" value={newAddr.longitude} onChange={(e) => setNewAddr({ ...newAddr, longitude: e.target.value })} className="px-2.5 py-1.5 border border-gray-300 rounded bg-white" />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await api.createAddress({
+                            ...newAddr,
+                            line1: newAddr.landmark || newAddr.city,
+                            latitude: newAddr.latitude ? Number(newAddr.latitude) : undefined,
+                            longitude: newAddr.longitude ? Number(newAddr.longitude) : undefined,
+                            is_default: true,
+                          });
+                          setSavedAddresses((prev) => [res.address, ...prev]);
+                          setSelectedAddressId(res.address.address_id);
+                          setDeliveryAddress([res.address.landmark, res.address.subcity, res.address.city, res.address.region].filter(Boolean).join(', '));
+                          setShowNewAddressForm(false);
+                        } catch (err: any) {
+                          showError(err?.response?.data?.message || 'Failed to save address');
+                        }
+                      }}
+                      className="col-span-2 py-1.5 bg-[#286c00] text-white font-bold rounded cursor-pointer"
+                    >
+                      Save Address &amp; Validate Zone
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                  Delivery City &amp; Street Address {requiresDeliveryAddress ? '*' : '(Optional for Pickup)'}
+                  Delivery City, Landmark &amp; Street Address {requiresDeliveryAddress ? '*' : '(Optional for Pickup)'}
                 </label>
                 <input
                   type="text"
                   value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  placeholder="e.g., Addis Ababa, Bole Sub-city Woreda 03 (used to calculate distance fee)"
+                  onChange={(e) => {
+                    setSelectedAddressId(null);
+                    setDeliveryAddress(e.target.value);
+                  }}
+                  placeholder="e.g., Addis Ababa, Bole Sub-city Near Medhanialem (used to calculate corridor distance & zone)"
                   className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-[#286c00]"
                 />
+                {feeEstimate?.detected_zone && (
+                  <p className={`text-[11px] mt-1.5 font-semibold ${feeEstimate.detected_zone.serviceable === false ? 'text-red-600' : 'text-emerald-700'}`}>
+                    Detected Zone: {feeEstimate.detected_zone.name} ({feeEstimate.detected_zone.zone_type})
+                    {feeEstimate.detected_zone.serviceable === false ? ` — ${feeEstimate.detected_zone.reason || 'Unavailable/Restricted'}` : ''}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -357,11 +472,29 @@ export default function CheckoutPage() {
                         </span>
                         <span className="text-sm font-bold text-gray-900">{group.storeName}</span>
                       </div>
-                      <span className="text-[11px] font-semibold text-gray-600 tabular-nums">
-                        {pkgEstimate
-                          ? `${pkgEstimate.total_weight_kg} kg · ~${pkgEstimate.distance_km} km`
-                          : `${group.items.length} item(s)`}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-gray-600 tabular-nums">
+                        {pkgEstimate?.candidate_branches?.length > 1 && (
+                          <select
+                            value={branchSelections[group.farmerId] || pkgEstimate?.selected_branch?.id || ''}
+                            onChange={(e) =>
+                              setBranchSelections((prev) => ({ ...prev, [group.farmerId]: Number(e.target.value) }))
+                            }
+                            className="px-2 py-1 border border-gray-300 rounded bg-white text-[11px] font-bold text-gray-800"
+                          >
+                            {pkgEstimate.candidate_branches.map((cb: any) => (
+                              <option key={cb.branch_id} value={cb.branch_id} disabled={!cb.serviceable}>
+                                {cb.name} ({cb.region}) · ~{cb.distance_km}km {cb.can_cover_all_items ? '' : '[Partial]'}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <span>
+                          {pkgEstimate?.selected_branch?.name ? `${pkgEstimate.selected_branch.name} · ` : ''}
+                          {pkgEstimate
+                            ? `${pkgEstimate.total_weight_kg} kg · ~${pkgEstimate.distance_km} km`
+                            : `${group.items.length} item(s)`}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="p-5 space-y-4">
@@ -448,18 +581,38 @@ export default function CheckoutPage() {
                           })}
                         </div>
 
-                        {/* Itemized Distance & Weight Fee Transparency */}
+                        {/* Split Fulfillment & Itemized Distance/Weight Fee Transparency */}
+                        {pkgEstimate?.requires_split_approval && (
+                          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold">Multi-Branch Split Fulfillment Notice</span>
+                              <label className="inline-flex items-center gap-1.5 font-bold cursor-pointer">
+                                <input type="checkbox" checked={allowSplit} onChange={(e) => setAllowSplit(e.target.checked)} className="accent-[#286c00]" />
+                                Approve Split Across {pkgEstimate.split_packages?.length} Branches
+                              </label>
+                            </div>
+                            <p className="text-[11px]">
+                              No single branch holds the entire order. Splitting fulfills from multiple branches with transparent separate package fees.
+                            </p>
+                          </div>
+                        )}
+
                         {chosenModeMeta && chosenModeMeta.shipping_fee > 0 && (
-                          <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg text-[11px] text-gray-600 flex flex-wrap items-center justify-between gap-2">
-                            <span>
-                              <strong>{chosenModeMeta.route_label}</strong> ({chosenModeMeta.distance_km} km ·{' '}
-                              {chosenModeMeta.total_weight_kg} kg)
-                            </span>
-                            <span className="font-mono text-gray-700">
-                              Base ETB {chosenModeMeta.breakdown.base_fee} + Distance ETB{' '}
-                              {chosenModeMeta.breakdown.distance_fee} + Weight ETB{' '}
-                              {chosenModeMeta.breakdown.weight_fee}
-                            </span>
+                          <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg text-[11px] text-gray-600 space-y-1">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span>
+                                <strong>{chosenModeMeta.route_label}</strong> ({chosenModeMeta.distance_km} km ·{' '}
+                                {chosenModeMeta.total_weight_kg} kg)
+                              </span>
+                              <span className="font-mono text-gray-700">
+                                Base {chosenModeMeta.breakdown.base_fee} + Dist {chosenModeMeta.breakdown.distance_fee} + Wt {chosenModeMeta.breakdown.weight_fee}
+                                {Number(chosenModeMeta.breakdown.handling_fee || 0) > 0 ? ` + Handling ${chosenModeMeta.breakdown.handling_fee}` : ''}
+                                {Number(chosenModeMeta.breakdown.remote_surcharge || 0) > 0 ? ` + Zone ${chosenModeMeta.breakdown.remote_surcharge}` : ''} ETB
+                              </span>
+                            </div>
+                            {chosenModeMeta.route_disclaimer && (
+                              <p className="text-[10px] text-gray-400">{chosenModeMeta.route_disclaimer}</p>
+                            )}
                           </div>
                         )}
                       </div>
@@ -504,6 +657,20 @@ export default function CheckoutPage() {
                       {shippingFee === 0 ? 'Free' : `ETB ${shippingFee.toFixed(2)}`}
                     </span>
                   </div>
+                  {feeEstimate?.consolidation?.consolidation_eligible && (
+                    <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                      <label className="flex items-center justify-between font-bold cursor-pointer">
+                        <span>Food-Safe Consolidation (-ETB {feeEstimate.consolidation.estimated_savings})</span>
+                        <input
+                          type="checkbox"
+                          checked={enableConsolidation}
+                          onChange={(e) => setEnableConsolidation(e.target.checked)}
+                          className="accent-[#286c00]"
+                        />
+                      </label>
+                      <p className="text-[10px] text-emerald-700">{feeEstimate.consolidation.food_safety_rule}</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
