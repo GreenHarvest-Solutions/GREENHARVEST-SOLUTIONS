@@ -241,9 +241,15 @@ const processWebhook = async ({ provider, headers, body, rawBody }) => {
           await paymentModel.createEscrowEntry(client, {
             order_id: order.id,
             suborder_id: sub.id,
+            branch_id: sub.branch_id || null,
             buyer_id: order.buyer_id,
             farmer_id: sub.farmer_id,
             escrow_amount: sub.total_amount,
+            product_subtotal: sub.subtotal,
+            buyer_delivery_fee: sub.shipping_fee,
+            driver_payout_amount: sub.driver_compensation_amount || 0,
+            platform_logistics_fee: sub.platform_logistics_fee || 0,
+            fulfillment_type: sub.fulfillment_type || "farmer_pickup",
             platform_fee_pct: 0.05,
             notes: `Auto-escrow held on ${adapter.name} settlement for suborder ${sub.suborder_number}`,
           });

@@ -29,6 +29,8 @@ const formatOrderRows = (rows) => {
 				items.push({
 					id: row.order_item_id,
 					suborder_id: row.suborder_id,
+					branch_id: row.item_branch_id || null,
+					branch_name: row.item_branch_name || null,
 					product_id: row.product_id,
 					quantity: row.quantity,
 					price: row.price,
@@ -50,12 +52,16 @@ const formatOrderRows = (rows) => {
 					suborder_number: row.suborder_number,
 					farmer_id: row.suborder_farmer_id,
 					farmer_name: row.suborder_farmer_name,
+					branch_id: row.suborder_branch_id || null,
+					branch_snapshot: row.branch_snapshot || null,
 					subtotal: row.suborder_subtotal,
 					shipping_fee: row.suborder_shipping_fee,
 					total_amount: row.suborder_total_amount,
 					fulfillment_type: row.fulfillment_type,
 					fulfillment_status: row.fulfillment_status,
 					pickup_code: row.pickup_code,
+					allocation_strategy: row.allocation_strategy || null,
+					delivery_quote_id: row.delivery_quote_id || null,
 				});
 			}
 		}
@@ -90,6 +96,8 @@ const getOrdersForBuyer = async (buyer_id, order_id = null) => {
 				o.created_at,
 				oi.id AS order_item_id,
 				oi.suborder_id,
+				oi.branch_id AS item_branch_id,
+				oi.branch_name AS item_branch_name,
 				oi.product_id,
 				oi.quantity,
 				oi.price,
@@ -106,6 +114,10 @@ const getOrdersForBuyer = async (buyer_id, order_id = null) => {
 				so.id AS suborder_id,
 				so.suborder_number,
 				so.farmer_id AS suborder_farmer_id,
+				so.branch_id AS suborder_branch_id,
+				so.branch_snapshot,
+				so.allocation_strategy,
+				so.delivery_quote_id,
 				so_u.name AS suborder_farmer_name,
 				so.subtotal AS suborder_subtotal,
 				so.shipping_fee AS suborder_shipping_fee,
@@ -196,6 +208,18 @@ const createSuborderRecord = async (
 	{
 		parent_order_id,
 		farmer_id,
+		branch_id = null,
+		branch_snapshot = {},
+		allocation_strategy = "optimized",
+		delivery_quote_id = null,
+		driver_compensation_amount = 0,
+		platform_logistics_fee = 0,
+		consolidation_group_id = null,
+		time_slot_id = null,
+		sla_accept_by = null,
+		sla_pack_by = null,
+		sla_pickup_by = null,
+		sla_deliver_by = null,
 		suborder_number,
 		subtotal,
 		shipping_fee = 0.0,
@@ -210,6 +234,18 @@ const createSuborderRecord = async (
 			INSERT INTO suborders (
 				parent_order_id,
 				farmer_id,
+				branch_id,
+				branch_snapshot,
+				allocation_strategy,
+				delivery_quote_id,
+				driver_compensation_amount,
+				platform_logistics_fee,
+				consolidation_group_id,
+				time_slot_id,
+				sla_accept_by,
+				sla_pack_by,
+				sla_pickup_by,
+				sla_deliver_by,
 				suborder_number,
 				subtotal,
 				shipping_fee,
@@ -219,12 +255,24 @@ const createSuborderRecord = async (
 				pickup_code,
 				notes
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
+			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'pending', $20, $21)
 			RETURNING *
 		`,
 		[
 			parent_order_id,
 			farmer_id,
+			branch_id,
+			JSON.stringify(branch_snapshot || {}),
+			allocation_strategy,
+			delivery_quote_id,
+			Number(driver_compensation_amount || 0),
+			Number(platform_logistics_fee || 0),
+			consolidation_group_id,
+			time_slot_id,
+			sla_accept_by,
+			sla_pack_by,
+			sla_pickup_by,
+			sla_deliver_by,
 			suborder_number,
 			subtotal,
 			shipping_fee,
@@ -243,6 +291,9 @@ const createOrderItemRecord = async (
 	{
 		order_id,
 		suborder_id = null,
+		branch_id = null,
+		batch_id = null,
+		branch_name = null,
 		product_id,
 		quantity,
 		price,
@@ -259,6 +310,9 @@ const createOrderItemRecord = async (
 			INSERT INTO order_items (
 				order_id,
 				suborder_id,
+				branch_id,
+				batch_id,
+				branch_name,
 				product_id,
 				quantity,
 				price,
@@ -269,12 +323,15 @@ const createOrderItemRecord = async (
 				farmer_id,
 				farmer_name
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 			RETURNING *
 		`,
 		[
 			order_id,
 			suborder_id,
+			branch_id,
+			batch_id,
+			branch_name,
 			product_id,
 			quantity,
 			price,
