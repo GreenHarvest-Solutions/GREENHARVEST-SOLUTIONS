@@ -38,6 +38,10 @@ export default function AdminCarriersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
+  // Independent Delivery Partner Vetting State
+  const [partners, setPartners] = useState<any[]>([]);
+  const [partnerBusyId, setPartnerBusyId] = useState<number | null>(null);
+
   // Carrier Modal
   const [carrierModal, setCarrierModal] = useState<{
     isOpen: boolean;
@@ -87,6 +91,8 @@ export default function AdminCarriersPage() {
           setTotalCount(res.pagination.total || 0);
         }
       }
+      const partnerRes = await api.getAdminDeliveryPartners({ search: search.trim() || undefined }).catch(() => ({ partners: [] }));
+      setPartners(partnerRes?.partners || []);
     } catch (err: any) {
       showToast(err.message || 'Failed to fetch carrier registry', 'error');
     } finally {
@@ -158,6 +164,22 @@ export default function AdminCarriersPage() {
     } catch (err: any) {
       showToast(err.message || 'Failed to save carrier', 'error');
       setCarrierModal((prev) => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
+  const handleVerifyPartner = async (
+    userId: number,
+    status: 'verified' | 'suspended' | 'pending_review'
+  ) => {
+    setPartnerBusyId(userId);
+    try {
+      const res = await api.verifyAdminDeliveryPartner(userId, { status });
+      showToast(res.message || `Courier updated to ${status}`, 'success');
+      fetchCarriers();
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || err.message || 'Verification failed', 'error');
+    } finally {
+      setPartnerBusyId(null);
     }
   };
 
@@ -395,6 +417,115 @@ export default function AdminCarriersPage() {
                 />
               </div>
             </>
+          )}
+        </div>
+
+        {/* Independent Delivery Partner Vetting & Accountability Registry */}
+        <div className="bg-white border border-gray-300 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+            <div>
+              <h2 className="text-xs font-bold text-[#1f5400] uppercase tracking-wider">
+                Independent Delivery Partner Vetting &amp; Accountability ({partners.length})
+              </h2>
+              <p className="text-[11px] text-gray-500">
+                Verify courier National IDs, licenses, and vehicle plates before allowing Delivery Pool claims.
+              </p>
+            </div>
+          </div>
+
+          {partners.length === 0 ? (
+            <div className="p-8 text-center text-xs text-gray-500">
+              No independent delivery partner accounts registered yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-white border-b border-gray-200 text-[10px] font-bold uppercase text-gray-500">
+                  <tr>
+                    <th className="py-3 px-4">Courier</th>
+                    <th className="py-3 px-4">Vehicle &amp; Plate</th>
+                    <th className="py-3 px-4">License / National ID</th>
+                    <th className="py-3 px-4">Accountability Stats</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Governance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {partners.map((p) => (
+                    <tr key={p.user_id} className="hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <p className="font-bold text-gray-900">{p.name}</p>
+                        <p className="text-[11px] text-gray-500">{p.email}</p>
+                        <p className="text-[11px] text-[#007a6c] font-mono">{p.phone || 'No phone'}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <p className="font-semibold text-gray-900">{p.vehicle_type || 'Not submitted'}</p>
+                        <p className="font-mono text-[11px] text-gray-600">{p.vehicle_plate || '—'}</p>
+                        <p className="text-[10px] text-gray-400">{p.operating_region || 'Unassigned'}</p>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-gray-700">
+                        <p>Lic: {p.license_number || '—'}</p>
+                        <p>ID: {p.national_id_number || '—'}</p>
+                      </td>
+                      <td className="py-3 px-4 font-mono">
+                        <span className="font-bold text-amber-700">★ {Number(p.trust_score || 5).toFixed(2)}</span>
+                        <p className="text-[10px] text-gray-500">
+                          {p.completed_deliveries || 0} completed · {p.cancelled_deliveries || 0} dropped
+                        </p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-block px-2 py-0.5 text-[10px] font-bold uppercase border ${
+                            p.verification_status === 'verified'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                              : p.verification_status === 'pending_review'
+                              ? 'bg-amber-50 text-amber-900 border-amber-300'
+                              : p.verification_status === 'suspended'
+                              ? 'bg-red-50 text-red-800 border-red-300'
+                              : 'bg-gray-50 text-gray-700 border-gray-300'
+                          }`}
+                        >
+                          {String(p.verification_status || 'unverified').replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="inline-flex items-center gap-1.5">
+                          {p.verification_status !== 'verified' && (
+                            <button
+                              type="button"
+                              disabled={partnerBusyId === p.user_id}
+                              onClick={() => handleVerifyPartner(p.user_id, 'verified')}
+                              className="px-2.5 py-1 bg-[#1f5400] hover:bg-[#173e00] text-white text-[11px] font-bold disabled:opacity-50 cursor-pointer"
+                            >
+                              Verify
+                            </button>
+                          )}
+                          {p.verification_status !== 'suspended' ? (
+                            <button
+                              type="button"
+                              disabled={partnerBusyId === p.user_id}
+                              onClick={() => handleVerifyPartner(p.user_id, 'suspended')}
+                              className="px-2.5 py-1 border border-red-300 text-red-700 hover:bg-red-50 text-[11px] font-bold disabled:opacity-50 cursor-pointer"
+                            >
+                              Suspend
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={partnerBusyId === p.user_id}
+                              onClick={() => handleVerifyPartner(p.user_id, 'verified')}
+                              className="px-2.5 py-1 border border-emerald-300 text-emerald-800 hover:bg-emerald-50 text-[11px] font-bold disabled:opacity-50 cursor-pointer"
+                            >
+                              Reinstate
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
