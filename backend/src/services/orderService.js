@@ -3,6 +3,8 @@ const { pool } = require("../config/db");
 const logger = require("../utils/logger");
 const notificationModel = require("../models/notificationModel");
 const orderModel = require("../models/orderModel");
+const deliveryModel = require("../models/deliveryModel");
+const deliveryPricingService = require("./deliveryPricingService");
 const inventoryModel = require("../models/inventoryModel");
 const inventoryService = require("./inventoryService");
 const { normalizeRole } = require("../utils/roles");
@@ -65,6 +67,7 @@ const orderStatusTransitions = {
 
 const roleAllowedStatuses = {
 	admin: ["pending", "confirmed", "collected", "in_transit", "delivered", "returned", "cancelled"],
+	buyer: ["cancelled"],
 	field_agent: ["confirmed", "collected"],
 	delivery_partner: ["in_transit", "delivered"],
 	farmer: ["confirmed", "collected", "in_transit", "delivered", "returned", "cancelled"],
@@ -84,6 +87,15 @@ const validateOrderStatusUpdate = ({ actor, order, nextStatus }) => {
 
 	if (!allowedStatuses.includes(nextStatus)) {
 		throw createServiceError(`Role ${actorRole} cannot set order status to ${nextStatus}`, 403);
+	}
+
+	if (actorRole === "buyer") {
+		if (Number(actor.id) !== Number(order.buyer_id)) {
+			throw createServiceError("You can only cancel your own orders", 403);
+		}
+		if (!["pending", "confirmed"].includes(order.order_status)) {
+			throw createServiceError("Only pending or confirmed orders can be cancelled", 400);
+		}
 	}
 
 	if (
@@ -123,6 +135,20 @@ const validateOrderStatusUpdate = ({ actor, order, nextStatus }) => {
 
 // Removed resolveOrderSupplyChain entirely as it does not match DB schema
 
+const resolveFulfillmentMode = (requestedMode, farmerItems) => {
+	const normalized = String(requestedMode || "").trim().toLowerCase();
+	if (normalized === "delivery_partner") return "delivery_partner";
+	if (normalized === "farmer_delivery") {
+		const supported = farmerItems.every((it) => it.farmer_delivery_available !== false);
+		return supported ? "farmer_delivery" : "delivery_partner";
+	}
+	if (normalized === "farmer_pickup") {
+		const supported = farmerItems.every((it) => it.pickup_available !== false);
+		return supported ? "farmer_pickup" : "delivery_partner";
+	}
+	return "farmer_pickup";
+};
+
 const createOrder = async (buyer_id, payload = {}) => {
 	const client = await pool.connect();
 
@@ -137,6 +163,15 @@ const createOrder = async (buyer_id, payload = {}) => {
 		if (address_id !== null && !isPositiveInteger(address_id)) {
 			throw createServiceError("address_id must be a valid integer", 400);
 		}
+
+		const buyerRes = await client.query(
+			`SELECT address FROM users WHERE id = $1 LIMIT 1`,
+			[buyer_id]
+		);
+		const buyerShippingAddress =
+			(payload.delivery_address && String(payload.delivery_address).trim()) ||
+			(buyerRes.rows[0] && buyerRes.rows[0].address) ||
+			"Standard Buyer Delivery Address";
 
 		const cartResult = await client.query(
 			`
@@ -153,7 +188,12 @@ const createOrder = async (buyer_id, payload = {}) => {
 					p.farmer_id,
 					p.unit,
 					p.image_url,
+					p.farm_location,
+					COALESCE(p.pickup_available, TRUE) AS pickup_available,
+					COALESCE(p.farmer_delivery_available, FALSE) AS farmer_delivery_available,
+					COALESCE(p.delivery_radius_km, 0) AS delivery_radius_km,
 					u.name AS farmer_name,
+					u.address AS farmer_address,
 					u.account_status,
 					c.cart_id
 				FROM carts c
@@ -171,7 +211,7 @@ const createOrder = async (buyer_id, payload = {}) => {
 			throw createServiceError("Cart is empty", 400);
 		}
 
-		let total_amount = 0;
+		let items_subtotal = 0;
 
 		// 1. Eligibility & Stock Concurrency Verification
 		for (const item of cartResult.rows) {
@@ -202,19 +242,10 @@ const createOrder = async (buyer_id, payload = {}) => {
 				);
 			}
 
-			total_amount += Number(item.price) * item.quantity;
+			items_subtotal += Number(item.price) * item.quantity;
 		}
 
-		// 2. Create Parent Order
-		const orderNumber = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-		const order = await orderModel.createOrderRecord(client, {
-			buyer_id,
-			total_amount: total_amount.toFixed(2),
-			address_id,
-			order_number: orderNumber,
-		});
-
-		// 3. Multi-Vendor Suborders: Group by farmer_id
+		// Group items by farmer_id and pre-compute per-suborder shipping fees
 		const itemsByFarmer = new Map();
 		for (const item of cartResult.rows) {
 			const fId = Number(item.farmer_id);
@@ -224,24 +255,118 @@ const createOrder = async (buyer_id, payload = {}) => {
 			itemsByFarmer.get(fId).push(item);
 		}
 
-		let suborderIndex = 1;
+		const fulfillmentSelections =
+			payload.fulfillment_selections && typeof payload.fulfillment_selections === "object"
+				? payload.fulfillment_selections
+				: {};
+
+		let totalShippingFee = 0;
+		const suborderPlan = [];
 		for (const [farmerId, farmerItems] of itemsByFarmer.entries()) {
+			const requestedMode =
+				fulfillmentSelections[String(farmerId)] ||
+				fulfillmentSelections[farmerId] ||
+				payload.fulfillment_type ||
+				"farmer_pickup";
+			const fulfillmentType = resolveFulfillmentMode(requestedMode, farmerItems);
+			const originAddress =
+				farmerItems[0]?.farm_location || farmerItems[0]?.farmer_address || "";
+			const maxRadius = farmerItems.reduce(
+				(max, it) => Math.max(max, Number(it.delivery_radius_km || 0)),
+				0
+			);
+			const estimate = deliveryPricingService.estimateSuborderDeliveryFee({
+				fulfillment_type: fulfillmentType,
+				origin_address: originAddress,
+				destination_address: buyerShippingAddress,
+				items: farmerItems,
+				delivery_radius_km: maxRadius,
+			});
+			totalShippingFee += estimate.shipping_fee;
+			suborderPlan.push({
+				farmerId,
+				farmerItems,
+				fulfillmentType,
+				shippingFee: estimate.shipping_fee,
+				estimate,
+				originAddress,
+			});
+		}
+
+		const grandTotal = items_subtotal + totalShippingFee;
+
+		// 2. Create Parent Order
+		const orderNumber = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+		const order = await orderModel.createOrderRecord(client, {
+			buyer_id,
+			total_amount: grandTotal.toFixed(2),
+			address_id,
+			order_number: orderNumber,
+		});
+
+		// 3. Multi-Vendor Suborders + Deliveries Seed + Initial Event Timeline
+		let suborderIndex = 1;
+		for (const {
+			farmerId,
+			farmerItems,
+			fulfillmentType,
+			shippingFee,
+			estimate,
+			originAddress,
+		} of suborderPlan) {
 			const farmerSubtotal = farmerItems.reduce(
 				(sum, it) => sum + Number(it.price) * it.quantity,
 				0
 			);
+			const suborderTotal = farmerSubtotal + shippingFee;
 			const suborderNumber = `SUB-${order.id}-${farmerId}-${suborderIndex++}`;
-			const pickupCode = `GH-${Math.floor(100000 + Math.random() * 900000)}`;
+			const pickupCode =
+				fulfillmentType === "farmer_pickup"
+					? `GH-${Math.floor(100000 + Math.random() * 900000)}`
+					: `PKP-${Math.floor(100000 + Math.random() * 900000)}`;
+			const buyerConfirmationCode = `DEL-${Math.floor(100000 + Math.random() * 900000)}`;
 
 			const suborder = await orderModel.createSuborderRecord(client, {
 				parent_order_id: order.id,
 				farmer_id: farmerId,
 				suborder_number: suborderNumber,
 				subtotal: farmerSubtotal.toFixed(2),
-				shipping_fee: 0.00,
-				total_amount: farmerSubtotal.toFixed(2),
-				fulfillment_type: "farmer_pickup",
+				shipping_fee: shippingFee.toFixed(2),
+				total_amount: suborderTotal.toFixed(2),
+				fulfillment_type: fulfillmentType,
 				pickup_code: pickupCode,
+				notes: payload.notes ? String(payload.notes).trim() : null,
+			});
+
+			const pickupOrigin = originAddress || "Farm Gate";
+
+			const deliveryRecord = await deliveryModel.upsertSuborderDelivery(client, {
+				order_id: order.id,
+				suborder_id: suborder.id,
+				fulfillment_type: fulfillmentType,
+				status: "pending",
+				pickup_verification_code: pickupCode,
+				delivery_confirmation_code: buyerConfirmationCode,
+				pickup_location: pickupOrigin,
+				delivery_location: buyerShippingAddress,
+				estimated_time: estimate.estimated_eta,
+				distance_km: estimate.distance_km,
+				total_weight_kg: estimate.total_weight_kg,
+				fee_breakdown: estimate.breakdown,
+				current_checkpoint: `${pickupOrigin} (Awaiting farmer acceptance)`,
+			});
+
+			await deliveryModel.recordDeliveryEvent(client, {
+				delivery_id: deliveryRecord.id,
+				suborder_id: suborder.id,
+				order_id: order.id,
+				event_type: "order_placed",
+				status: "pending",
+				title: "Order Placed & Inventory Reserved",
+				description: `Fulfillment mode: ${fulfillmentType.replace(/_/g, " ")} (${estimate.total_weight_kg} kg · ~${estimate.distance_km} km)`,
+				location_name: pickupOrigin,
+				actor_id: buyer_id,
+				actor_role: "buyer",
 			});
 
 			for (const item of farmerItems) {
@@ -359,6 +484,33 @@ const updateOrderStatus = async ({ actor, order_id, status }) => {
 		order,
 		nextStatus,
 	});
+
+	if (nextStatus === "cancelled") {
+		const client = await pool.connect();
+		try {
+			await client.query("BEGIN");
+			await inventoryModel.releaseReservationsByOrderId(client, Number(order_id));
+			await client.query(
+				`UPDATE suborders SET fulfillment_status = 'cancelled', updated_at = NOW() WHERE parent_order_id = $1`,
+				[Number(order_id)]
+			);
+			await client.query(
+				`UPDATE deliveries SET status = 'cancelled', delivery_status = 'cancelled' WHERE order_id = $1`,
+				[Number(order_id)]
+			);
+			await client.query(
+				`UPDATE orders SET order_status = 'cancelled', delivery_status = 'cancelled' WHERE id = $1`,
+				[Number(order_id)]
+			);
+			await client.query("COMMIT");
+			return orderModel.findOrderById(Number(order_id));
+		} catch (err) {
+			await client.query("ROLLBACK");
+			throw err;
+		} finally {
+			client.release();
+		}
+	}
 
 	return orderModel.updateOrderStatusById(Number(order_id), nextStatus);
 };
