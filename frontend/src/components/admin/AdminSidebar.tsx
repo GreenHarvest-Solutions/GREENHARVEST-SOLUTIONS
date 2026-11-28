@@ -217,6 +217,7 @@ export default function AdminSidebar() {
           { label: 'Pricing Rules & Zones', href: '/admin/logistics/pricing', icon: 'fa-sliders' },
           { label: 'Hubs & Depots', href: '/admin/logistics/hubs', icon: 'fa-route' },
           { label: 'Incident Queue', href: '/admin/logistics/incidents', icon: 'fa-triangle-exclamation' },
+          { label: 'Delivery Exceptions', href: '/admin/logistics/exceptions', icon: 'fa-circle-exclamation' },
         ],
       },
       {
