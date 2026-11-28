@@ -199,25 +199,44 @@ const createEscrowEntry = async (
 	{
 		order_id,
 		suborder_id,
+		branch_id = null,
 		buyer_id,
 		farmer_id,
 		escrow_amount,
+		product_subtotal = null,
+		buyer_delivery_fee = 0,
+		driver_payout_amount = 0,
+		platform_logistics_fee = 0,
+		fulfillment_type = "farmer_pickup",
 		platform_fee_pct = 0.05,
 		notes = null,
 	}
 ) => {
 	const escrowNum = Number(escrow_amount);
-	const platformFee = Number((escrowNum * platform_fee_pct).toFixed(2));
-	const farmerPayout = Number((escrowNum - platformFee).toFixed(2));
+	const prodSubtotal = product_subtotal !== null ? Number(product_subtotal) : escrowNum;
+	const buyerDeliveryFee = Number(buyer_delivery_fee || 0);
+	const driverPayout = fulfillment_type === "delivery_partner" ? Number(driver_payout_amount || 0) : 0;
+	const platformLogistics =
+		fulfillment_type === "delivery_partner"
+			? Math.max(0, Number((buyerDeliveryFee - driverPayout).toFixed(2)))
+			: 0;
+	const platformFee = Number((prodSubtotal * platform_fee_pct).toFixed(2));
+	const farmerGross = fulfillment_type === "farmer_delivery" ? prodSubtotal + buyerDeliveryFee : prodSubtotal;
+	const farmerPayout = Number(Math.max(0, farmerGross - platformFee).toFixed(2));
 
 	const result = await client.query(
 		`
 			INSERT INTO escrow_ledger (
 				order_id,
 				suborder_id,
+				branch_id,
 				buyer_id,
 				farmer_id,
 				escrow_amount,
+				product_subtotal,
+				buyer_delivery_fee,
+				driver_payout_amount,
+				platform_logistics_fee,
 				platform_fee_amount,
 				farmer_payout_amount,
 				buyer_refund_amount,
@@ -226,15 +245,20 @@ const createEscrowEntry = async (
 				notes,
 				created_at
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, 0.00, NOW() + INTERVAL '7 days', 'held', $8, NOW())
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0.00, NOW() + INTERVAL '7 days', 'held', $13, NOW())
 			RETURNING *
 		`,
 		[
 			order_id,
 			suborder_id,
+			branch_id,
 			buyer_id,
 			farmer_id,
 			escrowNum,
+			prodSubtotal,
+			buyerDeliveryFee,
+			driverPayout,
+			platformLogistics_or_param(platformLogistics, platform_logistics_fee, fulfillment_type),
 			platformFee,
 			farmerPayout,
 			notes || `Escrow held for suborder #${suborder_id}`,
@@ -243,6 +267,11 @@ const createEscrowEntry = async (
 
 	return result.rows[0];
 };
+
+function platformLogistics_or_param(computed, param, fulfillment_type) {
+	if (fulfillment_type !== "delivery_partner") return 0;
+	return param !== undefined && param !== null && Number(param) > 0 ? Number(param) : computed;
+}
 
 const getPaymentHistoryByBuyer = async (user_id) => {
 	const result = await pool.query(

@@ -289,6 +289,10 @@ const getFarmerOrders = async (req, res) => {
           o.order_number,
           s.id AS suborder_id,
           COALESCE(s.suborder_number, 'SUB-' || o.id || '-' || $1) AS suborder_number,
+          s.branch_id,
+          COALESCE(fb.name, s.branch_snapshot->>'branch_name', 'Main Farm') AS branch_name,
+          s.branch_snapshot,
+          s.allocation_strategy,
           COALESCE(s.fulfillment_status, o.order_status) AS order_status,
           COALESCE(s.fulfillment_status, o.order_status) AS fulfillment_status,
           COALESCE(s.fulfillment_type, 'farmer_pickup') AS fulfillment_type,
@@ -327,8 +331,9 @@ const getFarmerOrders = async (req, res) => {
           )) AS items
         FROM orders o
         JOIN users u ON u.id = o.buyer_id
-        JOIN order_items oi ON oi.order_id = o.id
         LEFT JOIN suborders s ON s.parent_order_id = o.id AND s.farmer_id = $1
+        LEFT JOIN farmer_branches fb ON fb.id = s.branch_id
+        JOIN order_items oi ON (s.id IS NOT NULL AND oi.suborder_id = s.id) OR (s.id IS NULL AND oi.order_id = o.id)
         LEFT JOIN users dp ON dp.id = s.delivery_partner_id
         LEFT JOIN delivery_profiles dp_prof ON dp_prof.user_id = dp.id
         LEFT JOIN products p ON p.id = oi.product_id
@@ -336,7 +341,7 @@ const getFarmerOrders = async (req, res) => {
         LEFT JOIN payments p_pay ON p_pay.order_id = o.id
         LEFT JOIN deliveries d ON d.suborder_id = s.id
         WHERE (oi.farmer_id = $1 OR p.farmer_id = $1)${statusFilter}${searchFilter}
-        GROUP BY o.id, s.id, u.id, dp.id, dp_prof.profile_id, p_pay.payment_status, d.id
+        GROUP BY o.id, s.id, fb.id, u.id, dp.id, dp_prof.profile_id, p_pay.payment_status, d.id
         ORDER BY o.created_at DESC
         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
       `,

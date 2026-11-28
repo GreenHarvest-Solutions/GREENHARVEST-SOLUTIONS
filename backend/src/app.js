@@ -35,6 +35,9 @@ const storeLayoutRoutes = require("./routes/storeLayoutRoutes");
 const advisorRoutes = require("./routes/advisorRoutes");
 const marketInsightsRoutes = require("./routes/marketInsightsRoutes");
 const farmerKycRoutes = require("./routes/farmerKycRoutes");
+const branchRoutes = require("./routes/branchRoutes");
+const addressRoutes = require("./routes/addressRoutes");
+const logisticsOperationsRoutes = require("./routes/logisticsOperationsRoutes");
 
 const app = express();
 
@@ -122,6 +125,9 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/returns", returnsRoutes);
 app.use("/api/market-insights", marketInsightsRoutes);
 app.use("/api/farmer/kyc", farmerKycRoutes);
+app.use("/api/branches", branchRoutes);
+app.use("/api/addresses", addressRoutes);
+app.use("/api/logistics-ops", logisticsOperationsRoutes);
 
 // Static uploads serving for uploaded crop pictures
 app.use("/uploads", express.static(path.join(__dirname, "../public/uploads")));
