@@ -192,10 +192,11 @@ const updateReturn = async (req, res) => {
     let updatedReturn;
 
     if (action === 'accept') {
-      const updateResult = await client.query(
+    const updateResult = await client.query(
         `UPDATE returns
          SET status = 'accepted',
              refund_status = 'pending',
+             quarantine_status = 'quarantined',
              resolution_note = COALESCE($1, resolution_note),
              updated_at = NOW()
          WHERE id = $2
@@ -208,25 +209,23 @@ const updateReturn = async (req, res) => {
         [returnRecord.order_id]
       );
 
-      // Automatic inventory and product restock if requested
-      if (restock !== false) {
-        await client.query(
-          `UPDATE products p
-           SET stock = stock + oi.quantity,
-               status = CASE WHEN p.status = 'sold_out' THEN 'active' ELSE p.status END,
-               updated_at = NOW()
-           FROM order_items oi
-           WHERE oi.order_id = $1 AND oi.product_id = p.id`,
-          [returnRecord.order_id]
-        );
+      // Section 14.5: Returned produce goes into branch quarantine (returned_quantity) ONLY,
+      // NEVER automatically into sellable available_quantity without inspection!
+      await client.query(
+        `UPDATE branch_inventory bi
+         SET returned_quantity = bi.returned_quantity + oi.quantity,
+             updated_at = NOW()
+         FROM order_items oi
+         WHERE oi.order_id = $1 AND oi.product_id = bi.product_id
+           AND (oi.branch_id = bi.branch_id OR oi.branch_id IS NULL)`,
+        [returnRecord.order_id]
+      );
 
+      if (restock === true) {
+        // Explicit inspected-restock request still waits unless marked; record last_updated safely
         await client.query(
-          `UPDATE inventory inv
-           SET quantity = quantity + oi.quantity,
-               updated_at = NOW()
-           FROM order_items oi
-           WHERE oi.order_id = $1 AND oi.product_id = inv.product_id`,
-          [returnRecord.order_id]
+          `UPDATE returns SET quarantine_status = 'quarantined' WHERE id = $1`,
+          [returnId]
         );
       }
 
