@@ -175,6 +175,34 @@ const proposeSubstitution = async ({ actor, suborderId, payload }) => {
   return res.rows[0];
 };
 
+const listBuyerSubstitutions = async ({ buyerId }) => {
+  const res = await pool.query(
+    `SELECT
+       ps.*,
+       o.order_number,
+       s.suborder_number,
+       op.name AS original_product_name,
+       op.unit AS original_unit,
+       pp.name AS proposed_product_name,
+       pp.unit AS proposed_unit,
+       ob.name AS original_branch_name,
+       pb.name AS proposed_branch_name,
+       fu.name AS farmer_name
+     FROM product_substitutions ps
+     JOIN orders o ON o.id = ps.order_id
+     JOIN suborders s ON s.id = ps.suborder_id
+     LEFT JOIN products op ON op.id = ps.original_product_id
+     LEFT JOIN products pp ON pp.id = ps.proposed_product_id
+     LEFT JOIN farmer_branches ob ON ob.id = ps.original_branch_id
+     LEFT JOIN farmer_branches pb ON pb.id = ps.proposed_branch_id
+     LEFT JOIN users fu ON fu.id = s.farmer_id
+     WHERE o.buyer_id = $1
+     ORDER BY ps.created_at DESC`,
+    [Number(buyerId)]
+  );
+  return res.rows;
+};
+
 const respondToSubstitution = async ({ actor, substitutionId, decision }) => {
   const client = await pool.connect();
   try {
@@ -425,6 +453,7 @@ module.exports = {
   createTimeSlot,
   getAllocationStrategySetting,
   getBranchFinancialReconciliation,
+  listBuyerSubstitutions,
   listExceptionsAdmin,
   listOrderCommunications,
   listTimeSlots,

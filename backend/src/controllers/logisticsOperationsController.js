@@ -95,6 +95,15 @@ const proposeSubstitution = async (req, res) => {
   }
 };
 
+const listMySubstitutions = async (req, res) => {
+  try {
+    const substitutions = await logisticsOps.listBuyerSubstitutions({ buyerId: req.user.id });
+    return res.status(200).json({ substitutions });
+  } catch (err) {
+    return handleError(res, err);
+  }
+};
+
 const respondSubstitution = async (req, res) => {
   try {
     const result = await logisticsOps.respondToSubstitution({
@@ -216,6 +225,7 @@ module.exports = {
   getCommunications,
   getFinancialReconciliation,
   listExceptions,
+  listMySubstitutions,
   listPricingRules,
   listTimeSlots,
   postCommunication,

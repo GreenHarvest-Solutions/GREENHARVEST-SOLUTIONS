@@ -18,6 +18,7 @@ router.get("/time-slots", ctrl.listTimeSlots);
 router.post("/time-slots", requireRole("farmer", "admin"), ctrl.createTimeSlot);
 
 // Product Substitutions
+router.get("/substitutions/my", requireRole("buyer", "admin"), ctrl.listMySubstitutions);
 router.post("/suborders/:suborderId/substitutions", requireRole("farmer", "admin"), ctrl.proposeSubstitution);
 router.post("/substitutions/:id/respond", requireRole("buyer", "admin"), ctrl.respondSubstitution);
 
