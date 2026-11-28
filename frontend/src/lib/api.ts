@@ -852,6 +852,30 @@ class APIClient {
     });
   }
 
+  // Buyer Product Substitutions
+  async getMySubstitutions() {
+    return this.request<{ substitutions: any[] }>({
+      method: 'GET',
+      url: '/logistics-ops/substitutions/my',
+    });
+  }
+
+  async respondSubstitution(substitutionId: number | string, data: { response: 'accepted' | 'rejected' }) {
+    return this.request<{ substitution: any }>({
+      method: 'POST',
+      url: `/logistics-ops/substitutions/${substitutionId}/respond`,
+      data,
+    });
+  }
+
+  // Order detail (alias to getOrderById for tracking page)
+  async getOrderDetail(id: number | string) {
+    return this.request<{ order: any }>({
+      method: 'GET',
+      url: `/orders/${id}`,
+    });
+  }
+
   async adminScanSla() {
     return this.request<{ scanned_overdue_count: number; exceptions: any[] }>({
       method: 'POST',
