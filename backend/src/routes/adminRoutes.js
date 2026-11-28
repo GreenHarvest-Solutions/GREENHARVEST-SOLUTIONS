@@ -76,6 +76,8 @@ const {
 	// Phase 3 Controllers
 	getShipmentById,
 	getCarriers,
+	getDeliveryPartnersAdmin,
+	verifyDeliveryPartnerAdmin,
 	createCarrier,
 	updateCarrier,
 	getHubs,
@@ -232,10 +234,12 @@ router.post("/logistics/assign", permissionMiddleware("logistics.manage"), assig
 router.patch("/logistics/shipments/:id/reroute", permissionMiddleware("logistics.manage"), emergencyRerouteTruck);
 router.patch("/logistics/:id/reroute", permissionMiddleware("logistics.manage"), emergencyRerouteTruck);
 
-// Carrier Governance
+// Carrier Governance & Independent Courier Verification
 router.get("/logistics/carriers", permissionMiddleware("logistics.carriers.read"), getCarriers);
 router.post("/logistics/carriers", permissionMiddleware("logistics.carriers.manage"), createCarrier);
 router.patch("/logistics/carriers/:id", permissionMiddleware("logistics.carriers.manage"), updateCarrier);
+router.get("/logistics/partners", permissionMiddleware("logistics.carriers.read"), getDeliveryPartnersAdmin);
+router.patch("/logistics/partners/:userId/verify", permissionMiddleware("logistics.carriers.manage"), verifyDeliveryPartnerAdmin);
 
 // Cold Storage Hubs & Depots
 router.get("/logistics/hubs", permissionMiddleware("logistics.hubs.read"), getHubs);

@@ -140,10 +140,12 @@ const updatePartnerStatus = async (req, res) => {
 			status: req.body.status,
 			proof_image: req.body.proof_of_delivery_image_url || req.body.proof_image,
 			notes: req.body.notes,
+			confirmation_code: req.body.confirmation_code,
+			pickup_code: req.body.pickup_code,
 		});
 
 		return res.status(200).json({
-			message: "Delivery transit status updated",
+			message: result.message || "Delivery transit status updated",
 			...result,
 		});
 	} catch (error) {
@@ -154,10 +156,93 @@ const updatePartnerStatus = async (req, res) => {
 	}
 };
 
+const estimateCheckoutDelivery = async (req, res) => {
+	try {
+		const result = await deliveryService.estimateCheckoutDelivery({
+			buyer_id: req.user.id,
+			delivery_address: req.body?.delivery_address,
+			fulfillment_selections: req.body?.fulfillment_selections || {},
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Estimate delivery failed", error, {
+			userId: req.user && req.user.id,
+		});
+	}
+};
+
+const getMyPartnerProfile = async (req, res) => {
+	try {
+		const profile = await deliveryService.getMyPartnerProfile(req.user);
+		return res.status(200).json({ profile });
+	} catch (error) {
+		return handleControllerError(res, "Fetch partner profile failed", error, {
+			userId: req.user && req.user.id,
+		});
+	}
+};
+
+const submitMyPartnerProfile = async (req, res) => {
+	try {
+		const profile = await deliveryService.submitMyPartnerProfile({
+			actor: req.user,
+			payload: req.body || {},
+		});
+		return res.status(200).json({
+			message: "Verification details submitted for Admin approval",
+			profile,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Submit partner profile failed", error, {
+			userId: req.user && req.user.id,
+		});
+	}
+};
+
+const postCheckpoint = async (req, res) => {
+	try {
+		const result = await deliveryService.postDeliveryCheckpoint({
+			actor: req.user,
+			suborder_id: req.params.id,
+			location_name: req.body?.location_name,
+			latitude: req.body?.latitude ?? null,
+			longitude: req.body?.longitude ?? null,
+			estimated_time: req.body?.estimated_time || null,
+			notes: req.body?.notes || null,
+		});
+		return res.status(200).json({
+			message: "Route checkpoint logged",
+			...result,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Post checkpoint failed", error, {
+			userId: req.user && req.user.id,
+			params: req.params,
+		});
+	}
+};
+
+const rateSuborderDelivery = async (req, res) => {
+	try {
+		const result = await deliveryService.rateSuborderDelivery({
+			actor: req.user,
+			suborder_id: req.params.id,
+			rating: req.body?.rating,
+			feedback: req.body?.feedback,
+		});
+		return res.status(200).json(result);
+	} catch (error) {
+		return handleControllerError(res, "Rate delivery failed", error, {
+			userId: req.user && req.user.id,
+			params: req.params,
+		});
+	}
+};
+
 // Tracking & Legacy Handlers
 const trackSuborderDelivery = async (req, res) => {
 	try {
-		const delivery = await deliveryService.trackSuborderDelivery(req.params.id);
+		const delivery = await deliveryService.trackSuborderDelivery(req.params.id, req.user);
 		return res.status(200).json({ delivery });
 	} catch (error) {
 		return handleControllerError(res, "Track suborder delivery failed", error, {
@@ -253,9 +338,14 @@ module.exports = {
 	confirmFarmerDelivery,
 	confirmPickup,
 	dispatchFarmerDelivery,
+	estimateCheckoutDelivery,
 	getAssignedDeliveries,
 	getDeliveryPool,
+	getMyPartnerProfile,
 	markReadyForPickup,
+	postCheckpoint,
+	rateSuborderDelivery,
+	submitMyPartnerProfile,
 	trackDelivery,
 	trackSuborderDelivery,
 	updateDeliveryStatus,

@@ -19,7 +19,11 @@ interface OrderItem {
 interface FarmerOrder {
   id?: number;
   order_id: number;
-  order_status: 'pending' | 'confirmed' | 'in_transit' | 'delivered' | 'cancelled';
+  suborder_id?: number;
+  suborder_number?: string;
+  fulfillment_type?: string;
+  fulfillment_status?: string;
+  order_status: string;
   total_amount: number | string;
   farmer_total?: number | string;
   payment_status?: string;
@@ -119,16 +123,42 @@ function ShippingManagementContent() {
     loadOrders();
   };
 
-  const handleStatusUpdate = async (orderId: number, nextStatus: string) => {
+  const handleStatusUpdate = async (
+    order: FarmerOrder,
+    nextStatus: string
+  ) => {
     try {
       setIsSubmitting(true);
-      await api.updateOrderStatus(orderId.toString(), nextStatus);
-      showSuccess(`Shipment status updated to "${nextStatus.replace('_', ' ')}".`);
+      const subId = order.suborder_id;
+
+      if (nextStatus === 'in_transit' && subId) {
+        if (order.fulfillment_type === 'farmer_pickup') {
+          const res = await api.markSuborderReadyForPickup(subId, {
+            farmer_notes: trackingNotes.trim() || undefined,
+          });
+          showSuccess(`Marked ready for pickup! Code: ${res.pickup_code}`);
+        } else {
+          const res = await api.dispatchFarmerDelivery(subId, {
+            estimated_time: 'Within 24 hours',
+            vehicle_info: selectedCarrier,
+            farmer_notes: trackingNotes.trim() || undefined,
+          });
+          showSuccess(`Dispatched via ${selectedCarrier}! Code: ${res.delivery_confirmation_code}`);
+        }
+      } else if (nextStatus === 'delivered' && subId) {
+        await api.updateFarmerSuborderStatus(subId, 'delivered');
+        showSuccess('Delivery completed and escrow released.');
+      } else {
+        await api.updateOrderStatus((order.id || order.order_id).toString(), nextStatus);
+        showSuccess(`Shipment status updated to "${nextStatus.replace('_', ' ')}".`);
+      }
+
       setDispatchingOrder(null);
+      setTrackingNotes('');
       loadOrders();
     } catch (err: any) {
       console.error('Failed to update shipment status:', err);
-      showError(err.message || 'Failed to update shipment status.');
+      showError(err?.response?.data?.message || err.message || 'Failed to update shipment status.');
     } finally {
       setIsSubmitting(false);
     }
@@ -496,22 +526,22 @@ function ShippingManagementContent() {
                             Packing Slip
                           </button>
 
-                          {order.order_status === 'confirmed' && (
+                          {['confirmed', 'accepted', 'packed'].includes(order.order_status) && (
                             <button
                               type="button"
                               onClick={() => setDispatchingOrder(order)}
-                              className="px-3 py-1.5 rounded-lg bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1"
+                              className="px-3 py-1.5 rounded-lg bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
                             >
                               <span className="material-symbols-outlined text-sm">local_shipping</span>
                               Dispatch
                             </button>
                           )}
 
-                          {order.order_status === 'in_transit' && (
+                          {['in_transit', 'dispatched', 'ready_for_pickup'].includes(order.order_status) && (
                             <button
                               type="button"
-                              onClick={() => handleStatusUpdate(currentOrderId, 'delivered')}
-                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1"
+                              onClick={() => handleStatusUpdate(order, 'delivered')}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
                             >
                               <span className="material-symbols-outlined text-sm">check_circle</span>
                               Delivered
@@ -624,10 +654,8 @@ function ShippingManagementContent() {
               <button
                 type="button"
                 disabled={isSubmitting}
-                onClick={() =>
-                  handleStatusUpdate(dispatchingOrder.id || dispatchingOrder.order_id, 'in_transit')
-                }
-                className="px-5 py-2 rounded-xl bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                onClick={() => handleStatusUpdate(dispatchingOrder, 'in_transit')}
+                className="px-5 py-2 rounded-xl bg-[#16a34a] hover:bg-[#15803d] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 {isSubmitting ? 'Dispatching...' : 'Confirm Dispatch'}
               </button>

@@ -8,9 +8,14 @@ const {
   confirmFarmerDelivery,
   confirmPickup,
   dispatchFarmerDelivery,
+  estimateCheckoutDelivery,
   getAssignedDeliveries,
   getDeliveryPool,
+  getMyPartnerProfile,
   markReadyForPickup,
+  postCheckpoint,
+  rateSuborderDelivery,
+  submitMyPartnerProfile,
   trackDelivery,
   trackSuborderDelivery,
   updateDeliveryStatus,
@@ -20,6 +25,13 @@ const {
 const router = express.Router();
 
 router.use(authMiddleware);
+
+// Checkout Distance & Weight Delivery Pricing Estimator
+router.post("/estimate", requireRole("buyer", "admin"), estimateCheckoutDelivery);
+
+// Delivery Partner Onboarding & Verification Profile
+router.get("/partner/profile", requireRole("delivery_partner", "deliveryPartner", "delivery", "admin"), getMyPartnerProfile);
+router.put("/partner/profile", requireRole("delivery_partner", "deliveryPartner", "delivery", "admin"), submitMyPartnerProfile);
 
 // Mode A: Farmer Pickup Routes
 router.post("/suborders/:id/ready-pickup", requireRole("farmer", "admin"), markReadyForPickup);
@@ -34,11 +46,15 @@ router.get("/pool", requireRole("delivery_partner", "deliveryPartner", "delivery
 router.post("/pool/:id/claim", requireRole("delivery_partner", "deliveryPartner", "delivery", "admin"), claimPoolDelivery);
 router.patch("/suborders/:id/partner-status", requireRole("delivery_partner", "deliveryPartner", "delivery", "admin"), updatePartnerStatus);
 
+// Live Checkpoints & Buyer Accountability Ratings
+router.post("/suborders/:id/checkpoint", requireRole("delivery_partner", "deliveryPartner", "delivery", "farmer", "admin"), postCheckpoint);
+router.post("/suborders/:id/rate", requireRole("buyer", "admin"), rateSuborderDelivery);
+
 // Tracking & Details
 router.get("/suborders/:id", trackSuborderDelivery);
 
 // Partner and Order Routes
-router.get("/assigned", requireRole("delivery_partner", "admin"), getAssignedDeliveries);
+router.get("/assigned", requireRole("delivery_partner", "deliveryPartner", "delivery", "admin"), getAssignedDeliveries);
 router.get("/track/:orderId", trackDelivery);
 router.get("/:order_id", trackDelivery);
 

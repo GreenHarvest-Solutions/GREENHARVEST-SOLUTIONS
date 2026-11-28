@@ -18,10 +18,28 @@ interface OrderItem {
 interface FarmerOrder {
   id?: number;
   order_id: number;
+  order_number?: string;
   suborder_id?: number;
-  order_status: 'pending' | 'confirmed' | 'in_transit' | 'delivered' | 'cancelled';
+  suborder_number?: string;
+  order_status: string;
   fulfillment_status?: string;
+  fulfillment_type?: string;
   delivery_mode?: string;
+  pickup_code?: string;
+  pickup_verification_code?: string;
+  delivery_confirmation_code?: string;
+  shipping_fee?: number | string;
+  distance_km?: number | string;
+  total_weight_kg?: number | string;
+  current_checkpoint?: string;
+  delivery_partner_id?: number;
+  delivery_partner_name?: string;
+  delivery_partner_phone?: string;
+  delivery_partner_plate?: string;
+  delivery_partner_verified?: string;
+  delivery_partner_trust_score?: number | string;
+  estimated_time?: string;
+  farmer_notes?: string;
   total_amount: number | string;
   farmer_total?: number | string;
   payment_status?: string;
@@ -44,6 +62,20 @@ export default function ManageOrdersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+  // Fulfillment Action Modals
+  const [codeModal, setCodeModal] = useState<{
+    order: FarmerOrder;
+    mode: 'pickup' | 'delivery';
+    code: string;
+  } | null>(null);
+  const [dispatchModal, setDispatchModal] = useState<{
+    order: FarmerOrder;
+    estimated_time: string;
+    vehicle_info: string;
+    farmer_notes: string;
+  } | null>(null);
+  const [modalSubmitting, setModalSubmitting] = useState(false);
 
   const loadOrders = async () => {
     try {
@@ -133,28 +165,91 @@ export default function ManageOrdersPage() {
     }
   };
 
-  const handleFulfillmentAction = async (order: any, action: string) => {
+  const handleFulfillmentAction = async (order: FarmerOrder, action: string) => {
+    const targetId = Number(order.suborder_id || order.order_id);
+    if (action === 'confirm_pickup') {
+      setCodeModal({ order, mode: 'pickup', code: '' });
+      return;
+    }
+    if (action === 'confirm_delivery') {
+      setCodeModal({ order, mode: 'delivery', code: '' });
+      return;
+    }
+    if (action === 'dispatch_farmer') {
+      setDispatchModal({
+        order,
+        estimated_time: 'Within 24 hours',
+        vehicle_info: 'Farmer Direct Vehicle',
+        farmer_notes: '',
+      });
+      return;
+    }
+
+    setUpdatingId(Number(order.order_id || order.id));
     try {
       if (action === 'ready_pickup') {
-        await api.markSuborderReadyForPickup(order.suborder_id || order.order_id);
-      } else if (action === 'confirm_pickup') {
-        const inputCode = window.prompt("Enter Buyer Pickup Verification Code (e.g. GH-XXXXXX):");
-        if (!inputCode) return;
-        await api.confirmSuborderPickup(order.suborder_id || order.order_id, inputCode);
-      } else if (action === 'dispatch_farmer') {
-        await api.dispatchFarmerDelivery(order.suborder_id || order.order_id, {
-          estimated_time: 'Within 24 hours',
-          vehicle_info: 'Farmer Vehicle Dispatch',
-        });
-      } else if (action === 'confirm_delivery') {
-        const confirmationCode = window.prompt("Enter Delivery Confirmation Code (optional if buyer confirmed directly):") || undefined;
-        await api.confirmFarmerDelivery(order.suborder_id || order.order_id, confirmationCode);
-      } else {
-        await handleStatusTransition(Number(order.order_id || order.id), action as any);
+        const res = await api.markSuborderReadyForPickup(targetId);
+        showSuccess(`Ready for buyer pickup! Code: ${res.pickup_code}`);
+      } else if (action === 'accept' || action === 'packed') {
+        if (order.suborder_id) {
+          await api.updateFarmerSuborderStatus(order.suborder_id, action === 'packed' ? 'packed' : 'accepted');
+        } else {
+          await api.updateOrderStatus(String(order.order_id), 'confirmed');
+        }
+        showSuccess(
+          action === 'packed'
+            ? 'Package marked packed & queued in the courier pool!'
+            : 'Order accepted and moved to preparation!'
+        );
       }
-      loadOrders();
+      await loadOrders();
     } catch (err: any) {
-      showError(err.response?.data?.message || err.message || 'Failed to update order fulfillment');
+      showError(err?.response?.data?.message || err?.message || 'Failed to update order fulfillment');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleSubmitCodeModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!codeModal) return;
+    const subId = codeModal.order.suborder_id || codeModal.order.order_id;
+    setModalSubmitting(true);
+    try {
+      if (codeModal.mode === 'pickup') {
+        const res = await api.confirmSuborderPickup(subId, codeModal.code.trim());
+        showSuccess(res.message || 'Pickup verified and escrow released!');
+      } else {
+        const res = await api.confirmFarmerDelivery(subId, codeModal.code.trim() || undefined);
+        showSuccess(res.message || 'Delivery confirmed and escrow released!');
+      }
+      setCodeModal(null);
+      await loadOrders();
+    } catch (err: any) {
+      showError(err?.response?.data?.message || err?.message || 'Verification failed');
+    } finally {
+      setModalSubmitting(false);
+    }
+  };
+
+  const handleSubmitDispatchModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dispatchModal) return;
+    const subId = dispatchModal.order.suborder_id || dispatchModal.order.order_id;
+    setModalSubmitting(true);
+    try {
+      const res = await api.dispatchFarmerDelivery(subId, {
+        estimated_time: dispatchModal.estimated_time.trim() || 'Within 24 hours',
+        vehicle_info: dispatchModal.vehicle_info.trim() || 'Farmer Vehicle',
+        farmer_notes: dispatchModal.farmer_notes.trim() || undefined,
+      });
+      showSuccess(`Dispatched! Share buyer code: ${res.delivery_confirmation_code}`);
+      setDispatchModal(null);
+      await loadOrders();
+    } catch (err: any) {
+      showError(err?.response?.data?.message || err?.message || 'Dispatch failed');
+    } finally {
+      setModalSubmitting(false);
     }
   };
 
@@ -421,47 +516,142 @@ export default function ManageOrdersPage() {
                         </p>
                       </div>
 
-                      <div className="border-t border-gray-200/80 pt-3 flex justify-between items-baseline">
-                        <span className="text-xs font-semibold text-gray-500">Your Share:</span>
-                        <span className="text-base font-black text-[#16a34a]">
-                          ETB {Number(order.farmer_total || order.total_amount).toLocaleString()}
-                        </span>
+                      <div className="border-t border-gray-200/80 pt-3 space-y-1.5">
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-xs font-semibold text-gray-500">Your Share:</span>
+                          <span className="text-base font-black text-[#16a34a]">
+                            ETB {Number(order.farmer_total || order.total_amount).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-gray-600">
+                          <span>Fulfillment Mode:</span>
+                          <span className="font-bold capitalize text-gray-800">
+                            {(order.fulfillment_type || 'farmer_pickup').replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        {(order.distance_km || order.total_weight_kg) && (
+                          <div className="flex justify-between items-center text-[11px] text-gray-500">
+                            <span>Logistics Load:</span>
+                            <span className="font-mono">
+                              {order.total_weight_kg ? `${order.total_weight_kg} kg` : ''}
+                              {order.distance_km ? ` · ~${order.distance_km} km` : ''}
+                            </span>
+                          </div>
+                        )}
+                        {order.delivery_partner_name && (
+                          <div className="pt-1 border-t border-gray-200/70 space-y-0.5 text-[11px]">
+                            <div className="flex justify-between items-center text-blue-800">
+                              <span>Verified Courier:</span>
+                              <span className="font-bold">
+                                {order.delivery_partner_name} (★{' '}
+                                {Number(order.delivery_partner_trust_score || 5).toFixed(1)})
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 text-right font-mono">
+                              {order.delivery_partner_plate ? `Plate: ${order.delivery_partner_plate} · ` : ''}
+                              {order.delivery_partner_phone || ''}
+                            </p>
+                          </div>
+                        )}
+                        {order.fulfillment_type === 'delivery_partner' &&
+                          (order.pickup_verification_code || order.pickup_code) &&
+                          order.order_status !== 'delivered' && (
+                            <div className="mt-1 p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-[11px]">
+                              <span className="font-semibold text-emerald-900">Courier Handover PIN:</span>
+                              <span className="font-mono font-black text-[#16a34a]">
+                                {order.pickup_verification_code || order.pickup_code}
+                              </span>
+                            </div>
+                          )}
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
+                    {/* Mode-Aware Phase 5 Action Buttons */}
                     <div className="space-y-2 pt-2 border-t border-gray-200/60">
                       {order.order_status === 'pending' && (
                         <button
                           type="button"
                           disabled={isUpdating}
-                          onClick={() => handleStatusTransition(currentOrderId, 'confirmed')}
-                          className="w-full py-2.5 bg-[#16a34a] hover:bg-[#15803d] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                          onClick={() => handleFulfillmentAction(order, 'accept')}
+                          className="w-full py-2.5 bg-[#16a34a] hover:bg-[#15803d] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                         >
-                          {isUpdating ? 'Updating...' : 'Accept & Confirm Order'}
+                          {isUpdating ? 'Updating...' : 'Accept & Confirm Package'}
                         </button>
                       )}
 
-                      {order.order_status === 'confirmed' && (
+                      {['confirmed', 'accepted', 'packed'].includes(order.order_status) && (
+                        <>
+                          {(order.fulfillment_type || 'farmer_pickup') === 'farmer_pickup' && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => handleFulfillmentAction(order, 'ready_pickup')}
+                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                            >
+                              {isUpdating ? 'Updating...' : 'Mark Ready for Buyer Pickup'}
+                            </button>
+                          )}
+
+                          {order.fulfillment_type === 'farmer_delivery' && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => handleFulfillmentAction(order, 'dispatch_farmer')}
+                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                            >
+                              Dispatch Farm Delivery
+                            </button>
+                          )}
+
+                          {order.fulfillment_type === 'delivery_partner' &&
+                            order.order_status !== 'packed' && (
+                              <button
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() => handleFulfillmentAction(order, 'packed')}
+                                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                              >
+                                Mark Packed for Courier Pool
+                              </button>
+                            )}
+
+                          {order.fulfillment_type === 'delivery_partner' &&
+                            order.order_status === 'packed' && (
+                              <p className="text-[11px] text-center font-semibold text-blue-700 py-1.5 bg-blue-50 rounded-lg border border-blue-100">
+                                Listed in Delivery Partner Pool
+                              </p>
+                            )}
+                        </>
+                      )}
+
+                      {order.order_status === 'ready_for_pickup' && (
                         <button
                           type="button"
                           disabled={isUpdating}
-                          onClick={() => handleStatusTransition(currentOrderId, 'in_transit')}
-                          className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                          onClick={() => handleFulfillmentAction(order, 'confirm_pickup')}
+                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                         >
-                          {isUpdating ? 'Updating...' : 'Mark Packed & Ship Harvest'}
+                          Verify Pickup Code &amp; Complete
                         </button>
                       )}
 
-                      {order.order_status === 'in_transit' && (
-                        <button
-                          type="button"
-                          disabled={isUpdating}
-                          onClick={() => handleStatusTransition(currentOrderId, 'delivered')}
-                          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                        >
-                          {isUpdating ? 'Updating...' : 'Confirm Delivery Completed'}
-                        </button>
+                      {['in_transit', 'dispatched', 'picked_up'].includes(order.order_status) && (
+                        <>
+                          {order.fulfillment_type === 'delivery_partner' ? (
+                            <p className="text-[11px] text-center font-semibold text-purple-700 py-2 bg-purple-50 rounded-lg border border-purple-100">
+                              In Transit via Courier Partner
+                            </p>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => handleFulfillmentAction(order, 'confirm_delivery')}
+                              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                            >
+                              Verify Code &amp; Release Escrow
+                            </button>
+                          )}
+                        </>
                       )}
 
                       <Link
@@ -504,6 +694,121 @@ export default function ManageOrdersPage() {
               Next
             </button>
           </div>
+        </div>
+      )}
+      {/* Code Verification Modal */}
+      {codeModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <form
+            onSubmit={handleSubmitCodeModal}
+            className="bg-white rounded-2xl max-w-md w-full p-6 border border-gray-200 shadow-2xl space-y-4"
+          >
+            <h3 className="text-base font-bold text-gray-900">
+              {codeModal.mode === 'pickup'
+                ? 'Verify Buyer Pickup Code'
+                : 'Verify Delivery Confirmation Code'}
+            </h3>
+            <p className="text-xs text-gray-500">
+              {codeModal.mode === 'pickup'
+                ? 'Ask the buyer for their 6-digit pickup verification code (GH-XXXXXX) to complete handover and release escrow.'
+                : 'Enter the buyer delivery confirmation code (DEL-XXXXXX) to complete delivery and release escrow.'}
+            </p>
+            <input
+              type="text"
+              required
+              autoFocus
+              value={codeModal.code}
+              onChange={(e) => setCodeModal({ ...codeModal, code: e.target.value })}
+              placeholder={codeModal.mode === 'pickup' ? 'GH-123456' : 'DEL-123456'}
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-mono uppercase focus:outline-none focus:border-[#16a34a]"
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={modalSubmitting}
+                onClick={() => setCodeModal(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={modalSubmitting}
+                className="px-4 py-2 rounded-xl bg-[#16a34a] text-white text-xs font-bold disabled:opacity-50"
+              >
+                {modalSubmitting ? 'Verifying...' : 'Confirm & Release Escrow'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Farmer Vehicle Dispatch Modal */}
+      {dispatchModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <form
+            onSubmit={handleSubmitDispatchModal}
+            className="bg-white rounded-2xl max-w-md w-full p-6 border border-gray-200 shadow-2xl space-y-4"
+          >
+            <h3 className="text-base font-bold text-gray-900">Dispatch Direct Farm Delivery</h3>
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Vehicle / Driver Info</label>
+                <input
+                  type="text"
+                  required
+                  value={dispatchModal.vehicle_info}
+                  onChange={(e) =>
+                    setDispatchModal({ ...dispatchModal, vehicle_info: e.target.value })
+                  }
+                  placeholder="e.g., Pickup Truck · Driver Dawit"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-[#16a34a]"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Estimated Arrival</label>
+                <input
+                  type="text"
+                  required
+                  value={dispatchModal.estimated_time}
+                  onChange={(e) =>
+                    setDispatchModal({ ...dispatchModal, estimated_time: e.target.value })
+                  }
+                  placeholder="e.g., Today by 4:00 PM"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-[#16a34a]"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Dispatch Notes</label>
+                <textarea
+                  rows={2}
+                  value={dispatchModal.farmer_notes}
+                  onChange={(e) =>
+                    setDispatchModal({ ...dispatchModal, farmer_notes: e.target.value })
+                  }
+                  placeholder="Optional transit notes..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-[#16a34a]"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={modalSubmitting}
+                onClick={() => setDispatchModal(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={modalSubmitting}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold disabled:opacity-50"
+              >
+                {modalSubmitting ? 'Dispatching...' : 'Confirm Dispatch'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

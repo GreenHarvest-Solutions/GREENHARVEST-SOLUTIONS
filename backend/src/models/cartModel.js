@@ -37,7 +37,10 @@ const getUserCartItems = async (user_id) => {
 				p.price AS product_price,
 				COALESCE(i.quantity, 0) AS product_stock,
 				pi.image_url,
-				NULL::text AS farm_location,
+				COALESCE(p.farm_location, u.address) AS farm_location,
+				COALESCE(p.pickup_available, TRUE) AS pickup_available,
+				COALESCE(p.farmer_delivery_available, FALSE) AS farmer_delivery_available,
+				COALESCE(p.delivery_radius_km, 0) AS delivery_radius_km,
 				p.farmer_id,
 				u.name AS farmer_name
 			FROM carts c

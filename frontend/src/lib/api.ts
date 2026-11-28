@@ -587,10 +587,133 @@ class APIClient {
     });
   }
 
-  async updatePartnerTransitStatus(suborderId: string | number, data: { status: string; proof_of_delivery_image_url?: string; notes?: string }) {
-    return this.request<{ message: string; suborder_id: number; status: string }>({
+  async updatePartnerTransitStatus(
+    suborderId: string | number,
+    data: {
+      status: string;
+      proof_of_delivery_image_url?: string;
+      notes?: string;
+      confirmation_code?: string;
+      pickup_code?: string;
+    }
+  ) {
+    return this.request<{ message: string; suborder_id: number; status: string; requeued?: boolean }>({
       method: 'PATCH',
       url: `/deliveries/suborders/${suborderId}/partner-status`,
+      data,
+    });
+  }
+
+  async estimateCheckoutDelivery(data: {
+    delivery_address?: string;
+    fulfillment_selections?: Record<string, string>;
+  }) {
+    return this.request<{
+      destination_address: string;
+      total_shipping_fee: number;
+      packages: Record<
+        string,
+        {
+          farmer_id: number;
+          farmer_name: string;
+          origin_address: string;
+          total_weight_kg: number;
+          distance_km: number;
+          selected_mode: string;
+          selected_fee: number;
+          modes: Record<
+            string,
+            {
+              shipping_fee: number;
+              distance_km: number;
+              total_weight_kg: number;
+              estimated_eta: string;
+              within_farmer_radius: boolean;
+              route_label: string;
+              breakdown: {
+                base_fee: number;
+                distance_fee: number;
+                weight_fee: number;
+                service_tier: string;
+              };
+            }
+          >;
+        }
+      >;
+    }>({
+      method: 'POST',
+      url: '/deliveries/estimate',
+      data,
+    });
+  }
+
+  async getMyPartnerProfile() {
+    return this.request<{ profile: any }>({
+      method: 'GET',
+      url: '/deliveries/partner/profile',
+    });
+  }
+
+  async submitMyPartnerProfile(data: {
+    vehicle_type: string;
+    vehicle_plate: string;
+    vehicle_capacity_kg?: number;
+    license_number: string;
+    national_id_number: string;
+    operating_region: string;
+    id_document_url?: string;
+    license_document_url?: string;
+  }) {
+    return this.request<{ message: string; profile: any }>({
+      method: 'PUT',
+      url: '/deliveries/partner/profile',
+      data,
+    });
+  }
+
+  async postDeliveryCheckpoint(
+    suborderId: string | number,
+    data: {
+      location_name: string;
+      latitude?: number;
+      longitude?: number;
+      estimated_time?: string;
+      notes?: string;
+    }
+  ) {
+    return this.request<{ message: string; current_checkpoint: string; event: any }>({
+      method: 'POST',
+      url: `/deliveries/suborders/${suborderId}/checkpoint`,
+      data,
+    });
+  }
+
+  async rateSuborderDelivery(
+    suborderId: string | number,
+    data: { rating: number; feedback?: string }
+  ) {
+    return this.request<{ message: string; rating: number }>({
+      method: 'POST',
+      url: `/deliveries/suborders/${suborderId}/rate`,
+      data,
+    });
+  }
+
+  async getAdminDeliveryPartners(params?: { status?: string; search?: string }) {
+    return this.request<{ partners: any[] }>({
+      method: 'GET',
+      url: '/admin/logistics/partners',
+      params,
+    });
+  }
+
+  async verifyAdminDeliveryPartner(
+    userId: string | number,
+    data: { status: 'verified' | 'suspended' | 'pending_review' | 'unverified'; notes?: string }
+  ) {
+    return this.request<{ message: string; profile: any }>({
+      method: 'PATCH',
+      url: `/admin/logistics/partners/${userId}/verify`,
       data,
     });
   }
@@ -599,6 +722,20 @@ class APIClient {
     return this.request<{ delivery: any }>({
       method: 'GET',
       url: `/deliveries/suborders/${suborderId}`,
+    });
+  }
+
+  async getAssignedDeliveries() {
+    return this.request<{ deliveries: any[] }>({
+      method: 'GET',
+      url: '/deliveries/assigned',
+    });
+  }
+
+  async trackOrderDeliveries(orderId: string | number) {
+    return this.request<{ deliveries: any[]; delivery: any }>({
+      method: 'GET',
+      url: `/deliveries/track/${orderId}`,
     });
   }
 

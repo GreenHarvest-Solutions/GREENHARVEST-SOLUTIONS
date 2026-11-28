@@ -1,5 +1,6 @@
 const logger = require("../utils/logger");
 const adminService = require("../services/adminService");
+const deliveryModel = require("../models/deliveryModel");
 const intelligenceService = require("../services/intelligenceService");
 
 const handleControllerError = (res, context, error, meta = {}) => {
@@ -1412,6 +1413,38 @@ const getCarriers = async (req, res) => {
 	}
 };
 
+const getDeliveryPartnersAdmin = async (req, res) => {
+	try {
+		const { status, search } = req.query;
+		const partners = await deliveryModel.listPartnerProfilesAdmin({ status, search });
+		return res.status(200).json({ partners });
+	} catch (error) {
+		return handleControllerError(res, "Get delivery partners failed", error);
+	}
+};
+
+const verifyDeliveryPartnerAdmin = async (req, res) => {
+	try {
+		const { userId } = req.params;
+		const { status, notes } = req.body || {};
+		const allowed = ["verified", "suspended", "pending_review", "unverified"];
+		if (!allowed.includes(status)) {
+			return res.status(400).json({ status: "error", message: `Invalid verification status. Allowed: ${allowed.join(", ")}` });
+		}
+		const profile = await deliveryModel.updatePartnerVerificationAdmin({
+			user_id: Number(userId),
+			status,
+			notes: notes || null,
+		});
+		return res.status(200).json({
+			message: `Courier verification status updated to ${status}`,
+			profile,
+		});
+	} catch (error) {
+		return handleControllerError(res, "Verify delivery partner failed", error);
+	}
+};
+
 const createCarrier = async (req, res) => {
 	try {
 		const { name, code, contact_person, phone, email, status, total_fleet_count, cold_chain_sla_score, coverage_regions, notes } = req.body;
@@ -2137,6 +2170,8 @@ module.exports = {
 	// Phase 3 Controllers
 	getShipmentById,
 	getCarriers,
+	getDeliveryPartnersAdmin,
+	verifyDeliveryPartnerAdmin,
 	createCarrier,
 	updateCarrier,
 	getHubs,
