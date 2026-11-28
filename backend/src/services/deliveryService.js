@@ -31,14 +31,29 @@ const createServiceError = (message, statusCode, extra = {}) => {
 // Delivery Pricing Estimator (Checkout)
 // ==========================================
 
-const estimateCheckoutDelivery = async ({ buyer_id, delivery_address = "", fulfillment_selections = {} }) => {
+const estimateCheckoutDelivery = async ({
+  buyer_id,
+  delivery_address = "",
+  destination_lat = null,
+  destination_lng = null,
+  fulfillment_selections = {},
+  branch_selections = {},
+  allocation_strategy = null,
+  allow_split = false,
+  enable_consolidation = false,
+  is_same_day = false,
+  create_quotes = false,
+}) => {
+  const branchAllocationService = require("./branchAllocationService");
   const cartResult = await pool.query(
     `
       SELECT
         ci.product_id,
         ci.quantity,
+        p.name,
         p.farmer_id,
         p.unit,
+        p.cold_chain_required,
         p.farm_location,
         COALESCE(p.pickup_available, TRUE) AS pickup_available,
         COALESCE(p.farmer_delivery_available, FALSE) AS farmer_delivery_available,
@@ -58,6 +73,12 @@ const estimateCheckoutDelivery = async ({ buyer_id, delivery_address = "", fulfi
   const destination =
     String(delivery_address || "").trim() || (buyerRes.rows[0] && buyerRes.rows[0].address) || "";
 
+  const zoneInfo = await deliveryPricingService.resolveDestinationZone({
+    addressText: destination,
+    latitude: destination_lat,
+    longitude: destination_lng,
+  });
+
   const itemsByFarmer = new Map();
   for (const row of cartResult.rows) {
     const fId = String(row.farmer_id);
@@ -66,58 +87,151 @@ const estimateCheckoutDelivery = async ({ buyer_id, delivery_address = "", fulfi
   }
 
   const estimatesByFarmer = {};
+  const allocatedPackages = [];
+  const generatedQuotes = {};
   let totalShippingFee = 0;
 
   for (const [fId, items] of itemsByFarmer.entries()) {
-    const originAddress = items[0]?.farm_location || items[0]?.farmer_address || "";
-    const maxRadius = items.reduce(
-      (max, it) => Math.max(max, Number(it.delivery_radius_km || 0)),
-      0
-    );
-
-    const modeEstimates = {
-      farmer_pickup: deliveryPricingService.estimateSuborderDeliveryFee({
-        fulfillment_type: "farmer_pickup",
-        origin_address: originAddress,
-        destination_address: destination,
-        items,
-        delivery_radius_km: maxRadius,
-      }),
-      farmer_delivery: deliveryPricingService.estimateSuborderDeliveryFee({
-        fulfillment_type: "farmer_delivery",
-        origin_address: originAddress,
-        destination_address: destination,
-        items,
-        delivery_radius_km: maxRadius,
-      }),
-      delivery_partner: deliveryPricingService.estimateSuborderDeliveryFee({
-        fulfillment_type: "delivery_partner",
-        origin_address: originAddress,
-        destination_address: destination,
-        items,
-        delivery_radius_km: maxRadius,
-      }),
-    };
-
     const chosenMode = fulfillment_selections[fId] || "farmer_pickup";
-    const selectedEstimate = modeEstimates[chosenMode] || modeEstimates.farmer_pickup;
-    totalShippingFee += selectedEstimate.shipping_fee;
+    const preferredBranchId = branch_selections[fId] || null;
+    let splitRequiredInfo = null;
+    let allocationResult = null;
+
+    try {
+      allocationResult = await branchAllocationService.allocateFarmerItemsToBranches({
+        farmerId: Number(fId),
+        farmerItems: items,
+        requestedDeliveryMethod: chosenMode,
+        destinationAddress: destination,
+        destinationLat: destination_lat,
+        destinationLng: destination_lng,
+        strategyOverride: allocation_strategy,
+        preferredBranchId,
+        allowSplit: Boolean(allow_split),
+        isSameDay: Boolean(is_same_day),
+      });
+    } catch (allocErr) {
+      if (allocErr.requires_split_approval) {
+        splitRequiredInfo = allocErr.proposed_packages;
+        allocationResult = await branchAllocationService.allocateFarmerItemsToBranches({
+          farmerId: Number(fId),
+          farmerItems: items,
+          requestedDeliveryMethod: chosenMode,
+          destinationAddress: destination,
+          destinationLat: destination_lat,
+          destinationLng: destination_lng,
+          strategyOverride: allocation_strategy,
+          preferredBranchId,
+          allowSplit: true,
+          isSameDay: Boolean(is_same_day),
+        });
+      } else {
+        estimatesByFarmer[fId] = {
+          farmer_id: Number(fId),
+          farmer_name: items[0]?.farmer_name || "Producer",
+          serviceable: false,
+          error: allocErr.message,
+          selected_mode: chosenMode,
+          selected_fee: 0,
+        };
+        continue;
+      }
+    }
+
+    const primaryPkg = allocationResult.packages[0];
+    const selectedBranch = primaryPkg.branch;
+
+    // Also compute 3-mode comparison on primary selected branch so buyer can toggle freely
+    const [pickupEst, directEst, courierEst] = await Promise.all([
+      deliveryPricingService.estimateBranchDeliveryAsync({ branch: selectedBranch, delivery_method: "farmer_pickup", destination_address: destination, destination_lat, destination_lng, items, is_same_day }),
+      deliveryPricingService.estimateBranchDeliveryAsync({ branch: selectedBranch, delivery_method: "farmer_delivery", destination_address: destination, destination_lat, destination_lng, items, is_same_day }),
+      deliveryPricingService.estimateBranchDeliveryAsync({ branch: selectedBranch, delivery_method: "delivery_partner", destination_address: destination, destination_lat, destination_lng, items, is_same_day }),
+    ]);
+
+    const pkgShippingSum = allocationResult.packages.reduce((s, p) => s + Number(p.estimate.shipping_fee || 0), 0);
+    totalShippingFee += pkgShippingSum;
+
+    for (const pkg of allocationResult.packages) {
+      allocatedPackages.push(pkg);
+      if (create_quotes) {
+        const { quote } = await deliveryPricingService.generateAndSaveDeliveryQuote({
+          buyer_id,
+          branch: pkg.branch,
+          delivery_method: pkg.fulfillment_type,
+          destination_address: destination,
+          destination_lat,
+          destination_lng,
+          items: pkg.items,
+          is_same_day,
+        });
+        generatedQuotes[`${fId}:${pkg.branch.id}`] = quote;
+      }
+    }
 
     estimatesByFarmer[fId] = {
       farmer_id: Number(fId),
       farmer_name: items[0]?.farmer_name || "Producer",
-      origin_address: originAddress || "Farm Gate",
-      total_weight_kg: selectedEstimate.total_weight_kg,
-      distance_km: selectedEstimate.distance_km,
-      modes: modeEstimates,
+      selected_branch: {
+        id: selectedBranch.id,
+        branch_code: selectedBranch.branch_code,
+        name: selectedBranch.name,
+        branch_type: selectedBranch.branch_type,
+        physical_address: selectedBranch.physical_address,
+        region: selectedBranch.region,
+      },
+      candidate_branches: (allocationResult.candidate_branches || []).map((c) => ({
+        branch_id: c.branch.id,
+        name: c.branch.name,
+        region: c.branch.region,
+        physical_address: c.branch.physical_address,
+        serviceable: c.serviceable,
+        can_cover_all_items: c.can_cover_all_items,
+        total_available_for_items: c.total_available_for_items,
+        distance_km: c.estimate.distance_km,
+        shipping_fee: c.estimate.shipping_fee,
+        unserviceable_reason: c.estimate.unserviceable_reason,
+      })),
+      was_split: allocationResult.was_split,
+      requires_split_approval: Boolean(splitRequiredInfo),
+      split_packages: allocationResult.packages.map((p) => ({
+        branch_id: p.branch.id,
+        branch_name: p.branch.name,
+        physical_address: p.branch.physical_address,
+        shipping_fee: p.estimate.shipping_fee,
+        distance_km: p.estimate.distance_km,
+        total_weight_kg: p.estimate.total_weight_kg,
+        items: p.items.map((it) => ({ product_id: it.product_id, name: it.name, quantity: it.quantity })),
+      })),
+      origin_address: selectedBranch.physical_address,
+      total_weight_kg: primaryPkg.estimate.total_weight_kg,
+      distance_km: primaryPkg.estimate.distance_km,
+      distance_source: primaryPkg.estimate.distance_source,
+      is_estimated_fallback: primaryPkg.estimate.is_estimated_fallback,
+      route_disclaimer: primaryPkg.estimate.route_disclaimer,
+      modes: {
+        farmer_pickup: pickupEst,
+        farmer_delivery: directEst,
+        delivery_partner: courierEst,
+      },
       selected_mode: chosenMode,
-      selected_fee: selectedEstimate.shipping_fee,
+      selected_fee: pkgShippingSum,
+      serviceable: true,
     };
   }
 
+  const consolidationPlan = branchAllocationService.evaluateConsolidationPlan(allocatedPackages);
+  const netShippingFee =
+    enable_consolidation && consolidationPlan.consolidation_eligible
+      ? Math.max(0, Math.round((totalShippingFee - consolidationPlan.estimated_savings) * 100) / 100)
+      : totalShippingFee;
+
   return {
     destination_address: destination,
-    total_shipping_fee: totalShippingFee,
+    detected_zone: zoneInfo,
+    total_shipping_fee: netShippingFee,
+    original_shipping_fee: totalShippingFee,
+    consolidation: consolidationPlan,
+    quotes: generatedQuotes,
     packages: estimatesByFarmer,
   };
 };
@@ -208,7 +322,7 @@ const markSuborderReadyForPickup = async ({ actor, suborder_id, pickup_location,
       current_checkpoint: `${pickupSite} · Ready for Buyer Pickup`,
     });
 
-    await deliveryModel.recordDeliveryEvent(client, {
+        await deliveryModel.recordDeliveryEvent(client, {
       delivery_id: delivery.id,
       suborder_id: parsedSuborderId,
       order_id: suborder.parent_order_id,
@@ -300,7 +414,7 @@ const confirmSuborderPickup = async ({ actor, suborder_id, pickup_code }) => {
     const releasedEscrow = await deliveryModel.releaseEscrowForSuborder(client, parsedSuborderId);
     await deliveryModel.checkAndCompleteParentOrder(client, suborder.parent_order_id);
 
-    await deliveryModel.recordDeliveryEvent(client, {
+        await deliveryModel.recordDeliveryEvent(client, {
       delivery_id: updatedDel.rows[0]?.id || null,
       suborder_id: parsedSuborderId,
       order_id: suborder.parent_order_id,
@@ -380,7 +494,7 @@ const dispatchFarmerDelivery = async ({ actor, suborder_id, estimated_time, vehi
 
     await client.query(`UPDATE deliveries SET dispatched_at = NOW() WHERE id = $1`, [delivery.id]);
 
-    await deliveryModel.recordDeliveryEvent(client, {
+        await deliveryModel.recordDeliveryEvent(client, {
       delivery_id: delivery.id,
       suborder_id: parsedSuborderId,
       order_id: suborder.parent_order_id,
@@ -466,7 +580,7 @@ const confirmFarmerDelivery = async ({ actor, suborder_id, confirmation_code }) 
     const releasedEscrow = await deliveryModel.releaseEscrowForSuborder(client, parsedSuborderId);
     await deliveryModel.checkAndCompleteParentOrder(client, suborder.parent_order_id);
 
-    await deliveryModel.recordDeliveryEvent(client, {
+        await deliveryModel.recordDeliveryEvent(client, {
       delivery_id: updatedDel.rows[0]?.id || null,
       suborder_id: parsedSuborderId,
       order_id: suborder.parent_order_id,
@@ -582,6 +696,27 @@ const claimPoolDelivery = async ({ actor, suborder_id, estimated_time }) => {
       current_checkpoint: `Assigned to ${partnerProfile?.name || "Verified Courier"} · En route to farm`,
     });
 
+    await client.query(
+      `INSERT INTO driver_payout_ledger (
+         delivery_id, suborder_id, order_id, driver_id, branch_id,
+         buyer_paid_delivery_fee, driver_total_earning, platform_logistics_revenue, status
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending')
+       ON CONFLICT (suborder_id, driver_id) DO UPDATE SET
+         status = 'pending',
+         driver_total_earning = EXCLUDED.driver_total_earning,
+         platform_logistics_revenue = EXCLUDED.platform_logistics_revenue`,
+      [
+        delivery.id,
+        parsedSuborderId,
+        suborder.parent_order_id,
+        actor.id,
+        suborder.branch_id || null,
+        Number(suborder.shipping_fee || 0),
+        Number(suborder.driver_compensation_amount || existingDel?.driver_compensation_amount || 0),
+        Number(suborder.platform_logistics_fee || existingDel?.platform_logistics_fee || 0),
+      ]
+    );
+
     await deliveryModel.recordDeliveryEvent(client, {
       delivery_id: delivery.id,
       suborder_id: parsedSuborderId,
@@ -686,6 +821,11 @@ const updatePartnerTransitStatus = async ({
         [notes || "Previous courier released job; reopened in pool.", parsedSuborderId]
       );
 
+      await client.query(
+        `UPDATE driver_payout_ledger SET status = 'forfeited' WHERE suborder_id = $1 AND driver_id = $2`,
+        [parsedSuborderId, partnerId]
+      );
+
       await deliveryModel.recordDeliveryEvent(client, {
         delivery_id: existingDel?.id || null,
         suborder_id: parsedSuborderId,
@@ -756,14 +896,14 @@ const updatePartnerTransitStatus = async ({
 
     const delivery = await client.query(
       `UPDATE deliveries
-       SET status = $1,
-           delivery_status = $1,
+       SET status = $1::varchar,
+           delivery_status = $1::varchar,
            proof_of_delivery_image_url = COALESCE($2, proof_of_delivery_image_url),
            farmer_notes = COALESCE($3, farmer_notes),
            current_checkpoint = $4,
-           dispatched_at = CASE WHEN $1 = 'in_transit' AND dispatched_at IS NULL THEN NOW() ELSE dispatched_at END,
-           delivered_at = CASE WHEN $5 THEN NOW() ELSE delivered_at END,
-           buyer_confirmed_at = CASE WHEN $5 THEN NOW() ELSE buyer_confirmed_at END
+           dispatched_at = CASE WHEN $1::varchar = 'in_transit' AND dispatched_at IS NULL THEN NOW() ELSE dispatched_at END,
+           delivered_at = CASE WHEN $5::boolean THEN NOW() ELSE delivered_at END,
+           buyer_confirmed_at = CASE WHEN $5::boolean THEN NOW() ELSE buyer_confirmed_at END
        WHERE suborder_id = $6
        RETURNING *`,
       [normalizedStatus, proof_image || null, notes || null, nextCheckpoint, isDelivered, parsedSuborderId]
@@ -780,11 +920,15 @@ const updatePartnerTransitStatus = async ({
         `,
         [partnerId]
       );
+      await client.query(
+        `UPDATE driver_payout_ledger SET status = 'eligible', released_at = NOW() WHERE suborder_id = $1 AND driver_id = $2`,
+        [parsedSuborderId, partnerId]
+      );
       releasedEscrow = await deliveryModel.releaseEscrowForSuborder(client, parsedSuborderId);
       await deliveryModel.checkAndCompleteParentOrder(client, suborder.parent_order_id);
     }
 
-    await deliveryModel.recordDeliveryEvent(client, {
+        await deliveryModel.recordDeliveryEvent(client, {
       delivery_id: delivery.rows[0]?.id || null,
       suborder_id: parsedSuborderId,
       order_id: suborder.parent_order_id,

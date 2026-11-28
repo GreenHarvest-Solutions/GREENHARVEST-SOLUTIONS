@@ -5,6 +5,8 @@ const notificationModel = require("../models/notificationModel");
 const orderModel = require("../models/orderModel");
 const deliveryModel = require("../models/deliveryModel");
 const deliveryPricingService = require("./deliveryPricingService");
+const branchAllocationService = require("./branchAllocationService");
+const addressModel = require("../models/addressModel");
 const inventoryModel = require("../models/inventoryModel");
 const inventoryService = require("./inventoryService");
 const { normalizeRole } = require("../utils/roles");
@@ -164,14 +166,35 @@ const createOrder = async (buyer_id, payload = {}) => {
 			throw createServiceError("address_id must be a valid integer", 400);
 		}
 
+		let savedAddress = null;
+		if (address_id !== null) {
+			savedAddress = await addressModel.getAddressById(address_id, client);
+			if (!savedAddress || Number(savedAddress.user_id) !== Number(buyer_id)) {
+				throw createServiceError("Saved address not found or unauthorized", 404);
+			}
+			if (savedAddress.verification_status === "outside_service_area" || savedAddress.verification_status === "invalid_coordinates") {
+				throw createServiceError("Selected saved address lies outside serviceable delivery zones", 409);
+			}
+		}
+
 		const buyerRes = await client.query(
 			`SELECT address FROM users WHERE id = $1 LIMIT 1`,
 			[buyer_id]
 		);
 		const buyerShippingAddress =
 			(payload.delivery_address && String(payload.delivery_address).trim()) ||
+			(savedAddress ? [savedAddress.landmark, savedAddress.subcity, savedAddress.city, savedAddress.region, savedAddress.line1].filter(Boolean).join(", ") : null) ||
 			(buyerRes.rows[0] && buyerRes.rows[0].address) ||
 			"Standard Buyer Delivery Address";
+
+		const destinationLat =
+			payload.destination_lat !== undefined && payload.destination_lat !== null
+				? Number(payload.destination_lat)
+				: savedAddress?.latitude ?? null;
+		const destinationLng =
+			payload.destination_lng !== undefined && payload.destination_lng !== null
+				? Number(payload.destination_lng)
+				: savedAddress?.longitude ?? null;
 
 		const cartResult = await client.query(
 			`
@@ -187,6 +210,7 @@ const createOrder = async (buyer_id, payload = {}) => {
 					p.deleted_at,
 					p.farmer_id,
 					p.unit,
+					p.cold_chain_required,
 					p.image_url,
 					p.farm_location,
 					COALESCE(p.pickup_available, TRUE) AS pickup_available,
@@ -213,9 +237,8 @@ const createOrder = async (buyer_id, payload = {}) => {
 
 		let items_subtotal = 0;
 
-		// 1. Eligibility & Stock Concurrency Verification
+		// 1. Eligibility & Authoritative Aggregate Stock Concurrency Check
 		for (const item of cartResult.rows) {
-			// Eligibility Gate: Product must be non-deleted, active, and approved
 			if (item.deleted_at || item.status !== "active" || item.moderation_status !== "approved") {
 				throw createServiceError(
 					`Product "${item.name}" is no longer available for purchase`,
@@ -223,7 +246,6 @@ const createOrder = async (buyer_id, payload = {}) => {
 				);
 			}
 
-			// Eligibility Gate: Seller must be active (not suspended or banned)
 			if (item.account_status && ["suspended", "banned", "deactivated"].includes(item.account_status)) {
 				throw createServiceError(
 					`The seller for "${item.name}" is currently unable to fulfill orders`,
@@ -231,7 +253,6 @@ const createOrder = async (buyer_id, payload = {}) => {
 				);
 			}
 
-			// Authoritative Row-Level Lock on Inventory
 			const inv = await inventoryModel.findInventoryForUpdate(client, item.product_id);
 			const availableStock = inv ? Number(inv.quantity) : Number(item.stock || 0);
 
@@ -245,13 +266,11 @@ const createOrder = async (buyer_id, payload = {}) => {
 			items_subtotal += Number(item.price) * item.quantity;
 		}
 
-		// Group items by farmer_id and pre-compute per-suborder shipping fees
+		// Group items by farmer_id, then allocate each farmer's items to 1+ verified fulfillment branches
 		const itemsByFarmer = new Map();
 		for (const item of cartResult.rows) {
 			const fId = Number(item.farmer_id);
-			if (!itemsByFarmer.has(fId)) {
-				itemsByFarmer.set(fId, []);
-			}
+			if (!itemsByFarmer.has(fId)) itemsByFarmer.set(fId, []);
 			itemsByFarmer.get(fId).push(item);
 		}
 
@@ -259,9 +278,21 @@ const createOrder = async (buyer_id, payload = {}) => {
 			payload.fulfillment_selections && typeof payload.fulfillment_selections === "object"
 				? payload.fulfillment_selections
 				: {};
+		const branchSelections =
+			payload.branch_selections && typeof payload.branch_selections === "object"
+				? payload.branch_selections
+				: {};
+		const quoteSelections =
+			payload.quote_ids && typeof payload.quote_ids === "object"
+				? payload.quote_ids
+				: {};
+
+		const slaRes = await client.query(`SELECT value FROM platform_settings WHERE key = 'sla_deadlines_hours' LIMIT 1`);
+		const slaCfg = slaRes.rows[0]?.value || { accept: 6, pack: 12, pickup: 24, deliver: 48 };
 
 		let totalShippingFee = 0;
-		const suborderPlan = [];
+		const packagePlan = [];
+
 		for (const [farmerId, farmerItems] of itemsByFarmer.entries()) {
 			const requestedMode =
 				fulfillmentSelections[String(farmerId)] ||
@@ -269,31 +300,88 @@ const createOrder = async (buyer_id, payload = {}) => {
 				payload.fulfillment_type ||
 				"farmer_pickup";
 			const fulfillmentType = resolveFulfillmentMode(requestedMode, farmerItems);
-			const originAddress =
-				farmerItems[0]?.farm_location || farmerItems[0]?.farmer_address || "";
-			const maxRadius = farmerItems.reduce(
-				(max, it) => Math.max(max, Number(it.delivery_radius_km || 0)),
-				0
-			);
-			const estimate = deliveryPricingService.estimateSuborderDeliveryFee({
-				fulfillment_type: fulfillmentType,
-				origin_address: originAddress,
-				destination_address: buyerShippingAddress,
-				items: farmerItems,
-				delivery_radius_km: maxRadius,
-			});
-			totalShippingFee += estimate.shipping_fee;
-			suborderPlan.push({
+			const preferredBranchId = branchSelections[String(farmerId)] || branchSelections[farmerId] || null;
+
+			const allocation = await branchAllocationService.allocateFarmerItemsToBranches({
 				farmerId,
 				farmerItems,
-				fulfillmentType,
-				shippingFee: estimate.shipping_fee,
-				estimate,
-				originAddress,
+				requestedDeliveryMethod: fulfillmentType,
+				destinationAddress: buyerShippingAddress,
+				destinationLat,
+				destinationLng,
+				strategyOverride: payload.allocation_strategy || null,
+				preferredBranchId,
+				allowSplit: Boolean(payload.allow_split),
+				isSameDay: Boolean(payload.is_same_day),
 			});
+
+			for (const pkg of allocation.packages) {
+				let deliveryQuote = null;
+				const quoteKey = `${farmerId}:${pkg.branch.id}`;
+				const providedQuoteId = quoteSelections[quoteKey] || quoteSelections[String(farmerId)] || null;
+
+				if (providedQuoteId) {
+					deliveryQuote = await deliveryPricingService.validateAndAcceptQuoteForOrder(client, {
+						quote_id: providedQuoteId,
+						buyer_id,
+						branch_id: pkg.branch.id,
+						delivery_method: pkg.fulfillment_type,
+						destination_address: buyerShippingAddress,
+					});
+				}
+
+				const finalShippingFee = deliveryQuote ? Number(deliveryQuote.total_delivery_fee) : Number(pkg.estimate.shipping_fee);
+				const finalDriverComp = deliveryQuote ? Number(deliveryQuote.driver_compensation_amount) : Number(pkg.estimate.driver_compensation_amount || 0);
+				const finalPlatformLogFee = deliveryQuote ? Number(deliveryQuote.platform_logistics_fee) : Number(pkg.estimate.platform_logistics_fee || 0);
+
+				totalShippingFee += finalShippingFee;
+				packagePlan.push({
+					farmerId,
+					branch: pkg.branch,
+					farmerItems: pkg.items,
+					fulfillmentType: pkg.fulfillment_type,
+					strategyUsed: allocation.strategy_used,
+					shippingFee: finalShippingFee,
+					driverCompensation: finalDriverComp,
+					platformLogisticsFee: finalPlatformLogFee,
+					deliveryQuote,
+					estimate: pkg.estimate,
+				});
+			}
 		}
 
-		const grandTotal = items_subtotal + totalShippingFee;
+		// Food-safe consolidation check & discount application when multiple courier packages share safe corridor
+		const consolidationPlan = payload.enable_consolidation
+			? branchAllocationService.evaluateConsolidationPlan(packagePlan)
+			: { consolidation_eligible: false, groups: [], estimated_savings: 0 };
+
+		if (consolidationPlan.consolidation_eligible && consolidationPlan.groups.length > 0) {
+			for (const grp of consolidationPlan.groups) {
+				const matchingPkgs = packagePlan.filter((p) => grp.branch_ids.includes(p.branch.id) && p.fulfillmentType === "delivery_partner");
+				const perPkgDiscount = matchingPkgs.length > 0 ? grp.estimated_savings / matchingPkgs.length : 0;
+				for (const mp of matchingPkgs) {
+					mp.consolidationGroupId = grp.consolidation_group_id;
+					mp.shippingFee = Math.max(40, Math.round((mp.shippingFee - perPkgDiscount) * 100) / 100);
+				}
+			}
+			totalShippingFee = packagePlan.reduce((s, p) => s + Number(p.shippingFee), 0);
+		}
+
+		// Optional delivery time slot atomic capacity check (prevents overbooking)
+		if (payload.time_slot_id) {
+			const slotRes = await client.query(
+				`UPDATE delivery_time_slots
+				 SET booked_count = booked_count + 1
+				 WHERE id = $1 AND is_active = TRUE AND booked_count < max_capacity
+				 RETURNING *`,
+				[Number(payload.time_slot_id)]
+			);
+			if (slotRes.rows.length === 0) {
+				throw createServiceError("Selected delivery/pickup time slot is full or unavailable", 409);
+			}
+		}
+
+		const grandTotal = Math.round((items_subtotal + totalShippingFee) * 100) / 100;
 
 		// 2. Create Parent Order
 		const orderNumber = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -304,31 +392,64 @@ const createOrder = async (buyer_id, payload = {}) => {
 			order_number: orderNumber,
 		});
 
-		// 3. Multi-Vendor Suborders + Deliveries Seed + Initial Event Timeline
+		// 3. Multi-Branch Fulfillment Packages (1 suborder per farmer + branch) + Atomic Branch Reservations
 		let suborderIndex = 1;
-		for (const {
-			farmerId,
-			farmerItems,
-			fulfillmentType,
-			shippingFee,
-			estimate,
-			originAddress,
-		} of suborderPlan) {
+		for (const pkg of packagePlan) {
+			const {
+				farmerId,
+				branch,
+				farmerItems,
+				fulfillmentType,
+				strategyUsed,
+				shippingFee,
+				driverCompensation,
+				platformLogisticsFee,
+				deliveryQuote,
+				estimate,
+				consolidationGroupId = null,
+			} = pkg;
+
 			const farmerSubtotal = farmerItems.reduce(
 				(sum, it) => sum + Number(it.price) * it.quantity,
 				0
 			);
 			const suborderTotal = farmerSubtotal + shippingFee;
-			const suborderNumber = `SUB-${order.id}-${farmerId}-${suborderIndex++}`;
+			const suborderNumber = `SUB-${order.id}-${farmerId}-B${branch.id}-${suborderIndex++}`;
 			const pickupCode =
 				fulfillmentType === "farmer_pickup"
 					? `GH-${Math.floor(100000 + Math.random() * 900000)}`
 					: `PKP-${Math.floor(100000 + Math.random() * 900000)}`;
 			const buyerConfirmationCode = `DEL-${Math.floor(100000 + Math.random() * 900000)}`;
 
+			const branchSnapshot = {
+				branch_id: branch.id,
+				branch_code: branch.branch_code,
+				branch_name: branch.name,
+				branch_type: branch.branch_type,
+				physical_address: branch.physical_address,
+				region: branch.region,
+				city: branch.city,
+				latitude: branch.latitude,
+				longitude: branch.longitude,
+				contact_phone: branch.contact_phone,
+			};
+
+			const nowMs = Date.now();
 			const suborder = await orderModel.createSuborderRecord(client, {
 				parent_order_id: order.id,
 				farmer_id: farmerId,
+				branch_id: branch.id,
+				branch_snapshot: branchSnapshot,
+				allocation_strategy: strategyUsed,
+				delivery_quote_id: deliveryQuote ? deliveryQuote.id : null,
+				driver_compensation_amount: driverCompensation,
+				platform_logistics_fee: platformLogisticsFee,
+				consolidation_group_id: consolidationGroupId,
+				time_slot_id: payload.time_slot_id ? Number(payload.time_slot_id) : null,
+				sla_accept_by: new Date(nowMs + Number(slaCfg.accept || 6) * 3600 * 1000),
+				sla_pack_by: new Date(nowMs + Number(slaCfg.pack || 12) * 3600 * 1000),
+				sla_pickup_by: new Date(nowMs + Number(slaCfg.pickup || 24) * 3600 * 1000),
+				sla_deliver_by: new Date(nowMs + Number(slaCfg.deliver || 48) * 3600 * 1000),
 				suborder_number: suborderNumber,
 				subtotal: farmerSubtotal.toFixed(2),
 				shipping_fee: shippingFee.toFixed(2),
@@ -338,11 +459,20 @@ const createOrder = async (buyer_id, payload = {}) => {
 				notes: payload.notes ? String(payload.notes).trim() : null,
 			});
 
-			const pickupOrigin = originAddress || "Farm Gate";
+			const pickupOrigin = branch.physical_address || "Farm Gate";
 
 			const deliveryRecord = await deliveryModel.upsertSuborderDelivery(client, {
 				order_id: order.id,
 				suborder_id: suborder.id,
+				branch_id: branch.id,
+				delivery_quote_id: deliveryQuote ? deliveryQuote.id : null,
+				zone_id: estimate.zone?.id || null,
+				driver_compensation_amount: driverCompensation,
+				platform_logistics_fee: platformLogisticsFee,
+				pricing_rule_version: deliveryQuote ? deliveryQuote.pricing_rule_version : estimate.pricing_rule_version || 1,
+				distance_source: deliveryQuote ? deliveryQuote.distance_source : estimate.distance_source,
+				is_estimated_fallback: deliveryQuote ? deliveryQuote.is_estimated_fallback : estimate.is_estimated_fallback,
+				consolidation_group_id: consolidationGroupId,
 				fulfillment_type: fulfillmentType,
 				status: "pending",
 				pickup_verification_code: pickupCode,
@@ -352,8 +482,8 @@ const createOrder = async (buyer_id, payload = {}) => {
 				estimated_time: estimate.estimated_eta,
 				distance_km: estimate.distance_km,
 				total_weight_kg: estimate.total_weight_kg,
-				fee_breakdown: estimate.breakdown,
-				current_checkpoint: `${pickupOrigin} (Awaiting farmer acceptance)`,
+				fee_breakdown: deliveryQuote ? deliveryQuote.fee_breakdown : estimate.breakdown,
+				current_checkpoint: `${branch.name} (${pickupOrigin}) — Awaiting branch acceptance`,
 			});
 
 			await deliveryModel.recordDeliveryEvent(client, {
@@ -362,18 +492,31 @@ const createOrder = async (buyer_id, payload = {}) => {
 				order_id: order.id,
 				event_type: "order_placed",
 				status: "pending",
-				title: "Order Placed & Inventory Reserved",
-				description: `Fulfillment mode: ${fulfillmentType.replace(/_/g, " ")} (${estimate.total_weight_kg} kg · ~${estimate.distance_km} km)`,
+				title: `Package Assigned to ${branch.name}`,
+				description: `Fulfillment mode: ${fulfillmentType.replace(/_/g, " ")} | ${estimate.total_weight_kg} kg · ~${estimate.distance_km} km (${estimate.distance_source})`,
 				location_name: pickupOrigin,
 				actor_id: buyer_id,
 				actor_role: "buyer",
 			});
 
 			for (const item of farmerItems) {
-				// Record order_item with frozen immutable product snapshot
+				// Atomic branch reservation (assigns FIFO/FEFO batch when configured)
+				const reservation = await inventoryModel.reserveBranchStockForOrder(client, {
+					orderId: order.id,
+					suborderId: suborder.id,
+					branchId: branch.id,
+					productId: item.product_id,
+					quantity: item.quantity,
+					actorId: buyer_id,
+					ttlMinutes: 30,
+				});
+
 				await orderModel.createOrderItemRecord(client, {
 					order_id: order.id,
 					suborder_id: suborder.id,
+					branch_id: branch.id,
+					batch_id: reservation.batch_id || null,
+					branch_name: branch.name,
 					product_id: item.product_id,
 					quantity: item.quantity,
 					price: item.price,
@@ -383,17 +526,6 @@ const createOrder = async (buyer_id, payload = {}) => {
 					unit_price: item.price,
 					farmer_id: item.farmer_id,
 					farmer_name: item.farmer_name,
-				});
-
-				// Decrement authoritative inventory stock
-				await inventoryModel.decrementInventoryStock(client, item.product_id, item.quantity);
-
-				// Create 15-minute stock reservation
-				await inventoryModel.createStockReservation(client, {
-					orderId: order.id,
-					productId: item.product_id,
-					quantity: item.quantity,
-					ttlMinutes: 15,
 				});
 			}
 		}
