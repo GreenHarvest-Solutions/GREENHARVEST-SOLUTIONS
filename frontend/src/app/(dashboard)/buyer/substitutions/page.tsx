@@ -6,33 +6,36 @@ import { useToast } from '@/contexts/ToastContext';
 
 interface SubstitutionItem {
   id: number;
+  order_id: number;
+  order_number?: string;
   suborder_id: number;
   suborder_number?: string;
   original_product_id: number;
-  original_product_name: string;
-  original_quantity: number;
-  original_unit_price: number;
-  substitute_product_id: number;
-  substitute_product_name: string;
-  substitute_quantity: number;
-  substitute_unit_price: number;
-  substitution_reason: string;
-  price_difference: number;
-  buyer_response: 'pending' | 'accepted' | 'rejected';
-  proposed_by: string;
-  proposed_at: string;
+  original_product_name?: string;
+  original_unit?: string;
+  original_branch_id?: number;
+  original_branch_name?: string;
+  substitution_type: string;
+  proposed_branch_id?: number;
+  proposed_branch_name?: string;
+  proposed_product_id?: number;
+  proposed_product_name?: string;
+  proposed_unit?: string;
+  proposed_quantity?: number;
+  price_delta: number;
+  delivery_fee_delta: number;
+  reason?: string;
+  status: 'proposed' | 'approved' | 'rejected';
+  created_at: string;
   responded_at?: string;
   farmer_name?: string;
-  image_url?: string;
-  substitute_image_url?: string;
 }
 
-const reasonLabels: Record<string, string> = {
-  out_of_stock: 'Out of Stock',
-  quality_concern: 'Quality Concern',
-  size_unavailable: 'Size Unavailable',
-  seasonal_replacement: 'Seasonal Replacement',
-  other: 'Other Reason',
+const typeLabels: Record<string, string> = {
+  other_branch: 'Fulfill From Another Branch',
+  alternative_product: 'Alternative Product',
+  partial_quantity: 'Adjusted Quantity',
+  cancel_item: 'Cancel Unavailable Item',
 };
 
 export default function BuyerSubstitutionsPage() {
@@ -40,35 +43,43 @@ export default function BuyerSubstitutionsPage() {
   const [substitutions, setSubstitutions] = useState<SubstitutionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [responding, setResponding] = useState<number | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('pending');
+  const [filter, setFilter] = useState<'all' | 'proposed' | 'approved' | 'rejected'>('proposed');
 
   const fetchSubstitutions = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await (api as unknown as { getMySubstitutions: () => Promise<{ substitutions: SubstitutionItem[] }> }).getMySubstitutions();
+      const res = await api.getMySubstitutions();
       setSubstitutions(res.substitutions || []);
-    } catch {
-      // If endpoint not ready yet, show demo state
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load substitution proposals';
+      showError(msg);
       setSubstitutions([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     fetchSubstitutions();
   }, [fetchSubstitutions]);
 
-  const handleRespond = async (substitutionId: number, response: 'accepted' | 'rejected') => {
+  const handleRespond = async (substitutionId: number, decision: 'approve' | 'reject') => {
     setResponding(substitutionId);
     try {
-      await (api as unknown as { respondSubstitution: (id: number, data: { response: string }) => Promise<unknown> })
-        .respondSubstitution(substitutionId, { response });
-      showSuccess(response === 'accepted' ? 'Substitution accepted — order will proceed.' : 'Substitution rejected. The farmer will be notified.');
+      await api.respondSubstitution(substitutionId, { decision });
+      showSuccess(
+        decision === 'approve'
+          ? 'Substitution approved — your order fulfillment has been updated.'
+          : 'Substitution rejected. The farmer has been notified.'
+      );
       setSubstitutions((prev) =>
         prev.map((s) =>
           s.id === substitutionId
-            ? { ...s, buyer_response: response, responded_at: new Date().toISOString() }
+            ? {
+                ...s,
+                status: decision === 'approve' ? 'approved' : 'rejected',
+                responded_at: new Date().toISOString(),
+              }
             : s
         )
       );
@@ -80,50 +91,48 @@ export default function BuyerSubstitutionsPage() {
     }
   };
 
-  const filtered = substitutions.filter((s) => filter === 'all' || s.buyer_response === filter);
-
-  const priceDiff = (s: SubstitutionItem) => {
-    const diff = s.substitute_quantity * s.substitute_unit_price - s.original_quantity * s.original_unit_price;
-    return diff;
-  };
+  const filtered = substitutions.filter((s) => filter === 'all' || s.status === filter);
+  const pendingCount = substitutions.filter((s) => s.status === 'proposed').length;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-3xl mx-auto">
-        {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <span className="material-icons text-amber-500">swap_horiz</span>
-            Product Substitutions
+            Product & Branch Substitutions
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Farmers sometimes substitute products that are out of stock or unavailable. Review and respond here.
+            Review farmer-proposed product replacements, branch reallocations, or quantity adjustments before any financial change is applied.
           </p>
         </div>
 
-        {/* Filter tabs */}
         <div className="flex gap-1 mb-5 bg-white border border-gray-200 rounded-lg p-1 w-fit">
-          {(['pending', 'accepted', 'rejected', 'all'] as const).map((tab) => (
+          {([
+            { key: 'proposed', label: 'Pending' },
+            { key: 'approved', label: 'Approved' },
+            { key: 'rejected', label: 'Rejected' },
+            { key: 'all', label: 'All' },
+          ] as const).map((tab) => (
             <button
-              key={tab}
-              onClick={() => setFilter(tab)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition capitalize ${
-                filter === tab
+              key={tab.key}
+              onClick={() => setFilter(tab.key)}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+                filter === tab.key
                   ? 'bg-green-600 text-white shadow-sm'
                   : 'text-gray-500 hover:text-gray-800'
               }`}
             >
-              {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-              {tab === 'pending' && substitutions.filter(s => s.buyer_response === 'pending').length > 0 && (
+              {tab.label}
+              {tab.key === 'proposed' && pendingCount > 0 && (
                 <span className="ml-1.5 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                  {substitutions.filter(s => s.buyer_response === 'pending').length}
+                  {pendingCount}
                 </span>
               )}
             </button>
           ))}
         </div>
 
-        {/* Content */}
         {loading ? (
           <div className="flex justify-center items-center h-32">
             <span className="material-icons animate-spin text-green-500 text-3xl">refresh</span>
@@ -132,122 +141,124 @@ export default function BuyerSubstitutionsPage() {
           <div className="bg-white rounded-xl border border-dashed border-gray-200 p-12 text-center">
             <span className="material-icons text-gray-300 text-5xl block mb-3">check_circle</span>
             <p className="text-gray-500 font-medium">
-              {filter === 'pending' ? 'No pending substitutions' : `No ${filter} substitutions`}
+              {filter === 'proposed' ? 'No pending substitution proposals' : `No ${filter} substitutions`}
             </p>
             <p className="text-gray-400 text-sm mt-1">
-              {filter === 'pending'
-                ? 'All your orders are using the originally requested products.'
+              {filter === 'proposed'
+                ? 'All your active orders are proceeding as originally placed.'
                 : 'Nothing to show here.'}
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             {filtered.map((sub) => {
-              const diff = priceDiff(sub);
-              const isPending = sub.buyer_response === 'pending';
+              const isPending = sub.status === 'proposed';
+              const totalDelta = Number(sub.price_delta || 0) + Number(sub.delivery_fee_delta || 0);
               return (
                 <div
                   key={sub.id}
                   className={`bg-white rounded-xl border shadow-sm overflow-hidden ${
-                    isPending ? 'border-amber-300' : sub.buyer_response === 'accepted' ? 'border-green-200' : 'border-red-200'
+                    isPending ? 'border-amber-300' : sub.status === 'approved' ? 'border-green-200' : 'border-red-200'
                   }`}
                 >
-                  {/* Status bar */}
-                  <div className={`px-4 py-2 flex items-center justify-between text-xs font-medium ${
-                    isPending ? 'bg-amber-50 text-amber-700' :
-                    sub.buyer_response === 'accepted' ? 'bg-green-50 text-green-700' :
-                    'bg-red-50 text-red-700'
-                  }`}>
+                  <div
+                    className={`px-4 py-2 flex items-center justify-between text-xs font-medium ${
+                      isPending
+                        ? 'bg-amber-50 text-amber-700'
+                        : sub.status === 'approved'
+                        ? 'bg-green-50 text-green-700'
+                        : 'bg-red-50 text-red-700'
+                    }`}
+                  >
                     <span className="flex items-center gap-1">
                       <span className="material-icons text-xs">
-                        {isPending ? 'pending' : sub.buyer_response === 'accepted' ? 'check_circle' : 'cancel'}
+                        {isPending ? 'pending' : sub.status === 'approved' ? 'check_circle' : 'cancel'}
                       </span>
-                      {isPending ? 'Awaiting Your Response' :
-                       sub.buyer_response === 'accepted' ? 'Accepted' : 'Rejected'}
+                      {isPending ? 'Awaiting Your Approval' : sub.status === 'approved' ? 'Approved' : 'Rejected'}
+                      <span className="ml-2 px-2 py-0.5 rounded bg-white/70 text-gray-700">
+                        {typeLabels[sub.substitution_type] || sub.substitution_type}
+                      </span>
                     </span>
-                    <span className="text-gray-400">
-                      Suborder: {sub.suborder_number || `#${sub.suborder_id}`}
+                    <span className="text-gray-500">
+                      {sub.suborder_number || `Suborder #${sub.suborder_id}`}
                       {sub.farmer_name && ` · ${sub.farmer_name}`}
                     </span>
                   </div>
 
                   <div className="p-4">
-                    {/* Comparison */}
                     <div className="flex items-center gap-3">
-                      {/* Original */}
                       <div className="flex-1 bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        <p className="text-xs text-gray-400 font-medium mb-1 flex items-center gap-1">
-                          <span className="material-icons text-xs text-gray-400">remove_circle_outline</span>
-                          Original Item
+                        <p className="text-xs text-gray-400 font-medium mb-1">Original</p>
+                        <p className="font-semibold text-gray-800 text-sm">
+                          {sub.original_product_name || `Product #${sub.original_product_id}`}
                         </p>
-                        <p className="font-semibold text-gray-800 text-sm">{sub.original_product_name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {sub.original_quantity} units × {sub.original_unit_price.toLocaleString()} ETB
-                        </p>
-                        <p className="text-sm font-bold text-gray-700 mt-1">
-                          = {(sub.original_quantity * sub.original_unit_price).toLocaleString()} ETB
-                        </p>
+                        {sub.original_branch_name && (
+                          <p className="text-xs text-gray-500 mt-0.5">Branch: {sub.original_branch_name}</p>
+                        )}
                       </div>
 
-                      {/* Arrow */}
                       <div className="text-gray-400">
                         <span className="material-icons text-2xl">arrow_forward</span>
                       </div>
 
-                      {/* Substitute */}
                       <div className="flex-1 bg-green-50 rounded-lg p-3 border border-green-100">
-                        <p className="text-xs text-green-600 font-medium mb-1 flex items-center gap-1">
-                          <span className="material-icons text-xs text-green-500">add_circle_outline</span>
-                          Proposed Substitute
+                        <p className="text-xs text-green-600 font-medium mb-1">Proposed Change</p>
+                        <p className="font-semibold text-gray-800 text-sm">
+                          {sub.substitution_type === 'cancel_item'
+                            ? 'Cancel Item & Refund'
+                            : sub.proposed_product_name ||
+                              sub.original_product_name ||
+                              `Product #${sub.proposed_product_id || sub.original_product_id}`}
                         </p>
-                        <p className="font-semibold text-gray-800 text-sm">{sub.substitute_product_name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {sub.substitute_quantity} units × {sub.substitute_unit_price.toLocaleString()} ETB
-                        </p>
-                        <p className="text-sm font-bold text-gray-700 mt-1">
-                          = {(sub.substitute_quantity * sub.substitute_unit_price).toLocaleString()} ETB
-                        </p>
+                        {sub.proposed_branch_name && (
+                          <p className="text-xs text-green-700 mt-0.5">New Branch: {sub.proposed_branch_name}</p>
+                        )}
+                        {sub.proposed_quantity !== null && sub.proposed_quantity !== undefined && (
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            Quantity: {sub.proposed_quantity} {sub.proposed_unit || sub.original_unit || 'units'}
+                          </p>
+                        )}
                       </div>
                     </div>
 
-                    {/* Price difference */}
-                    {diff !== 0 && (
-                      <div className={`mt-3 flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg ${
-                        diff > 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
-                      }`}>
-                        <span className="material-icons text-sm">
-                          {diff > 0 ? 'arrow_upward' : 'arrow_downward'}
-                        </span>
-                        <span>
-                          {diff > 0
-                            ? `Price increases by ${diff.toLocaleString()} ETB`
-                            : `Price decreases by ${Math.abs(diff).toLocaleString()} ETB`}
-                        </span>
+                    {(Number(sub.price_delta) !== 0 || Number(sub.delivery_fee_delta) !== 0) && (
+                      <div
+                        className={`mt-3 flex flex-wrap items-center gap-4 text-xs px-3 py-2 rounded-lg ${
+                          totalDelta > 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                        }`}
+                      >
+                        {Number(sub.price_delta) !== 0 && (
+                          <span>
+                            Product Price Delta: <strong>{Number(sub.price_delta) > 0 ? '+' : ''}{Number(sub.price_delta).toLocaleString()} ETB</strong>
+                          </span>
+                        )}
+                        {Number(sub.delivery_fee_delta) !== 0 && (
+                          <span>
+                            Delivery Fee Delta: <strong>{Number(sub.delivery_fee_delta) > 0 ? '+' : ''}{Number(sub.delivery_fee_delta).toLocaleString()} ETB</strong>
+                          </span>
+                        )}
                       </div>
                     )}
 
-                    {/* Reason */}
-                    <div className="mt-3 p-2 bg-blue-50 rounded-lg text-xs text-blue-700 flex items-start gap-2">
-                      <span className="material-icons text-xs text-blue-400 mt-0.5">info</span>
-                      <div>
-                        <span className="font-medium">Reason: </span>
-                        {reasonLabels[sub.substitution_reason] || sub.substitution_reason}
+                    {sub.reason && (
+                      <div className="mt-3 p-2.5 bg-blue-50 rounded-lg text-xs text-blue-700 flex items-start gap-2">
+                        <span className="material-icons text-xs text-blue-400 mt-0.5">info</span>
+                        <div>
+                          <span className="font-medium">Reason: </span>
+                          {sub.reason}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Timestamps */}
                     <div className="mt-2 text-xs text-gray-400 flex gap-3">
-                      <span>Proposed: {new Date(sub.proposed_at).toLocaleDateString()}</span>
-                      {sub.responded_at && (
-                        <span>Responded: {new Date(sub.responded_at).toLocaleDateString()}</span>
-                      )}
+                      <span>Proposed: {new Date(sub.created_at).toLocaleDateString()}</span>
+                      {sub.responded_at && <span>Responded: {new Date(sub.responded_at).toLocaleDateString()}</span>}
                     </div>
 
-                    {/* Action buttons */}
                     {isPending && (
                       <div className="mt-4 flex gap-3">
                         <button
-                          onClick={() => handleRespond(sub.id, 'accepted')}
+                          onClick={() => handleRespond(sub.id, 'approve')}
                           disabled={responding === sub.id}
                           className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-60 text-sm font-medium"
                         >
@@ -256,15 +267,15 @@ export default function BuyerSubstitutionsPage() {
                           ) : (
                             <span className="material-icons text-sm">check</span>
                           )}
-                          Accept Substitute
+                          Approve Proposal
                         </button>
                         <button
-                          onClick={() => handleRespond(sub.id, 'rejected')}
+                          onClick={() => handleRespond(sub.id, 'reject')}
                           disabled={responding === sub.id}
                           className="flex-1 flex items-center justify-center gap-2 border border-red-300 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 disabled:opacity-60 text-sm font-medium"
                         >
                           <span className="material-icons text-sm">close</span>
-                          Reject — Cancel Item
+                          Reject
                         </button>
                       </div>
                     )}

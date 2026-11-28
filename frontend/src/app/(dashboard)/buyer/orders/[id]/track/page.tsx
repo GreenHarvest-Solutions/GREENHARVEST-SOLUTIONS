@@ -42,14 +42,20 @@ export default function OrderTrackingPage() {
     Record<number, { rating: number; feedback: string; submitting: boolean }>
   >({});
 
+  // Scoped Order Communications
+  const [messages, setMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
+
   const fetchTrackingData = useCallback(
     async (silent = false) => {
       if (!orderId) return;
       try {
         if (!silent) setLoading(true);
-        const [orderRes, deliveryRes] = await Promise.all([
+        const [orderRes, deliveryRes, commRes] = await Promise.all([
           api.getOrderById(orderId).catch(() => null),
           api.trackOrderDeliveries(orderId).catch(() => ({ deliveries: [] })),
+          api.getOrderCommunications(orderId).catch(() => ({ messages: [] })),
         ]);
 
         if (orderRes?.order) {
@@ -68,6 +74,7 @@ export default function OrderTrackingPage() {
         }
 
         setDeliveries(deliveryRes?.deliveries || []);
+        setMessages(commRes?.messages || []);
         setLastSynced(new Date());
       } catch (err) {
         if (!silent) {
@@ -316,6 +323,14 @@ export default function OrderTrackingPage() {
                         <p className="text-sm font-bold text-gray-900 mt-0.5">
                           Producer: {sub?.farmer_name || 'GreenHarvest Farmer'}
                         </p>
+                        {sub?.branch_snapshot && (
+                          <p className="text-[11px] text-emerald-700 font-medium mt-0.5 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[13px]">store</span>
+                            Branch: {sub.branch_snapshot.name || sub.branch_snapshot.branch_name || 'Primary Branch'}
+                            {(sub.branch_snapshot.city || sub.branch_snapshot.region) &&
+                              ` (${[sub.branch_snapshot.city, sub.branch_snapshot.region].filter(Boolean).join(', ')})`}
+                          </p>
+                        )}
                       </div>
 
                       <div className="text-right">
@@ -593,6 +608,89 @@ export default function OrderTrackingPage() {
                   ETB {Number(order.total_amount || order.total_price || 0).toFixed(2)}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Scoped Order Communications */}
+          <div className="bg-white rounded-2xl p-5 border border-gray-200 space-y-3">
+            <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px] text-[#286c00]">chat</span>
+              Order Messages ({messages.length})
+            </h2>
+            <div className="max-h-56 overflow-y-auto space-y-2">
+              {messages.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">
+                  No messages yet. Phone numbers are masked for privacy.
+                </p>
+              ) : (
+                messages.map((msg: any) => (
+                  <div
+                    key={msg.id}
+                    className={`p-2.5 rounded-xl text-xs ${
+                      msg.sender_role === 'buyer'
+                        ? 'bg-emerald-50 text-emerald-900 ml-4'
+                        : 'bg-gray-50 text-gray-700 mr-4'
+                    }`}
+                  >
+                    <p className="font-bold capitalize text-[11px] mb-0.5">
+                      {msg.sender_name || msg.sender_role}
+                    </p>
+                    <p>{msg.message}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {new Date(msg.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <input
+                type="text"
+                placeholder="Message producer about this order..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' && newMessage.trim() && !sendingMsg) {
+                    setSendingMsg(true);
+                    try {
+                      await api.postOrderCommunication(orderId, {
+                        channel: 'buyer_farmer',
+                        message: newMessage.trim(),
+                      });
+                      setNewMessage('');
+                      await fetchTrackingData(true);
+                    } catch {
+                      showError('Failed to send message.');
+                    } finally {
+                      setSendingMsg(false);
+                    }
+                  }
+                }}
+                className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#286c00]"
+              />
+              <button
+                type="button"
+                disabled={sendingMsg || !newMessage.trim()}
+                onClick={async () => {
+                  if (!newMessage.trim()) return;
+                  setSendingMsg(true);
+                  try {
+                    await api.postOrderCommunication(orderId, {
+                      channel: 'buyer_farmer',
+                      message: newMessage.trim(),
+                    });
+                    setNewMessage('');
+                    await fetchTrackingData(true);
+                  } catch {
+                    showError('Failed to send message.');
+                  } finally {
+                    setSendingMsg(false);
+                  }
+                }}
+                className="px-3 py-2 bg-[#286c00] text-white rounded-lg text-xs font-bold hover:bg-[#1e5200] disabled:opacity-50"
+              >
+                Send
+              </button>
             </div>
           </div>
 

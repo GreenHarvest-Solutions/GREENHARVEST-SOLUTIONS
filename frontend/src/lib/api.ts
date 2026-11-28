@@ -860,10 +860,18 @@ class APIClient {
     });
   }
 
-  async respondSubstitution(substitutionId: number | string, data: { response: 'accepted' | 'rejected' }) {
+  async respondSubstitution(substitutionId: number | string, data: { decision: 'approve' | 'reject' }) {
     return this.request<{ substitution: any }>({
       method: 'POST',
       url: `/logistics-ops/substitutions/${substitutionId}/respond`,
+      data,
+    });
+  }
+
+  async adminRespondException(exceptionId: number | string, data: { decision: 'approve' | 'reject'; notes?: string }) {
+    return this.request<{ exception: any }>({
+      method: 'POST',
+      url: `/logistics-ops/exceptions/${exceptionId}/respond`,
       data,
     });
   }

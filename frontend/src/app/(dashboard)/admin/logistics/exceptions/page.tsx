@@ -62,6 +62,8 @@ export default function AdminDeliveryExceptionsPage() {
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('open');
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [respondingId, setRespondingId] = useState<number | null>(null);
+  const [resolutionNotes, setResolutionNotes] = useState<Record<number, string>>({});
   const [slaResult, setSlaResult] = useState<{ scanned: number; created: number } | null>(null);
 
   const fetchExceptions = useCallback(async () => {
@@ -92,6 +94,22 @@ export default function AdminDeliveryExceptionsPage() {
       showError('SLA scan failed');
     } finally {
       setScanning(false);
+    }
+  };
+
+  const handleRespondException = async (exceptionId: number, decision: 'approve' | 'reject') => {
+    setRespondingId(exceptionId);
+    try {
+      await api.adminRespondException(exceptionId, {
+        decision,
+        notes: resolutionNotes[exceptionId] || '',
+      });
+      showSuccess(decision === 'approve' ? 'Exception resolved' : 'Exception closed');
+      await fetchExceptions();
+    } catch {
+      showError('Failed to update exception');
+    } finally {
+      setRespondingId(null);
     }
   };
 
@@ -317,6 +335,36 @@ export default function AdminDeliveryExceptionsPage() {
                           <span className="material-icons text-xs">check</span>
                           Resolved at {new Date(exc.resolved_at).toLocaleString()}
                         </p>
+                      )}
+
+                      {exc.status !== 'resolved' && exc.status !== 'closed' && (
+                        <div className="pt-2 border-t border-gray-200 space-y-2">
+                          <input
+                            type="text"
+                            placeholder="Optional admin resolution note..."
+                            value={resolutionNotes[exc.id] || ''}
+                            onChange={(e) =>
+                              setResolutionNotes((prev) => ({ ...prev, [exc.id]: e.target.value }))
+                            }
+                            className="w-full text-xs border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleRespondException(exc.id, 'approve')}
+                              disabled={respondingId === exc.id}
+                              className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-60"
+                            >
+                              Approve & Resolve
+                            </button>
+                            <button
+                              onClick={() => handleRespondException(exc.id, 'reject')}
+                              disabled={respondingId === exc.id}
+                              className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-100 disabled:opacity-60"
+                            >
+                              Close Exception
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}
