@@ -247,14 +247,20 @@ const getFarmerOrders = async (req, res) => {
     ];
 
     if (status && status !== "all" && validOrderStatuses.includes(status)) {
-      statusFilter = ` AND o.order_status = $${paramIdx}`;
-      values.push(status);
-      paramIdx++;
+      statusFilter = status === 'confirmed'
+        ? ` AND COALESCE(s.fulfillment_status, o.order_status) IN ('confirmed', 'accepted', 'packed')`
+        : status === 'in_transit'
+        ? ` AND COALESCE(s.fulfillment_status, o.order_status) IN ('in_transit', 'dispatched', 'picked_up', 'ready_for_pickup')`
+        : ` AND COALESCE(s.fulfillment_status, o.order_status) = $${paramIdx}`;
+      if (status !== 'confirmed' && status !== 'in_transit') {
+        values.push(status);
+        paramIdx++;
+      }
     }
 
     let searchFilter = "";
     if (search) {
-      searchFilter = ` AND (CAST(o.id AS TEXT) LIKE $${paramIdx} OR u.name ILIKE $${paramIdx + 1})`;
+      searchFilter = ` AND (CAST(o.id AS TEXT) LIKE $${paramIdx} OR u.name ILIKE $${paramIdx + 1} OR COALESCE(s.suborder_number, '') ILIKE $${paramIdx + 1})`;
       values.push(`%${search}%`, `%${search}%`);
       paramIdx += 2;
     }
@@ -264,6 +270,7 @@ const getFarmerOrders = async (req, res) => {
         SELECT COUNT(DISTINCT o.id)::int AS total
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
+        LEFT JOIN suborders s ON s.parent_order_id = o.id AND s.farmer_id = $1
         LEFT JOIN products p ON p.id = oi.product_id
         JOIN users u ON u.id = o.buyer_id
         WHERE (oi.farmer_id = $1 OR p.farmer_id = $1)${statusFilter}${searchFilter}
@@ -279,17 +286,32 @@ const getFarmerOrders = async (req, res) => {
         SELECT
           o.id AS order_id,
           o.id,
+          o.order_number,
           s.id AS suborder_id,
           COALESCE(s.suborder_number, 'SUB-' || o.id || '-' || $1) AS suborder_number,
           COALESCE(s.fulfillment_status, o.order_status) AS order_status,
           COALESCE(s.fulfillment_status, o.order_status) AS fulfillment_status,
           COALESCE(s.fulfillment_type, 'farmer_pickup') AS fulfillment_type,
           s.pickup_code,
+          s.shipping_fee,
+          s.delivery_partner_id,
+          dp.name AS delivery_partner_name,
+          dp.phone AS delivery_partner_phone,
+          dp_prof.vehicle_plate AS delivery_partner_plate,
+          COALESCE(dp_prof.verification_status, 'unverified') AS delivery_partner_verified,
+          COALESCE(dp_prof.trust_score, 5.00)::numeric(3,2) AS delivery_partner_trust_score,
           COALESCE(s.total_amount, o.total_amount) AS total_amount,
           COALESCE(SUM(oi.quantity * oi.price), 0)::numeric(10,2) AS farmer_total,
           COALESCE(p_pay.payment_status, o.payment_status, 'pending') AS payment_status,
-          COALESCE(d.delivery_address, d.delivery_location, u.address, 'Standard Delivery Address') AS delivery_address,
+          COALESCE(d.delivery_location, d.delivery_address, u.address, 'Standard Delivery Address') AS delivery_address,
           COALESCE(d.status, d.delivery_status, o.delivery_status, 'pending') AS delivery_status,
+          d.pickup_verification_code,
+          d.estimated_time,
+          d.farmer_notes,
+          d.distance_km,
+          d.total_weight_kg,
+          d.current_checkpoint,
+          d.proof_of_delivery_image_url,
           o.created_at,
           u.name AS buyer_name,
           u.phone AS buyer_phone,
@@ -307,12 +329,14 @@ const getFarmerOrders = async (req, res) => {
         JOIN users u ON u.id = o.buyer_id
         JOIN order_items oi ON oi.order_id = o.id
         LEFT JOIN suborders s ON s.parent_order_id = o.id AND s.farmer_id = $1
+        LEFT JOIN users dp ON dp.id = s.delivery_partner_id
+        LEFT JOIN delivery_profiles dp_prof ON dp_prof.user_id = dp.id
         LEFT JOIN products p ON p.id = oi.product_id
         LEFT JOIN categories c ON c.id = p.category_id
         LEFT JOIN payments p_pay ON p_pay.order_id = o.id
-        LEFT JOIN deliveries d ON d.order_id = o.id
+        LEFT JOIN deliveries d ON d.suborder_id = s.id
         WHERE (oi.farmer_id = $1 OR p.farmer_id = $1)${statusFilter}${searchFilter}
-        GROUP BY o.id, s.id, u.id, p_pay.payment_status, d.delivery_address, d.delivery_location, d.status, d.delivery_status
+        GROUP BY o.id, s.id, u.id, dp.id, dp_prof.profile_id, p_pay.payment_status, d.id
         ORDER BY o.created_at DESC
         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
       `,
@@ -339,11 +363,22 @@ const getFarmerOrders = async (req, res) => {
 const updateFarmerSuborderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
-    const validStatuses = ['pending', 'accepted', 'packed', 'dispatched', 'delivered', 'cancelled'];
-    if (!validStatuses.includes(status)) {
+    const rawStatus = String(req.body?.status || '').trim().toLowerCase();
+    const statusMap = {
+      confirmed: 'accepted',
+      in_transit: 'in_transit',
+      accepted: 'accepted',
+      packed: 'packed',
+      dispatched: 'in_transit',
+      ready_for_pickup: 'ready_for_pickup',
+      delivered: 'delivered',
+      cancelled: 'cancelled',
+      pending: 'pending',
+    };
+    const nextStatus = statusMap[rawStatus];
+    if (!nextStatus) {
       return res.status(400).json({
-        message: `Invalid fulfillment status. Allowed: ${validStatuses.join(', ')}`,
+        message: 'Invalid fulfillment status. Allowed: pending, accepted, packed, ready_for_pickup, in_transit, delivered, cancelled',
       });
     }
 
@@ -354,16 +389,41 @@ const updateFarmerSuborderStatus = async (req, res) => {
         WHERE id = $2 AND farmer_id = $3
         RETURNING *
       `,
-      [status, id, req.user.id]
+      [nextStatus, id, req.user.id]
     );
 
     if (updated.rows.length === 0) {
       return res.status(404).json({ message: "Suborder not found or unauthorized" });
     }
 
+    const sub = updated.rows[0];
+    // Sync corresponding delivery record if one exists
+    const mappedDeliveryStatus = nextStatus === 'accepted' || nextStatus === 'packed' ? 'processing' : nextStatus;
+    await pool.query(
+      `
+        UPDATE deliveries
+        SET status = $1,
+            delivery_status = $1,
+            delivered_at = CASE WHEN $1 = 'delivered' THEN NOW() ELSE delivered_at END
+        WHERE suborder_id = $2
+      `,
+      [mappedDeliveryStatus, sub.id]
+    );
+
+    if (nextStatus === 'delivered') {
+      await pool.query(
+        `UPDATE escrow_ledger SET release_status = 'cleared', released_at = NOW() WHERE suborder_id = $1 AND release_status = 'held'`,
+        [sub.id]
+      );
+      const siblings = await pool.query(`SELECT fulfillment_status FROM suborders WHERE parent_order_id = $1`, [sub.parent_order_id]);
+      if (siblings.rows.length > 0 && siblings.rows.every((r) => r.fulfillment_status === 'delivered')) {
+        await pool.query(`UPDATE orders SET order_status = 'delivered', delivery_status = 'delivered' WHERE id = $1`, [sub.parent_order_id]);
+      }
+    }
+
     return res.status(200).json({
-      message: `Suborder status updated to ${status}`,
-      suborder: updated.rows[0],
+      message: `Suborder status updated to ${nextStatus}`,
+      suborder: sub,
     });
   } catch (error) {
     console.error("Update suborder status failed:", error.message);
