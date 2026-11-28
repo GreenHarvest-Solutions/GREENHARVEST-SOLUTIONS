@@ -860,6 +860,8 @@ const getPriceOutliers = async () => {
       f.id as farmer_id,
       COALESCE(fp.farm_type, 'Oromia') as region,
       c.name as category_name,
+      pc.id as corridor_id,
+      pc.region as corridor_region,
       pc.min_price as corridor_min,
       pc.max_price as corridor_max,
       pc.target_price as corridor_target,

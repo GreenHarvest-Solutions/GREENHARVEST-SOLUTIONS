@@ -305,7 +305,7 @@ export default function AdminPricingCorridorsPage() {
           columns={outlierColumns}
           data={outliers}
           loading={loading}
-          keyExtractor={(row) => String(row.id)}
+          keyExtractor={(row, idx) => `${row.id}-${row.corridor_id ?? idx}`}
           emptyMessage="No price outliers detected. All active listings are priced within regional corridors."
         />
       </div>
